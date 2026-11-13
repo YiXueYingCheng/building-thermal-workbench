@@ -1,10 +1,10 @@
 # 从 GitHub 下载并完成首次试用
 
-本指南供未参与开发的使用者试用 v0.72.1。希望验证的完整流程是：从 GitHub 获取 → 安装 → 登记示例 → 计算 → 查看并导出结果。
+本指南供未参与开发的使用者试用 v0.72.2。希望验证的完整流程是：从 GitHub 获取 → 安装 → 登记示例 → 计算 → 查看并导出结果。
 
 ## 1. 下载与解压
 
-在仓库右侧找到 **Releases**，进入 v0.72.1 公开预览版本，在附件中下载 `building-workbench-v0.72.1.zip`，解压到较短、可写的目录，例如 `C:\Workbench\building-workbench-v0.72.1`。
+在仓库右侧找到 **Releases**，进入 v0.72.2 公开预览版本，在附件中下载 `building-workbench-v0.72.2.zip`，解压到较短、可写的目录，例如 `C:\Workbench\building-workbench-v0.72.2`。
 
 如果发行附件尚不可用，也可以通过仓库的 **Code → Download ZIP** 下载源码。自动生成的源码包不包含个人运行配置；按照下一步复制 `config.example.json` 即可。不要直接在 ZIP 内双击运行。
 

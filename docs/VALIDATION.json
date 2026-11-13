@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.72.1",
+  "version": "0.72.2",
   "status": "validated_source_distribution_with_known_limitations",
   "license_status": "confirmed",
   "copyright_holder": "Zhao Bencheng",
@@ -35,7 +35,7 @@
     "total_kWh": 39.876207302993365
   },
   "feedback_exact_load_match": true,
-  "final_runtime_matches_tested_extraction": "Computational code unchanged; version and public-guide text updated.",
+  "final_runtime_matches_tested_extraction": "Historical v0.72.0 runtime checks retained. v0.72.2 changes calendar rendering, queue defaults and explicit starter-reference choices; original solver/models unchanged.",
   "not_verified": [
     "second_computer_installation",
     "all_107_weather_download_urls",
@@ -44,7 +44,7 @@
   "license_confirmed_on": "2026-11-13",
   "code_license": "MIT",
   "examples_and_documentation_license": "CC-BY-4.0",
-  "based_on": "0.72.0",
+  "based_on": "0.72.1",
   "license_finalization_new_simulations": 0,
   "license_finalization_checks": {
     "author_choice": "MIT + CC BY 4.0",
@@ -82,7 +82,7 @@
     "independent_computer_trial": "collect_after_publication"
   },
   "publication_performed_during_validation": false,
-  "historical_checks_note": "Existing fields record v0.72.0 checks; homepage_revision records v0.72.1 checks separately. No new simulations in v0.72.1.",
+  "historical_checks_note": "Existing top-level scientific checks record v0.72.0; homepage_revision records v0.72.1; calendar_and_starter_library_revision records v0.72.2 separately. No new simulations in v0.72.1 or v0.72.2.",
   "homepage_revision": {
     "date": "2026-11-13",
     "base_version": "0.72.0",
@@ -93,5 +93,23 @@
     "drawing26_license_unchanged": true,
     "new_simulations": 0,
     "independent_computer_trial": "feedback_received_but_not_yet_reviewed"
+  },
+  "calendar_and_starter_library_revision": {
+    "date": "2026-11-13",
+    "base_version": "0.72.1",
+    "python_tests_passed": 48,
+    "calendar_ui_regressions_passed": 5,
+    "browser_calendar_preview": true,
+    "browser_calendar_save": true,
+    "browser_calendar_apply": true,
+    "browser_scheme_save_and_reload": true,
+    "browser_queue_default_all": true,
+    "browser_material_copy_edit_save": true,
+    "browser_import_demo_choice_and_preview": true,
+    "original_scheme_preserved": true,
+    "protected_files_byte_identical": 125,
+    "new_simulations": 0,
+    "arbitrary_accdb_conversion_not_revalidated": true,
+    "independent_machine_v0722_trial": "pending"
   }
 }

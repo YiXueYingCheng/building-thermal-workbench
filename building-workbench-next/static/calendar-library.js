@@ -12,7 +12,17 @@ function calendarVersionOptions(r,m){if(r.source_kind!=='accepted_queue_daily_v1
  const options=r.can_save?(r.parent_options||[]):[],history=r.history||[];
  return `${options.length?`<label class="field">保存方式<select data-calendar-parent${m.pending?' disabled':''}><option value=""${!m.parent?' selected':''}>复用相同内容；否则新建日历</option>${options.map((s,i)=>`<option value="${i}"${m.parent?.id===s.id&&m.parent?.revision===s.revision?' selected':''}>追加到 ${esc(s.name)} · 当前 v${s.revision}</option>`).join('')}</select></label>`:''}${history.length?`<details class="calendar-history"><summary>查看已保存版本（${history.length}）</summary>${history.map(s=>`<p><strong>${esc(s.name)} · v${s.revision}</strong> · ${s.matches_current===null?'当前参考未就绪，暂不判定匹配':s.matches_current?'与本次完整内容一致':'与本次内容不同，历史版本保留'}<br><span class="muted">${esc(s.created.replace('T',' '))}</span></p>`).join('')}</details>`:''}`;
 }
-function orientationInputMarkup(row){const r=row?.orientation_input;if(!r)return '';return `<section class="calendar-orientation-input well"><h3>五层材料翻面 · 输入核对</h3>${r.status==='input_ready'?`<p><strong>${r.runtime_verified?'接线核对完成 · 翻面执行已接通':'接线核对完成 · 待短期实跑'}</strong></p><p>${r.surfaces} 面外墙 · 净墙 ${format(r.net_area_m2,2)} m² · 固定蓬松 R · 热阻 ${format(r.resistance_m2K_W,6)} m²·K/W。</p><p>${r.material_version?'材料版本：'+esc(r.material_version.name)+' · v'+r.material_version.revision:'当前方案内材料参数'}；若按此日历翻面，计算时段起始为 ${r.initial_face} 面朝外。</p><div class="ordinary-material-table"><table><thead><tr><th>朝外面</th><th>太阳吸收率</th><th>发射率</th></tr></thead><tbody>${['A','B'].map(f=>`<tr><td>${f==='A'?'A · 制冷面':'B · 供暖面'}</td><td>${format(r.faces[f].solar_absorptance,3)}</td><td>${format(r.faces[f].emissivity,3)}</td></tr>`).join('')}</tbody></table></div><p class="muted">按实际日期切换外侧光学参数，热阻及原墙体层序保持。下载预览含逐日朝向、参数和接线核对记录。</p>`:`<p>${esc(r.note)}</p><p class="muted">已有材料库版本可在“来源与迁移 → 本方案来源 → 建筑配置与材料版本”查看更新差异并明确采用。原构造方案仍可单独保存日历。</p>`}<p class="muted">${r.execution_enabled?'采用仅修改方案草稿；保存方案并在计算队列提交后才启动运行。':'请先处理上述核对事项；已有固定工况计算保持。'}</p></section>`;}
+function orientationInputMarkup(row){
+ const r=row?.orientation_input;if(!r)return '';
+ const ready=r.status==='input_ready';
+ // Drawing26 returns a verified status/note. The ordinary-building adapter
+ // additionally provides wall and optical details; only render supplied data.
+ const faces=['A','B'].every(f=>r.faces?.[f]&&['solar_absorptance','emissivity'].every(k=>Number.isFinite(r.faces[f][k])));
+ const walls=Number.isFinite(r.surfaces)&&Number.isFinite(r.net_area_m2)&&Number.isFinite(r.resistance_m2K_W);
+ const details=ready?`${walls?`<p>${r.surfaces} 面外墙 · 净墙 ${format(r.net_area_m2,2)} m² · 固定蓬松 R · 热阻 ${format(r.resistance_m2K_W,6)} m²·K/W。</p>`:''}${r.material_version?`<p>材料版本：${esc(r.material_version.name)} · v${r.material_version.revision}</p>`:''}${['A','B'].includes(r.initial_face)?`<p>计算时段起始为 ${r.initial_face} 面朝外。</p>`:''}${faces?`<div class="ordinary-material-table"><table><thead><tr><th>朝外面</th><th>太阳吸收率</th><th>发射率</th></tr></thead><tbody>${['A','B'].map(f=>`<tr><td>${f==='A'?'A · 制冷面':'B · 供暖面'}</td><td>${format(r.faces[f].solar_absorptance,3)}</td><td>${format(r.faces[f].emissivity,3)}</td></tr>`).join('')}</tbody></table></div>`:''}`:'';
+ const note=r.note||(ready?(r.runtime_verified?'翻面执行已接通':'翻面输入核对通过'):'翻面输入仍需核对。');
+ return `<section class="calendar-orientation-input well"><h3>材料翻面 · 输入核对</h3><p class="${ready?'':'warning'}"><strong>${esc(note)}</strong></p>${details}<p class="muted">${!ready||r.execution_enabled===false?'请先处理上述核对事项；已有固定工况计算保持。':'保存日历与采用到方案是独立操作。采用仅修改当前草稿；保存方案并提交计算后才开始运行。'}</p></section>`;
+}
 function calendarRowStatus(row){return row.ready?(row.transition_review?.confirmed?(row.transition_review.choice==='retain_two_rule_switches_v1'?'已确认两次切换特例':'已确认全部切换'):'日历就绪'):row.source&&row.preview?.transition_review_needed?'待确认季节切换':row.preview?'需核对条件':'缺少匹配参考';}
 function calendarReadinessSummary(r){const total=(r.scope_sites||[]).length,rows=r.rows||[],complete=rows.filter(x=>x.preview?.days?.length===365).length,ready=rows.filter(x=>x.ready).length,pending=rows.filter(x=>!x.ready&&x.source&&x.preview?.transition_review_needed).length,other=total-ready-pending;return `<p><strong>${complete} / ${total}</strong> 个地点已生成逐日日历；${ready} 个日历就绪${pending?'，'+pending+' 个待确认季节切换':''}${other?'，'+other+' 个需补齐参考或核对条件':''}。</p>`;}
 function calendarInspectionOutcome(r){if(r.can_save)return '。可查看并保存日历版本。';const pending=r.rows.filter(x=>!x.ready);return pending.length&&pending.every(x=>x.source&&x.preview?.transition_review_needed)?'。有季节切换待确认；请查看对应地点。':'。仍有参考缺口、待确认事项或条件差异。';}
@@ -62,17 +72,28 @@ async function requestDialogCalendarInspection(m,force){
 }
 async function loadCalendarInspection(m,force=false){
  const oldSite=m.result?.rows[m.site]?.site_id,oldDay=m.day;
- m.pending=true;m.accept=false;m.applied=false;m.parent=null;m.inspectionState=null;m.actionError='';m.needsInspection=false;m.savedOnly=false;m.inspectionId=null;m.inspectionChoices=copy(m.transitionChoices);m.message='正在核对当前范围的逐日参考与实际输入…';renderCalendarLibrary();
- const job=m.transitionChoices===null?await requestCalendarInspection(force):await requestDialogCalendarInspection(m,force);
- if(S.calendarLibrary!==m)return;
- m.pending=false;
- if(m.key!==referenceContext()){m.result=null;m.message='方案已变化，请关闭后重新预览。';}
- else if(job){
-  m.result=copy(job.result);m.inspectionId=job.id;m.site=Math.max(0,oldSite?m.result.rows.findIndex(x=>x.site_id===oldSite):m.result.rows.findIndex(x=>!x.ready));m.day=oldSite?oldDay:0;
-  m.transitionChoices=m.result.rows.filter(x=>x.transition_review?.confirmed).map(x=>({site_id:x.site_id,choice:x.transition_review.choice,binding_sha256:x.transition_review.binding_sha256,...(x.transition_review.retained_dates?{retained_dates:copy(x.transition_review.retained_dates)}:{})}));
-  m.message=calendarInspectionMessage({job})+calendarInspectionOutcome(m.result);
- }else{m.result=null;m.message=calendarInspectionMessage(m.inspectionState||currentCalendarInspection());}
- renderCalendarLibrary();
+ m.pending=true;m.accept=false;m.applied=false;m.parent=null;m.inspectionState=null;m.actionError='';m.needsInspection=false;m.savedOnly=false;m.inspectionId=null;m.inspectionChoices=copy(m.transitionChoices);m.message='正在核对当前范围的逐日参考与实际输入…';
+ try{
+  renderCalendarLibrary();
+  const job=m.transitionChoices===null?await requestCalendarInspection(force):await requestDialogCalendarInspection(m,force);
+  if(S.calendarLibrary!==m)return;
+  m.pending=false;
+  if(m.key!==referenceContext()){m.result=null;m.message='方案已变化，请关闭后重新预览。';}
+  else if(job){
+   m.result=copy(job.result);m.inspectionId=job.id;m.site=Math.max(0,oldSite?m.result.rows.findIndex(x=>x.site_id===oldSite):m.result.rows.findIndex(x=>!x.ready));m.day=oldSite?oldDay:0;
+   m.transitionChoices=m.result.rows.filter(x=>x.transition_review?.confirmed).map(x=>({site_id:x.site_id,choice:x.transition_review.choice,binding_sha256:x.transition_review.binding_sha256,...(x.transition_review.retained_dates?{retained_dates:copy(x.transition_review.retained_dates)}:{})}));
+   m.message=calendarInspectionMessage({job})+calendarInspectionOutcome(m.result);
+  }else{m.result=null;m.message=calendarInspectionMessage(m.inspectionState||currentCalendarInspection());}
+  renderCalendarLibrary();
+ }catch(error){
+  if(S.calendarLibrary!==m)return;
+  // Never leave a completed/failed request displayed as an endless spinner.
+  // A failed preview cannot retain a save/apply target from a previous result.
+  m.pending=false;m.result=null;m.inspectionId=null;m.accept=false;
+  m.actionError='日历预览未能显示，请重新核对。';
+  m.message=m.actionError+' '+error.message;
+  renderCalendarLibrary();
+ }
 }
 
 window.addEventListener('beforeunload',e=>{if(S.calendarLibrary?.writing){e.preventDefault();e.returnValue='';}});

@@ -10,6 +10,7 @@ Copyright (c) 2026 Zhao Bencheng。
 | 程序配置、依赖清单、版本文件、Git 忽略规则 | MIT |
 | 根目录及 docs、examples、resources 中的自有说明，作者和引用元数据 | [CC BY 4.0](../LICENSES/CC-BY-4.0.txt) |
 | examples/drawing26 中的数据库、固定模型模板、作息、记录与控制参数；examples/materials/ECA.json | CC BY 4.0 |
+| resources/starter-library 中由本项目原创的演示人数、得热与作息配置 | CC BY 4.0；演示值不代表规范推荐值 |
 | resources/import-reference 中来自 Drawing26 的门与材料参考记录 | CC BY 4.0 |
 | examples/weather 中由本项目整理的来源目录和说明 | CC BY 4.0，仅覆盖本项目整理内容；其中链接指向的天气原数据继续适用提供方条件 |
 | 验收结果目录中的自有报告、结果表、图片与结果压缩包 | CC BY 4.0；压缩包内另附署名和许可，便于单独分享 |
@@ -26,7 +27,7 @@ Copyright (c) 2026 Zhao Bencheng。
 
 ## 署名与引用
 
-推荐署名：**Zhao Bencheng (2026), 建筑热环境工作台 / Building Thermal Environment Workbench, v0.72.1**。数据或文档分享时标注 CC BY 4.0、附 [许可链接](https://creativecommons.org/licenses/by/4.0/)，并注明是否修改。对具体示例可补充 Drawing26、ECA 或结果文件名。项目公开网址为 [GitHub 仓库](https://github.com/YiXueYingCheng/building-thermal-workbench)；DOI 尚未注册。引用时请注明实际使用版本。
+推荐署名：**Zhao Bencheng (2026), 建筑热环境工作台 / Building Thermal Environment Workbench, v0.72.2**。数据或文档分享时标注 CC BY 4.0、附 [许可链接](https://creativecommons.org/licenses/by/4.0/)，并注明是否修改。对具体示例可补充 Drawing26、ECA 或结果文件名。项目公开网址为 [GitHub 仓库](https://github.com/YiXueYingCheng/building-thermal-workbench)；DOI 尚未注册。引用时请注明实际使用版本。
 
 作者邮箱：benchengchem@163.com。所属信息：426 Team, School of chemistry and chemical engineering, Jiangsu University。所属信息不表示机构为共同版权人或为下游成果背书。
 

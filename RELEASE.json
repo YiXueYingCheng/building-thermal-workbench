@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.72.1",
+  "version": "0.72.2",
   "prepared_on": "2026-11-13",
   "copyright_holder": "Zhao Bencheng",
   "code_license": "MIT",
@@ -9,9 +9,7 @@
   "license_confirmation": "Author explicitly selected MIT + CC BY 4.0 on 2026-11-13.",
   "known_issues": "docs/KNOWN_ISSUES.md",
   "validation": "docs/VALIDATION.json",
-  "based_on": "0.72.0",
-  "computational_code_unchanged": true,
-  "frozen_sample_and_static_files_unchanged": 133,
+  "based_on": "0.72.1",
   "standalone_result_archives": [
     {
       "archive": "验收结果/Drawing26-ECA-长沙两日/两态对照结果.zip",
@@ -35,7 +33,7 @@
     "new_simulations": 0,
     "remote_publication": false
   },
-  "distribution_revision": 5,
+  "distribution_revision": 6,
   "third_party_notice_revision": {
     "date": "2026-11-13",
     "distribution_revision": 2,
@@ -73,5 +71,24 @@
     "computational_code_and_samples_unchanged": true,
     "drawing26_license_unchanged": true,
     "new_simulations": 0
+  },
+  "solver_and_original_models_unchanged": true,
+  "calendar_and_starter_library_revision": {
+    "date": "2026-11-13",
+    "base_version": "0.72.1",
+    "python_tests_passed": 48,
+    "calendar_ui_regressions_passed": 5,
+    "browser_calendar_preview": true,
+    "browser_calendar_save": true,
+    "browser_calendar_apply": true,
+    "browser_scheme_save_and_reload": true,
+    "browser_queue_default_all": true,
+    "browser_material_copy_edit_save": true,
+    "browser_import_demo_choice_and_preview": true,
+    "original_scheme_preserved": true,
+    "protected_files_byte_identical": 125,
+    "new_simulations": 0,
+    "arbitrary_accdb_conversion_not_revalidated": true,
+    "independent_machine_v0722_trial": "pending"
   }
 }

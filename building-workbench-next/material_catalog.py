@@ -12,7 +12,8 @@ def inventory(catalog, root=ROOT):
         id='user_equivalent_layer',name='',kind='single_layer',model='equivalent_resistance_no_layer_storage',
         state_identity='independent',states=[dict(id=s,name=n,thermal_input='resistance',resistance_m2K_W=None,thickness_mm=None,conductivity_W_mK=None) for s,n in [('R','蓬松态'),('C','压缩态')]],
         optics_depend_on_state=False,optics={},source_note='')
-    return dict(versions=Library(root).all('material'), template=template, checked_at=now())
+    from starter_library import material_presets
+    return dict(versions=Library(root).all('material'), presets=material_presets(), template=template, checked_at=now())
 
 
 def source_materials(catalog, root=ROOT):

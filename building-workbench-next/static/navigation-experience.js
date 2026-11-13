@@ -7,7 +7,7 @@ async function openExecutionLocally(){S.view='execution';S.executionError='';ren
 const navigationExecutionView=executionView;
 executionView=function(){return S.execution?navigationExecutionView():`<section class="section"><h1>计算队列</h1><p role="status">${esc(S.executionError||'正在读取任务摘要，可切换到其他页面…')}</p><button data-view="execution">重新读取</button></section>`;};
 
-S.queueQuery='';S.queueCategory='research';S.queueGroupOpen=new Set();
+S.queueQuery='';S.queueCategory='all';S.queueGroupOpen=new Set();
 const navigationBatchCards=executionBatches;
 function queueGroups(){const groups=new Map();for(const b of S.execution?.batches||[]){const owner=S.boot.records.find(r=>r.id===b.record_id)?.research_set;const key=JSON.stringify([b.record_id||b.record_name,b.revision,b.output_contract]);if(!groups.has(key))groups.set(key,{key,name:b.record_name,revision:b.revision,owner,batches:[]});groups.get(key).batches.push(b);}return [...groups.values()];}
 executionBatches=function(){const groups=queueGroups(),q=S.queueQuery.trim().toLocaleLowerCase(),all=groups.filter(g=>(S.queueCategory==='all'||S.queueCategory==='research'&&g.owner||S.queueCategory==='other'&&!g.owner||S.queueCategory==='attention'&&g.batches.some(b=>b.counts.review||b.counts.failed||b.counts.interrupted||b.counts.running||b.counts.pending))&&(!q||[g.name,...g.batches.flatMap(b=>b.jobs.map(j=>j.city))].join(' ').toLocaleLowerCase().includes(q)));

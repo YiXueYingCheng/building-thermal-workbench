@@ -190,14 +190,15 @@ def verify_inspection(p):
 def options(catalog,root):
  from building_configuration import baseline
  from usage_schedules import gain_defaults,source_snapshot
- choices=[];donors={}
+ from starter_library import usage_templates,describe_choice
+ choices,donors=usage_templates()
  for bid,label in ([('drawing26_global_frozen','Drawing26')] if 'global_w00' in catalog['records'] else [])+[(k,v['building']['name']) for k,v in catalog.get('ordinary_buildings',{}).items()]:
   base,m,job=baseline(catalog,building_id=bid);gains=gain_defaults(m)
   sources=source_snapshot(root)['rooms'] if bid=='drawing26_global_frozen' else catalog['ordinary_buildings'][bid]['usage_sources']
   for room in base['rooms']:
    key=bid+':'+room['id'];details=sources.get(room['id'],{});rules={ch:copy.deepcopy(details.get('channels',{}).get(ch,{}).get('rule',room['loads'][ch])) for ch in CHANNELS}
    donors[key]=dict(rules=rules,gains={k:gains[room['id']][k] for k in ('sensible_W_person','lighting_heat_fraction')},source_building=bid,source_room=room['id'],baseline_sha256=base['baseline_sha256'])
-   choices.append(dict(id=key,label=label+' 原配置 · '+room['zone']+' · '+details.get('use',''),units={k:v.get('unit','people/间' if k=='people' else 'W/间') for k,v in rules.items()}))
+   choices.append(describe_choice(key,label+(' 示例原配置' if bid=='drawing26_global_frozen' else ' 原配置')+' · '+room['zone']+(' · '+details['use'] if details.get('use') else ''),donors[key]))
  weather=[dict(id=k,name=v['name']) for k,v in catalog['sites'].items() if v.get('eligible') and (v.get('weather') or {}).get('sha256')]
  return dict(choices=choices,weather=weather),donors
 

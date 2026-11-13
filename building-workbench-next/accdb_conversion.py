@@ -25,7 +25,7 @@ def normalise(models,d,request,donors,out,checkpoint=lambda:None):
   profile=dict(id=rid,zone=r['NAME'],area_m2=r['AREA'],conditioned=bool(g['IS_AC_ROOM']),loads=rules,hvac=hvac)
   if selected:profile['gain_settings']=copy.deepcopy(selected['gains'])
   profiles.append(profile)
-  sources[rid]=dict(use=types[r['TYPE']]['NAME'],basis='保留数据库配置' if choice=='source' else '明确选用既有建筑房间配置',channels={ch:dict(rule=rules[ch],verified=True,weekday_name='源工作日',weekend_name='源周末') for ch in CHANNELS},selection=choice)
+  sources[rid]=dict(use=types[r['TYPE']]['NAME'],basis='保留数据库配置' if choice=='source' else '明确选用配置：'+selected.get('source_label','既有建筑房间原配置'),channels={ch:dict(rule=rules[ch],verified=True,weekday_name='源工作日',weekend_name='源周末') for ch in CHANNELS},selection=choice)
   for mode,m in models.items():
    def put(name,values,old=None,check=False):
     nonlocal verified

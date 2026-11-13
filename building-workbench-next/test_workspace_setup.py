@@ -106,7 +106,11 @@ class WorkspaceSetupTests(unittest.TestCase):
             with urlopen(request,timeout=30) as response:return json.load(response)
         boot=call('/api/bootstrap');token=boot['token'];self.assertEqual(boot['records'],[])
         self.assertTrue(boot['workspace']['standalone'])
-        self.assertEqual(call('/api/building-import-options')['choices'],[])
+        choices=call('/api/building-import-options')['choices']
+        self.assertEqual({c['id'] for c in choices},{'demo:daytime','demo:nighttime','demo:continuous'})
+        preset=call('/api/material-library')['presets'][0]
+        self.assertTrue(preset['builtin'])
+        self.assertFalse((self.root/'data/components.sqlite').exists())
         self.assertEqual(call('/api/material-library/source-materials')['rows'],[])
         template=call('/api/material-library')['template']
         self.assertTrue(all(s['resistance_m2K_W'] is None for s in template['states']))
