@@ -2,7 +2,7 @@
 name: 首次试用反馈
 about: 记录从 GitHub 下载、安装、计算到导出的首次使用体验
 title: "[首次试用] "
-labels: ''
+labels: 'first-trial'
 assignees: ''
 ---
 

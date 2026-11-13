@@ -26,9 +26,9 @@ Copyright (c) 2026 Zhao Bencheng。
 
 ## 署名与引用
 
-推荐署名：**Zhao Bencheng (2026), 建筑热环境工作台 / Building Thermal Environment Workbench, v0.72.0**。数据或文档分享时标注 CC BY 4.0、附 [许可链接](https://creativecommons.org/licenses/by/4.0/)，并注明是否修改。对具体示例可补充 Drawing26、ECA 或结果文件名。项目公开网址和 DOI 尚未建立，因此不提供虚构地址；以软件名称、版本及本包作者信息定位。
+推荐署名：**Zhao Bencheng (2026), 建筑热环境工作台 / Building Thermal Environment Workbench, v0.72.1**。数据或文档分享时标注 CC BY 4.0、附 [许可链接](https://creativecommons.org/licenses/by/4.0/)，并注明是否修改。对具体示例可补充 Drawing26、ECA 或结果文件名。项目公开网址为 [GitHub 仓库](https://github.com/YiXueYingCheng/building-thermal-workbench)；DOI 尚未注册。引用时请注明实际使用版本。
 
-作者邮箱：benchengchem@163.com。所属信息：426 Team, School of chemistry and chemical engineering, Jiangsu University.。所属信息不表示机构为共同版权人或为下游成果背书。
+作者邮箱：benchengchem@163.com。所属信息：426 Team, School of chemistry and chemical engineering, Jiangsu University。所属信息不表示机构为共同版权人或为下游成果背书。
 
 研究引用见 [CITATION.cff](../CITATION.cff)，属于推荐学术引用，不向标准 MIT 额外添加论文引用义务。第三方数据仍需按其自身声明署名。
 

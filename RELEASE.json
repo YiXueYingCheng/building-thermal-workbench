@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.72.0",
+  "version": "0.72.1",
   "prepared_on": "2026-11-13",
   "copyright_holder": "Zhao Bencheng",
   "code_license": "MIT",
@@ -9,7 +9,7 @@
   "license_confirmation": "Author explicitly selected MIT + CC BY 4.0 on 2026-11-13.",
   "known_issues": "docs/KNOWN_ISSUES.md",
   "validation": "docs/VALIDATION.json",
-  "based_on": "0.72.0-rc.1",
+  "based_on": "0.72.0",
   "computational_code_unchanged": true,
   "frozen_sample_and_static_files_unchanged": 133,
   "standalone_result_archives": [
@@ -35,7 +35,7 @@
     "new_simulations": 0,
     "remote_publication": false
   },
-  "distribution_revision": 4,
+  "distribution_revision": 5,
   "third_party_notice_revision": {
     "date": "2026-11-13",
     "distribution_revision": 2,
@@ -66,5 +66,12 @@
     "workflow": ".github/workflows/release.yml",
     "script": "scripts/build_release.py",
     "computational_code_and_samples_unchanged": true
+  },
+  "homepage_revision": {
+    "date": "2026-11-13",
+    "change": "Real UI screenshots, exact engine version, integrity checker, feedback labels, actual repository links.",
+    "computational_code_and_samples_unchanged": true,
+    "drawing26_license_unchanged": true,
+    "new_simulations": 0
   }
 }

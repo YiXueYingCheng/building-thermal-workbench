@@ -1,14 +1,16 @@
 # 从 GitHub 下载并完成首次试用
 
-本指南供未参与开发的使用者试用 v0.72.0。希望验证的完整流程是：从 GitHub 获取 → 安装 → 登记示例 → 计算 → 查看并导出结果。
+本指南供未参与开发的使用者试用 v0.72.1。希望验证的完整流程是：从 GitHub 获取 → 安装 → 登记示例 → 计算 → 查看并导出结果。
 
 ## 1. 下载与解压
 
-在仓库右侧找到 **Releases**，进入 v0.72.0 公开预览版本，在附件中下载 `building-workbench-v0.72.0.zip`，解压到较短、可写的目录，例如 `C:\Workbench\building-workbench-v0.72.0`。
+在仓库右侧找到 **Releases**，进入 v0.72.1 公开预览版本，在附件中下载 `building-workbench-v0.72.1.zip`，解压到较短、可写的目录，例如 `C:\Workbench\building-workbench-v0.72.1`。
 
 如果发行附件尚不可用，也可以通过仓库的 **Code → Download ZIP** 下载源码。自动生成的源码包不包含个人运行配置；按照下一步复制 `config.example.json` 即可。不要直接在 ZIP 内双击运行。
 
 Windows 是本版验证的平台。先安装 64 位 Python 3.12；稍后计算还需安装指定版本 EnergyPlus。软件环境和引擎不在源码包中。
+
+担心下载或解压不完整时，可先按 [完整性校验指引](VERIFY_DOWNLOAD.md) 核对 ZIP 或包内清单。这一步不需要安装工作台依赖，也不是开始试用的必做门槛。
 
 ## 2. 安装依赖
 
@@ -53,6 +55,8 @@ if (-not (Test-Path .\building-workbench-next\config.json)) { Copy-Item .\buildi
 ## 5. 反馈使用体验
 
 在仓库 **Issues → New issue** 选择“首次试用反馈”，记录：下载的版本、Windows / Python / EnergyPlus 版本、完成到哪一步、预期行为、实际情况和具体报错。顺利完成也欢迎反馈，并指出说明中让人困惑的地方。
+
+模板会自动添加 `first-trial`（首次试用）标签。维护者会按内容补充 `installation`（安装和启动）、`bug`（程序异常）、`documentation`（说明问题）或 `question`（使用疑问）；反馈者不必自己设置标签。
 
 如果没有看到模板，可以直接新建 Issue，使用上述字段描述。不必上传整个工作区；提供相关错误片段或截图即可，分享前去掉无关的个人路径与私人项目数据。
 

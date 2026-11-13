@@ -20,7 +20,7 @@ def guide(version,catalog,root):
       dict(name='两日热阻反馈',period='1 月 1—2 日 · 5 分钟',description='同一组 7 段墙按上一完整步的室温和热流统一反馈。低/高温阈值为 18/26 °C，热流死区 1 W/m²，最短保持 60 分钟，初始为压缩态；A 面固定朝外。',records=[dict(label='热阻反馈方案',**controls['records']['feedback'])] if controls else []),
       dict(name='跨切换日的翻面对照',period=flip_period+' · 5 分钟',description='热阻固定为蓬松态，对照固定 A 面与全部 14 段墙按逐日日历翻面。日历根据全年原构造冷热需求生成；31日窗口用于观察切换过程。',records=[dict(label=label,**row) for key,label in [('fixed_A','固定 A 面方案'),('orientation','翻面方案')] if (row:=flip.get('records',{}).get(key))])]
     return dict(kind='public_preparation',version=version,title='建筑热环境工作台 · 使用说明',
-      introduction='围绕建筑、材料、工况和范围建立研究方案，核对输入后运行计算，再比较和导出结果。当前为 v0.72.0 公开源码分发包，可在本机使用。自有代码采用 MIT，示例与文档采用 CC BY 4.0；署名和第三方例外见包根目录说明。',factors=FACTORS,examples=examples,
+      introduction='围绕建筑、材料、工况和范围建立研究方案，核对输入后运行计算，再比较和导出结果。当前为 v0.72.1 公开源码分发包，可在本机使用。自有代码采用 MIT，示例与文档采用 CC BY 4.0；署名和第三方例外见包根目录说明。',factors=FACTORS,examples=examples,
       steps=['先打开一个示例，查看建筑、材料、工况、地点和时段。来源与已保存历史版本保持只读。',
         '需要修改时“另存为研究方案”，编辑四因素并保存版本；查看“计算安排”，确认步长及算例。',
         '生成输入、核对清单并提交“计算队列”。结果通过核验后，在“对照总览”选择对应版本的实际结果批次。',

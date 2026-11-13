@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.72.0",
+  "version": "0.72.1",
   "status": "validated_source_distribution_with_known_limitations",
   "license_status": "confirmed",
   "copyright_holder": "Zhao Bencheng",
@@ -44,7 +44,7 @@
   "license_confirmed_on": "2026-11-13",
   "code_license": "MIT",
   "examples_and_documentation_license": "CC-BY-4.0",
-  "based_on": "0.72.0-rc.1",
+  "based_on": "0.72.0",
   "license_finalization_new_simulations": 0,
   "license_finalization_checks": {
     "author_choice": "MIT + CC BY 4.0",
@@ -81,5 +81,17 @@
     "remote_publication": false,
     "independent_computer_trial": "collect_after_publication"
   },
-  "publication_performed_during_validation": false
+  "publication_performed_during_validation": false,
+  "historical_checks_note": "Existing fields record v0.72.0 checks; homepage_revision records v0.72.1 checks separately. No new simulations in v0.72.1.",
+  "homepage_revision": {
+    "date": "2026-11-13",
+    "base_version": "0.72.0",
+    "self_contained_tests_passed": 43,
+    "manifest_helper_tests_passed": 8,
+    "protected_original_files_byte_identical": 314,
+    "actual_ui_screenshots": 2,
+    "drawing26_license_unchanged": true,
+    "new_simulations": 0,
+    "independent_computer_trial": "feedback_received_but_not_yet_reviewed"
+  }
 }
