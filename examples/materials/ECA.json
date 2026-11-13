@@ -1,0 +1,49 @@
+{
+  "id": "ECA_PUBLIC_EXAMPLE",
+  "name": "ECA（热阻可调示例）",
+  "kind": "single_layer",
+  "source_note": "用户授权公开的既有 ECA 示例；双状态等效热阻，不计本等效层蓄热。热阻可独立编辑，控制策略另行设置。",
+  "model": "equivalent_resistance_no_layer_storage",
+  "states": [
+    {
+      "id": "R",
+      "name": "蓬松",
+      "thermal_input": "resistance",
+      "resistance_m2K_W": 0.30284675953967294
+    },
+    {
+      "id": "C",
+      "name": "压缩",
+      "thermal_input": "resistance",
+      "resistance_m2K_W": 0.06056935190793458
+    }
+  ],
+  "optics": {
+    "A_R": {
+      "reflectance": 0.938,
+      "solar_absorptance": 0.062000000000000055,
+      "emissivity": 0.988,
+      "input_basis": "opaque_reflectance"
+    },
+    "B_R": {
+      "reflectance": 0.176,
+      "solar_absorptance": 0.8240000000000001,
+      "emissivity": 0.659,
+      "input_basis": "opaque_reflectance"
+    },
+    "A_C": {
+      "reflectance": 0.938,
+      "solar_absorptance": 0.062000000000000055,
+      "emissivity": 0.988,
+      "input_basis": "opaque_reflectance"
+    },
+    "B_C": {
+      "reflectance": 0.176,
+      "solar_absorptance": 0.8240000000000001,
+      "emissivity": 0.659,
+      "input_basis": "opaque_reflectance"
+    }
+  },
+  "optics_depend_on_state": false,
+  "state_identity": "independent"
+}

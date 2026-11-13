@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "status": "fixed_feedback_and_orientation_examples_verified",
+  "authorization": "Drawing26 example building and adjustable-resistance ECA example material",
+  "date": "2026-11-13",
+  "building": {
+    "file": "drawing26/Drawing26.accdb",
+    "sha256": "911ccc300f1af61f6a5fee686c2577ae8c1aff145aaf6249e4b5366eaa8d29fa"
+  },
+  "material": {
+    "file": "materials/ECA.json",
+    "sha256": "afcf20d287cd944f16153d6e3b7ed9afa2cb81100b4eb221d6298056ae405ccf"
+  },
+  "weather": {
+    "file": "weather/sources.json",
+    "sha256": "703b26c28d643d3b5338d5aa7f6aabdfc1cbe98ddf3666fa0756ad715a2c3b6b",
+    "entries": 107,
+    "payloads_bundled": 0
+  },
+  "new_simulations": 8,
+  "template": {
+    "file": "drawing26/template/manifest.json",
+    "sha256": "329ac8840b0f22289f0a099556fee9f14e4c34927877833fbac576c8cd67a103"
+  },
+  "verified_settings": {
+    "weather_id": "china34_430000",
+    "period": [
+      1,
+      1,
+      1,
+      2
+    ],
+    "step_minutes": 5,
+    "mode": "controlled",
+    "compared_walls": 7,
+    "other_walls": "7 R",
+    "outward_face": "A"
+  },
+  "verification_report": "../验收结果/Drawing26-ECA-长沙两日/验收报告.md",
+  "reproduction": "same machine, fresh path including spaces",
+  "controls": {
+    "file": "drawing26/controls.json",
+    "sha256": "8f4d25803b9b520701f11066bd4c1188f45b86b1ffd47d700289ae8ad17526bc"
+  },
+  "feedback": {
+    "period": [
+      1,
+      1,
+      1,
+      2
+    ],
+    "step_minutes": 5
+  },
+  "orientation": {
+    "period": [
+      4,
+      20,
+      5,
+      20
+    ],
+    "step_minutes": 5,
+    "reference_period": [
+      1,
+      1,
+      12,
+      31
+    ]
+  },
+  "additional_verification_report": "../验收结果/Drawing26-反馈与翻面/验收报告.md"
+}

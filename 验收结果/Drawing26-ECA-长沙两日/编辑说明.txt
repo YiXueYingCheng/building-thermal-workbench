@@ -1,0 +1,18 @@
+﻿比较名称：Drawing26 · ECA 两态热阻对照
+参考：Drawing26 示例 · 蓬松 · 长沙两日，版本 1，来源 batch_83a89b403c7f4a1880156ce5ccf82235
+研究：Drawing26 示例 · 压缩 · 长沙两日，版本 1，来源 batch_b398aac59e714691b2f83703bf340749
+数据标识：600fdca61dbe45cd9fad11050df287eb84adbebb0cf12215beceba01957cfb94
+计算时段：[1, 1, 1, 2]；步长：5 min；有效地点：1/1。
+本图只比较所选地点；未将它外推到同类气候区域。
+参考减研究；正值表示需求降低，负值表示增加。建筑显热需求，非设备电耗。归一化面积：132.735 m²。
+
+Origin 编辑：
+1. 导入 period-loads.csv：demand 为分类 X（heating、cooling、total），reference_kWh 与 study_kWh 为两组 Y，绘制分组柱状图。
+2. 导入 monthly.csv：month 为 X，heating_saved_kWh、cooling_saved_kWh 为两组 Y；总变化另见 total_saved_kWh。
+3. saved 是参考减研究，正值为需求降低，负值为需求增加。saved_percent 的分母为对应参考需求；空白表示比例不适用，不能填零。
+4. figure.svg 和 figure.pdf 为可编辑矢量图，figure.png 为 300 dpi。图中使用 kWh，不依赖温控面积归一化；CSV 同时保留已核实的面积归一化指标（若有）。
+5. 短时段只统计实际选择的日期；月度行也仅包含所选日期覆盖的部分，不自动解释为完整月份。图题和图注记录统计时段。
+
+图表表示建筑显热需求，不是设备电耗。不生成气候地图或空地图矩阵。
+本包不自动创建 Origin 工程；图表与数据表可在 Origin 导入后编辑。
+dataset.json 保留原始数据标识、方案版本、来源批次及复核证据；此包不改写计算结果。

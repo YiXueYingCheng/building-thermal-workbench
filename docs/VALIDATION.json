@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "version": "0.72.0",
+  "status": "validated_source_distribution_with_known_limitations",
+  "license_status": "confirmed",
+  "copyright_holder": "Zhao Bencheng",
+  "validated_on": "2026-11-13",
+  "platform": "Windows, CPython 3.12.7, fresh venv",
+  "locked_dependencies": 13,
+  "unit_tests": 43,
+  "http_routes": 7,
+  "sample_registration": true,
+  "material_registration": true,
+  "missing_annual_reference_blocks_orientation": true,
+  "drawing26_tables_read": 137,
+  "generic_conversion": {
+    "status": "blocked_by_source_geometry",
+    "checked_sides": 29,
+    "rejected_sides": 2,
+    "rejected_objects": [
+      2892
+    ],
+    "new_simulations": 0
+  },
+  "map_export": {
+    "png_svg_pdf": true,
+    "attribution_in_figure": true,
+    "license_bytes_preserved": true,
+    "visually_checked": true
+  },
+  "new_simulations": 1,
+  "feedback_loads": {
+    "heating_kWh": 39.876207302993365,
+    "cooling_kWh": 0.0,
+    "total_kWh": 39.876207302993365
+  },
+  "feedback_exact_load_match": true,
+  "final_runtime_matches_tested_extraction": "Computational code unchanged; version and public-guide text updated.",
+  "not_verified": [
+    "second_computer_installation",
+    "all_107_weather_download_urls",
+    "arbitrary_building_dynamic_material_support"
+  ],
+  "license_confirmed_on": "2026-11-13",
+  "code_license": "MIT",
+  "examples_and_documentation_license": "CC-BY-4.0",
+  "based_on": "0.72.0-rc.1",
+  "license_finalization_new_simulations": 0,
+  "license_finalization_checks": {
+    "author_choice": "MIT + CC BY 4.0",
+    "confirmed_on": "2026-11-13",
+    "license_texts_verified": true,
+    "guide_tests_rechecked": 4,
+    "result_archives_with_embedded_license": 2,
+    "computational_code_unchanged": true,
+    "frozen_samples_unchanged": true,
+    "new_simulations": 0,
+    "remote_publication": false
+  },
+  "third_party_notice_revision": {
+    "date": "2026-11-13",
+    "distribution_revision": 2,
+    "change": "Clarify destep development references and actual runtime use.",
+    "reference_document": "docs/DESTEP_REFERENCE.md",
+    "original_author": "Hongyuan Jia",
+    "original_copyright": "Copyright (c) 2024 Hongyuan Jia",
+    "original_license": "MIT",
+    "upstream_archive_and_license_unchanged": true,
+    "computational_code_and_samples_unchanged": true,
+    "protected_files_checked": 298,
+    "new_simulations": 0
+  },
+  "github_preparation_revision": {
+    "date": "2026-11-13",
+    "distribution_revision": 3,
+    "change": "Add GitHub first-use guide, feedback template, release notes and byte-preserving Git attributes.",
+    "reference_document": "docs/FIRST_TRIAL.md",
+    "computational_code_and_samples_unchanged": true,
+    "protected_files_checked": 317,
+    "new_simulations": 0,
+    "remote_publication": false,
+    "independent_computer_trial": "collect_after_publication"
+  },
+  "publication_performed_during_validation": false
+}

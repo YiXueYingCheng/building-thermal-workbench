@@ -1,0 +1,295 @@
+{
+  "global_w00": {
+    "schema_version": 1,
+    "id": "global_w00",
+    "revision": "source_example_v1",
+    "name": "Drawing26 示例 · 原构造",
+    "status": "imported",
+    "archived": false,
+    "factors": {
+      "building": {
+        "id": "drawing26_global_frozen",
+        "name": "Drawing26 示例建筑",
+        "definition_status": "frozen_model_family",
+        "zones": 11,
+        "north_axis": 0,
+        "conditioned_area_m2": 132.735,
+        "total_area_m2": 166.935,
+        "wall_ids": [
+          "S_204",
+          "S_265",
+          "S_272",
+          "S_422",
+          "S_512",
+          "S_691",
+          "S_781",
+          "S_788",
+          "S_983",
+          "S_990",
+          "S_1118",
+          "S_1125",
+          "S_2622",
+          "S_2629"
+        ]
+      },
+      "materials": {
+        "definitions": [],
+        "applications": []
+      },
+      "condition": {
+        "operation": {
+          "mode": "controlled",
+          "settings": "inherit_frozen_building",
+          "load_basis": "zone_sensible_demand"
+        },
+        "controls": [],
+        "reference_runs": []
+      },
+      "scope": {
+        "site_ids": [
+          "example_changsha"
+        ],
+        "period": [
+          1,
+          1,
+          1,
+          2
+        ],
+        "aggregation": {
+          "kind": "site",
+          "missing": "null"
+        }
+      }
+    },
+    "numerics": {
+      "step_minutes": 5,
+      "engine": "energyplus.exe"
+    },
+    "execution": {
+      "profile": "custom",
+      "max_parallel": 1
+    },
+    "provenance": {
+      "adapter": "global_frozen_v011",
+      "snapshot_id": "drawing26_public_example_v1",
+      "case": "W00",
+      "source_refs": [],
+      "notes": [
+        "公开示例；历史计算结果未随包带入。"
+      ],
+      "mapping_status": "verified_template"
+    }
+  },
+  "global_fixed": {
+    "schema_version": 1,
+    "id": "global_fixed",
+    "revision": "source_example_v1",
+    "name": "Drawing26 示例 · ECA 固定状态",
+    "status": "imported",
+    "archived": false,
+    "factors": {
+      "building": {
+        "id": "drawing26_global_frozen",
+        "name": "Drawing26 示例建筑",
+        "definition_status": "frozen_model_family",
+        "zones": 11,
+        "north_axis": 0,
+        "conditioned_area_m2": 132.735,
+        "total_area_m2": 166.935,
+        "wall_ids": [
+          "S_204",
+          "S_265",
+          "S_272",
+          "S_422",
+          "S_512",
+          "S_691",
+          "S_781",
+          "S_788",
+          "S_983",
+          "S_990",
+          "S_1118",
+          "S_1125",
+          "S_2622",
+          "S_2629"
+        ]
+      },
+      "materials": {
+        "definitions": [
+          {
+            "id": "ECA_PUBLIC_EXAMPLE",
+            "name": "ECA（热阻可调示例）",
+            "kind": "single_layer",
+            "source_note": "用户授权公开的既有 ECA 示例；双状态等效热阻，不计本等效层蓄热。热阻可独立编辑，控制策略另行设置。",
+            "model": "equivalent_resistance_no_layer_storage",
+            "states": [
+              {
+                "id": "R",
+                "name": "蓬松",
+                "thermal_input": "resistance",
+                "resistance_m2K_W": 0.30284675953967294
+              },
+              {
+                "id": "C",
+                "name": "压缩",
+                "thermal_input": "resistance",
+                "resistance_m2K_W": 0.06056935190793458
+              }
+            ],
+            "optics": {
+              "A_R": {
+                "reflectance": 0.938,
+                "solar_absorptance": 0.062000000000000055,
+                "emissivity": 0.988,
+                "input_basis": "opaque_reflectance"
+              },
+              "B_R": {
+                "reflectance": 0.176,
+                "solar_absorptance": 0.8240000000000001,
+                "emissivity": 0.659,
+                "input_basis": "opaque_reflectance"
+              },
+              "A_C": {
+                "reflectance": 0.938,
+                "solar_absorptance": 0.062000000000000055,
+                "emissivity": 0.988,
+                "input_basis": "opaque_reflectance"
+              },
+              "B_C": {
+                "reflectance": 0.176,
+                "solar_absorptance": 0.8240000000000001,
+                "emissivity": 0.659,
+                "input_basis": "opaque_reflectance"
+              }
+            },
+            "optics_depend_on_state": false,
+            "state_identity": "independent"
+          }
+        ],
+        "applications": [
+          {
+            "id": "eca_walls",
+            "material_id": "ECA_PUBLIC_EXAMPLE",
+            "component": "wall",
+            "position": "exterior",
+            "target_ids": [
+              "S_204",
+              "S_265",
+              "S_272",
+              "S_422",
+              "S_512",
+              "S_691",
+              "S_781",
+              "S_788",
+              "S_983",
+              "S_990",
+              "S_1118",
+              "S_1125",
+              "S_2622",
+              "S_2629"
+            ],
+            "orientation": {
+              "A": "cooling_face",
+              "B": "other_face"
+            },
+            "placement_basis": "legacy_outer_equivalent_model"
+          }
+        ]
+      },
+      "condition": {
+        "operation": {
+          "mode": "controlled",
+          "settings": "inherit_frozen_building",
+          "load_basis": "zone_sensible_demand"
+        },
+        "controls": [
+          {
+            "application_id": "eca_walls",
+            "channel": "thermal",
+            "mode": "fixed",
+            "target_ids": [
+              "S_272",
+              "S_422",
+              "S_512",
+              "S_691",
+              "S_788",
+              "S_983",
+              "S_1118"
+            ],
+            "state_id": "C"
+          },
+          {
+            "application_id": "eca_walls",
+            "channel": "thermal",
+            "mode": "fixed",
+            "target_ids": [
+              "S_204",
+              "S_265",
+              "S_781",
+              "S_990",
+              "S_1125",
+              "S_2622",
+              "S_2629"
+            ],
+            "state_id": "R"
+          },
+          {
+            "application_id": "eca_walls",
+            "channel": "orientation",
+            "mode": "fixed",
+            "target_ids": [
+              "S_204",
+              "S_265",
+              "S_272",
+              "S_422",
+              "S_512",
+              "S_691",
+              "S_781",
+              "S_788",
+              "S_983",
+              "S_990",
+              "S_1118",
+              "S_1125",
+              "S_2622",
+              "S_2629"
+            ],
+            "face_id": "A"
+          }
+        ],
+        "reference_runs": []
+      },
+      "scope": {
+        "site_ids": [
+          "example_changsha"
+        ],
+        "period": [
+          1,
+          1,
+          1,
+          2
+        ],
+        "aggregation": {
+          "kind": "site",
+          "missing": "null"
+        }
+      }
+    },
+    "numerics": {
+      "step_minutes": 5,
+      "engine": "energyplus.exe"
+    },
+    "execution": {
+      "profile": "custom",
+      "max_parallel": 1
+    },
+    "provenance": {
+      "adapter": "global_frozen_v011",
+      "snapshot_id": "drawing26_public_example_v1",
+      "case": "FIXED_COOL_LOW7",
+      "source_refs": [],
+      "notes": [
+        "公开示例；历史计算结果未随包带入。"
+      ],
+      "mapping_status": "verified_template"
+    }
+  }
+}

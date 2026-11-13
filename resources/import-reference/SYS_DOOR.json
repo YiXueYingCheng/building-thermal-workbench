@@ -1,0 +1,47 @@
+[
+  {
+    "DOOR_ID": 1,
+    "GROUP_ID": "木制外门",
+    "NAME": null,
+    "CNAME": "单层实体木制外门",
+    "CONDUCT_CO": 0.057,
+    "MATERIAL_ID": 62,
+    "GAP_LENGTH": 25.3,
+    "GLASS_RAT": 0.0,
+    "APP_ID": 0,
+    "APP_FLAG": 0,
+    "FLAG": 0,
+    "ERASEFLAG": 0,
+    "ANOTATION": null
+  },
+  {
+    "DOOR_ID": 2,
+    "GROUP_ID": "木制外门",
+    "NAME": null,
+    "CNAME": "双层实体木制外门",
+    "CONDUCT_CO": 0.27,
+    "MATERIAL_ID": 62,
+    "GAP_LENGTH": 25.3,
+    "GLASS_RAT": 0.0,
+    "APP_ID": 0,
+    "APP_FLAG": 0,
+    "FLAG": 0,
+    "ERASEFLAG": 0,
+    "ANOTATION": null
+  },
+  {
+    "DOOR_ID": 4,
+    "GROUP_ID": "阳台外门",
+    "NAME": null,
+    "CNAME": "双层阳台木制外门",
+    "CONDUCT_CO": 0.215,
+    "MATERIAL_ID": 62,
+    "GAP_LENGTH": 25.3,
+    "GLASS_RAT": 0.3,
+    "APP_ID": 1,
+    "APP_FLAG": 1,
+    "FLAG": 0,
+    "ERASEFLAG": 0,
+    "ANOTATION": "参考<<供热工程>> 中国建筑工业出版社"
+  }
+]

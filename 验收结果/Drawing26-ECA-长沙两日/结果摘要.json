@@ -1,0 +1,390 @@
+{
+  "schema": 1,
+  "date": "2026-11-13",
+  "status": "passed",
+  "purpose": "two-day fixed-state workflow acceptance",
+  "building": "Drawing26",
+  "weather": "Changsha CSWD 576870",
+  "weather_sha256": "e8e7168934e3e32b0b19806b9369b1def629b01e6bc0965690f5dd17287c339e",
+  "period": [
+    1,
+    1,
+    1,
+    2
+  ],
+  "step_minutes": 5,
+  "conditioned_rooms": 6,
+  "total_rooms": 11,
+  "conditioned_area_m2": 132.735,
+  "application": {
+    "total_external_walls": 14,
+    "compared_walls": [
+      "S_272",
+      "S_422",
+      "S_512",
+      "S_691",
+      "S_788",
+      "S_983",
+      "S_1118"
+    ],
+    "other_7_walls": "R in both cases",
+    "outward_face": "A",
+    "feedback": false,
+    "flipping": false
+  },
+  "resistance_m2K_W": {
+    "R": 0.30284675953967294,
+    "C": 0.06056935190793458
+  },
+  "demand_basis": "building sensible heating and cooling demand; not electricity",
+  "results": {
+    "R": {
+      "loads": {
+        "heating_kWh": 34.48098105597957,
+        "cooling_kWh": 0.0,
+        "total_kWh": 34.48098105597957
+      },
+      "monthly": [
+        {
+          "month": 1,
+          "heating_kWh": 34.48098105597957,
+          "cooling_kWh": 0.0,
+          "total_kWh": 34.48098105597957
+        }
+      ],
+      "rooms": [
+        {
+          "system": "R1278_IDEAL",
+          "kind": "heating",
+          "kWh": 6.509957172547667
+        },
+        {
+          "system": "R1281_IDEAL",
+          "kind": "heating",
+          "kWh": 11.034098263138246
+        },
+        {
+          "system": "R1284_IDEAL",
+          "kind": "heating",
+          "kWh": 0.6738238765598339
+        },
+        {
+          "system": "R1296_IDEAL",
+          "kind": "heating",
+          "kWh": 1.7354108323410513
+        },
+        {
+          "system": "R1299_IDEAL",
+          "kind": "heating",
+          "kWh": 11.409559008554249
+        },
+        {
+          "system": "R3100_IDEAL",
+          "kind": "heating",
+          "kWh": 3.118131902838524
+        },
+        {
+          "system": "R1278_IDEAL",
+          "kind": "cooling",
+          "kWh": 0.0
+        },
+        {
+          "system": "R1281_IDEAL",
+          "kind": "cooling",
+          "kWh": 0.0
+        },
+        {
+          "system": "R1284_IDEAL",
+          "kind": "cooling",
+          "kWh": 0.0
+        },
+        {
+          "system": "R1296_IDEAL",
+          "kind": "cooling",
+          "kWh": 0.0
+        },
+        {
+          "system": "R1299_IDEAL",
+          "kind": "cooling",
+          "kWh": 0.0
+        },
+        {
+          "system": "R3100_IDEAL",
+          "kind": "cooling",
+          "kWh": 0.0
+        }
+      ],
+      "temperature_statistics": [
+        {
+          "zone": "R1-1279",
+          "mean_C": 17.061383637032925,
+          "min_C": 15.629742433357329,
+          "max_C": 19.077291294767612
+        },
+        {
+          "zone": "R1-1282",
+          "mean_C": 16.625940848125477,
+          "min_C": 15.836535396339132,
+          "max_C": 17.999999999999662
+        },
+        {
+          "zone": "R1-1285",
+          "mean_C": 17.436768355772056,
+          "min_C": 15.990318634471988,
+          "max_C": 20.111253385400556
+        },
+        {
+          "zone": "R1-1288",
+          "mean_C": 13.275377538541862,
+          "min_C": 12.502311757606604,
+          "max_C": 14.707138850461192
+        },
+        {
+          "zone": "R1-1291",
+          "mean_C": 14.908941947155844,
+          "min_C": 11.176891582751658,
+          "max_C": 23.365782568144304
+        },
+        {
+          "zone": "R1-1294",
+          "mean_C": 15.996000681047475,
+          "min_C": 15.1887958816195,
+          "max_C": 17.674427463244122
+        },
+        {
+          "zone": "R1-1297",
+          "mean_C": 17.301918830655527,
+          "min_C": 15.944279499095938,
+          "max_C": 19.606016822274942
+        },
+        {
+          "zone": "R1-1300",
+          "mean_C": 17.155550588312394,
+          "min_C": 15.57330520276028,
+          "max_C": 18.456317588791556
+        },
+        {
+          "zone": "R1-1303",
+          "mean_C": 15.676055877293537,
+          "min_C": 14.865295541579108,
+          "max_C": 17.223755538571982
+        },
+        {
+          "zone": "R1-3101",
+          "mean_C": 17.000459091404917,
+          "min_C": 15.772496791737048,
+          "max_C": 19.020242516955797
+        },
+        {
+          "zone": "R1-3976",
+          "mean_C": 13.767108509509969,
+          "min_C": 12.20657149828608,
+          "max_C": 16.49157996096601
+        }
+      ],
+      "warnings": [
+        "CheckUsedConstructions: There are 32 nominally unused constructions in input."
+      ],
+      "pending_warnings": [],
+      "checks": {
+        "process_exit_zero": true,
+        "err_end_success": true,
+        "sqlite_quick_check": "ok",
+        "full_period": true,
+        "monthly_reconciliation": true,
+        "sqlite_completion_flags": {
+          "Completed": "FALSE",
+          "CompletedSuccessfully": "FALSE"
+        },
+        "completion_basis": "Process + end/err + independent full-period coverage + monthly reconciliation; SQL flags retained unmodified."
+      }
+    },
+    "C": {
+      "loads": {
+        "heating_kWh": 44.97580831812175,
+        "cooling_kWh": 0.0,
+        "total_kWh": 44.97580831812175
+      },
+      "monthly": [
+        {
+          "month": 1,
+          "heating_kWh": 44.97580831812175,
+          "cooling_kWh": 0.0,
+          "total_kWh": 44.97580831812175
+        }
+      ],
+      "rooms": [
+        {
+          "system": "R1278_IDEAL",
+          "kind": "heating",
+          "kWh": 9.01627424300107
+        },
+        {
+          "system": "R1281_IDEAL",
+          "kind": "heating",
+          "kWh": 15.255910736528145
+        },
+        {
+          "system": "R1284_IDEAL",
+          "kind": "heating",
+          "kWh": 0.7982980651961527
+        },
+        {
+          "system": "R1296_IDEAL",
+          "kind": "heating",
+          "kWh": 2.5464057434508827
+        },
+        {
+          "system": "R1299_IDEAL",
+          "kind": "heating",
+          "kWh": 13.260050166112466
+        },
+        {
+          "system": "R3100_IDEAL",
+          "kind": "heating",
+          "kWh": 4.098869363833035
+        },
+        {
+          "system": "R1278_IDEAL",
+          "kind": "cooling",
+          "kWh": 0.0
+        },
+        {
+          "system": "R1281_IDEAL",
+          "kind": "cooling",
+          "kWh": 0.0
+        },
+        {
+          "system": "R1284_IDEAL",
+          "kind": "cooling",
+          "kWh": 0.0
+        },
+        {
+          "system": "R1296_IDEAL",
+          "kind": "cooling",
+          "kWh": 0.0
+        },
+        {
+          "system": "R1299_IDEAL",
+          "kind": "cooling",
+          "kWh": 0.0
+        },
+        {
+          "system": "R3100_IDEAL",
+          "kind": "cooling",
+          "kWh": 0.0
+        }
+      ],
+      "temperature_statistics": [
+        {
+          "zone": "R1-1279",
+          "mean_C": 17.04976043973405,
+          "min_C": 15.569479270789648,
+          "max_C": 18.812397517903207
+        },
+        {
+          "zone": "R1-1282",
+          "mean_C": 16.63905847638184,
+          "min_C": 15.854474534264618,
+          "max_C": 17.999999999999574
+        },
+        {
+          "zone": "R1-1285",
+          "mean_C": 17.41616546222794,
+          "min_C": 15.983896358544124,
+          "max_C": 20.072513274108857
+        },
+        {
+          "zone": "R1-1288",
+          "mean_C": 13.25255695345902,
+          "min_C": 12.488409554487175,
+          "max_C": 14.683253842348561
+        },
+        {
+          "zone": "R1-1291",
+          "mean_C": 14.866785328507023,
+          "min_C": 11.110808441769564,
+          "max_C": 23.30319707954356
+        },
+        {
+          "zone": "R1-1294",
+          "mean_C": 15.8974878952834,
+          "min_C": 15.087623289588734,
+          "max_C": 17.57168862829122
+        },
+        {
+          "zone": "R1-1297",
+          "mean_C": 17.225526120893782,
+          "min_C": 15.882106594710617,
+          "max_C": 19.386437812801084
+        },
+        {
+          "zone": "R1-1300",
+          "mean_C": 17.127602886288532,
+          "min_C": 15.595806978356935,
+          "max_C": 18.17896797966631
+        },
+        {
+          "zone": "R1-1303",
+          "mean_C": 15.6143014532391,
+          "min_C": 14.80341442456645,
+          "max_C": 17.161961558083682
+        },
+        {
+          "zone": "R1-3101",
+          "mean_C": 17.03647871163693,
+          "min_C": 15.765622465750118,
+          "max_C": 18.850544264589715
+        },
+        {
+          "zone": "R1-3976",
+          "mean_C": 13.746222256697294,
+          "min_C": 12.189854245289467,
+          "max_C": 16.46998023338
+        }
+      ],
+      "warnings": [
+        "CheckUsedConstructions: There are 32 nominally unused constructions in input."
+      ],
+      "pending_warnings": [],
+      "checks": {
+        "process_exit_zero": true,
+        "err_end_success": true,
+        "sqlite_quick_check": "ok",
+        "full_period": true,
+        "monthly_reconciliation": true,
+        "sqlite_completion_flags": {
+          "Completed": "FALSE",
+          "CompletedSuccessfully": "FALSE"
+        },
+        "completion_basis": "Process + end/err + independent full-period coverage + monthly reconciliation; SQL flags retained unmodified."
+      }
+    }
+  },
+  "C_minus_R_kWh": 10.49482726214218,
+  "C_increase_percent_vs_R": 30.436568046320726,
+  "reproduction": {
+    "passed": true,
+    "separate_paths": true,
+    "workspace_contains_spaces": true,
+    "absolute_tolerance_kWh": 1e-08,
+    "load_absolute_differences": {
+      "R": {
+        "heating_kWh": 0.0,
+        "cooling_kWh": 0.0,
+        "total_kWh": 0.0
+      },
+      "C": {
+        "heating_kWh": 0.0,
+        "cooling_kWh": 0.0,
+        "total_kWh": 0.0
+      }
+    },
+    "room_loads_identical": true,
+    "room_temperature_statistics_identical": true,
+    "monthly_totals_identical": true,
+    "initial_simulations": 2,
+    "reproduction_simulations": 2
+  },
+  "dataset_sha256": "600fdca61dbe45cd9fad11050df287eb84adbebb0cf12215beceba01957cfb94"
+}

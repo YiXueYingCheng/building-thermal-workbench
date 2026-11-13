@@ -1,0 +1,14 @@
+{
+  "legacy_root": "../dependencies/building-workbench-legacy",
+  "material_root": "../dependencies/material-input",
+  "conversion_root": "../dependencies/dest_compatibility",
+  "material_batch": null,
+  "import_reference_tables": "../resources/import-reference",
+  "public_material_catalog": null,
+  "python": null,
+  "plot_python": null,
+  "powershell": null,
+  "plot_font": null,
+  "initialization": "new_workspace",
+  "port": 8776
+}

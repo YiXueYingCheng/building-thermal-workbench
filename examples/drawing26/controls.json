@@ -1,0 +1,133 @@
+{
+  "kind": "drawing26_controls_v1",
+  "policy": {
+    "cold_C": 18.0,
+    "hot_C": 26.0,
+    "flux_deadband_W_m2": 1.0,
+    "minimum_hold_minutes": 60
+  },
+  "initial_state": "C",
+  "feedback_rule": "UNIFIED",
+  "update": {
+    "kind": "solver_step"
+  },
+  "state_roles": {
+    "positive": "R",
+    "negative": "C"
+  },
+  "walls": [
+    {
+      "surface": "S_204",
+      "zone": "R1-1291",
+      "eligible": false,
+      "area_m2": 5.4,
+      "group": "W",
+      "azimuth_deg": 270.0
+    },
+    {
+      "surface": "S_265",
+      "zone": "R1-1291",
+      "eligible": false,
+      "area_m2": 6.640000000000001,
+      "group": "S",
+      "azimuth_deg": 180.0
+    },
+    {
+      "surface": "S_272",
+      "zone": "R1-1279",
+      "eligible": true,
+      "area_m2": 9.680000000000003,
+      "group": "S",
+      "azimuth_deg": 180.0
+    },
+    {
+      "surface": "S_422",
+      "zone": "R1-1297",
+      "eligible": true,
+      "area_m2": 8.6,
+      "group": "E",
+      "azimuth_deg": 90.0
+    },
+    {
+      "surface": "S_512",
+      "zone": "R1-1300",
+      "eligible": true,
+      "area_m2": 9.680000000000003,
+      "group": "N",
+      "azimuth_deg": 0.0
+    },
+    {
+      "surface": "S_691",
+      "zone": "R1-1300",
+      "eligible": true,
+      "area_m2": 14.219999999999997,
+      "group": "E",
+      "azimuth_deg": 90.0
+    },
+    {
+      "surface": "S_781",
+      "zone": "R1-1288",
+      "eligible": false,
+      "area_m2": 19.8,
+      "group": "W",
+      "azimuth_deg": 270.0
+    },
+    {
+      "surface": "S_788",
+      "zone": "R1-1282",
+      "eligible": true,
+      "area_m2": 39.42,
+      "group": "W",
+      "azimuth_deg": 270.0
+    },
+    {
+      "surface": "S_983",
+      "zone": "R1-1279",
+      "eligible": true,
+      "area_m2": 15.120000000000001,
+      "group": "E",
+      "azimuth_deg": 90.0
+    },
+    {
+      "surface": "S_990",
+      "zone": "R1-1294",
+      "eligible": false,
+      "area_m2": 4.4799999999999995,
+      "group": "E",
+      "azimuth_deg": 90.0
+    },
+    {
+      "surface": "S_1118",
+      "zone": "R1-3101",
+      "eligible": true,
+      "area_m2": 7.0,
+      "group": "E",
+      "azimuth_deg": 90.0
+    },
+    {
+      "surface": "S_1125",
+      "zone": "R1-1303",
+      "eligible": false,
+      "area_m2": 5.2,
+      "group": "E",
+      "azimuth_deg": 90.0
+    },
+    {
+      "surface": "S_2622",
+      "zone": "R1-1288",
+      "eligible": false,
+      "area_m2": 5.2,
+      "group": "N",
+      "azimuth_deg": 0.0
+    },
+    {
+      "surface": "S_2629",
+      "zone": "R1-3976",
+      "eligible": false,
+      "area_m2": 5.040000000000001,
+      "group": "N",
+      "azimuth_deg": 0.0
+    }
+  ],
+  "basis": "Existing Drawing26 rules; geometry and net wall areas checked against the authorized template."
+}

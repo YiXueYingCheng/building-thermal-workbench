@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "version": "0.72.0",
+  "prepared_on": "2026-11-13",
+  "copyright_holder": "Zhao Bencheng",
+  "code_license": "MIT",
+  "data_docs_license": "CC-BY-4.0",
+  "license_scope": "docs/LICENSE_SCOPE.md",
+  "license_confirmation": "Author explicitly selected MIT + CC BY 4.0 on 2026-11-13.",
+  "known_issues": "docs/KNOWN_ISSUES.md",
+  "validation": "docs/VALIDATION.json",
+  "based_on": "0.72.0-rc.1",
+  "computational_code_unchanged": true,
+  "frozen_sample_and_static_files_unchanged": 133,
+  "standalone_result_archives": [
+    {
+      "archive": "验收结果/Drawing26-ECA-长沙两日/两态对照结果.zip",
+      "unchanged_payload_files": 8,
+      "omitted_obsolete_preview": false
+    },
+    {
+      "archive": "验收结果/Drawing26-反馈与翻面/反馈与翻面示例结果.zip",
+      "unchanged_payload_files": 20,
+      "omitted_obsolete_preview": true
+    }
+  ],
+  "license_finalization_checks": {
+    "author_choice": "MIT + CC BY 4.0",
+    "confirmed_on": "2026-11-13",
+    "license_texts_verified": true,
+    "guide_tests_rechecked": 4,
+    "result_archives_with_embedded_license": 2,
+    "computational_code_unchanged": true,
+    "frozen_samples_unchanged": true,
+    "new_simulations": 0,
+    "remote_publication": false
+  },
+  "distribution_revision": 4,
+  "third_party_notice_revision": {
+    "date": "2026-11-13",
+    "distribution_revision": 2,
+    "change": "Clarify destep development references and actual runtime use.",
+    "reference_document": "docs/DESTEP_REFERENCE.md",
+    "original_author": "Hongyuan Jia",
+    "original_copyright": "Copyright (c) 2024 Hongyuan Jia",
+    "original_license": "MIT",
+    "upstream_archive_and_license_unchanged": true,
+    "computational_code_and_samples_unchanged": true,
+    "protected_files_checked": 298,
+    "new_simulations": 0
+  },
+  "github_preparation_revision": {
+    "date": "2026-11-13",
+    "distribution_revision": 3,
+    "change": "Add GitHub first-use guide, feedback template, release notes and byte-preserving Git attributes.",
+    "reference_document": "docs/FIRST_TRIAL.md",
+    "computational_code_and_samples_unchanged": true,
+    "protected_files_checked": 317,
+    "new_simulations": 0,
+    "remote_publication": false,
+    "independent_computer_trial": "collect_after_publication"
+  },
+  "remote_publication_at_preparation": false,
+  "repository_url": "https://github.com/YiXueYingCheng/building-thermal-workbench",
+  "publication_packaging": {
+    "workflow": ".github/workflows/release.yml",
+    "script": "scripts/build_release.py",
+    "computational_code_and_samples_unchanged": true
+  }
+}

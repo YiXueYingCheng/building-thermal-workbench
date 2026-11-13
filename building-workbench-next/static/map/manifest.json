@@ -1,0 +1,37 @@
+{
+  "files": [
+    {
+      "file": "display-grid.json",
+      "source": "https://doi.org/10.6084/m9.figshare.21789074",
+      "sha256": "3b88533d4bd88f3166659a3264273d848cdd8d3b20169f9488d0a2f74a7928c4",
+      "bytes": 345641,
+      "license": "CC-BY-4.0",
+      "attribution": "Beck et al. (2023), Scientific Data 10, 724",
+      "changes": "1991-2020 0.1 degree raster reduced to 0.5 degrees using 5 x 5 modal aggregation; display only"
+    },
+    {
+      "file": "land.json",
+      "source": "https://registry.npmjs.org/@d3-maps/atlas/-/atlas-1.0.0.tgz",
+      "sha256": "1b3426166cd86a7b29bb2547ea9adf178a79df756ce914f2a373c9c3d4f4f1a0",
+      "bytes": 203552,
+      "license": "MIT (atlas package); public domain (Natural Earth source)",
+      "attribution": "Natural Earth; @d3-maps/atlas 1.0.0, Copyright 2026 Georgii Bukharov",
+      "changes": "World country geometries merged using topojson.merge"
+    }
+  ],
+  "projection": "Equirectangular",
+  "resolution_degrees": 0.5,
+  "climate_period": "1991-2020",
+  "method": "Official 0.1 degree climate grid, 5 x 5 modal display reduction; station classifications use the original finer grid.",
+  "source": {
+    "classification_source": "Beck et al. (2023), current corrected GeoTIFF download 61012822 (authors website V3), 1991–2020, EPSG:4326, 0.00833333°",
+    "classification_url": "https://doi.org/10.6084/m9.figshare.21789074",
+    "grid_sha256": "2130f0071dfb2904947d8ec3a0d807fac71004df76e769262004f1602e4d6a13"
+  },
+  "note": "Tiny classes can disappear at display resolution; the 30-class table remains authoritative.",
+  "attribution_notice": "third_party/THIRD_PARTY_MAPS.md",
+  "license_urls": [
+    "https://creativecommons.org/licenses/by/4.0/",
+    "https://www.naturalearthdata.com/about/terms-of-use/"
+  ]
+}

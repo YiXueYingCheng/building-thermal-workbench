@@ -1,0 +1,15 @@
+# Generated environments and local configuration
+.venv/
+dist/
+__pycache__/
+*.py[cod]
+building-workbench-next/config.json
+building-workbench-next/data/
+building-workbench-next/assets/
+building-workbench-next/verification/
+examples/weather/downloads/
+*.log
+*.laccdb
+*.ldb
+.DS_Store
+Thumbs.db

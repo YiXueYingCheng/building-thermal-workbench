@@ -1,0 +1,125 @@
+{
+  "date": "2026-11-13",
+  "feedback": {
+    "period": [
+      1,
+      1,
+      1,
+      2
+    ],
+    "step_minutes": 5,
+    "loads": {
+      "heating_kWh": 39.876207302993365,
+      "cooling_kWh": 0.0,
+      "total_kWh": 39.876207302993365
+    },
+    "policy": {
+      "cold_C": 18.0,
+      "hot_C": 26.0,
+      "flux_deadband_W_m2": 1.0,
+      "minimum_hold_minutes": 60
+    },
+    "initial_state": "C",
+    "C_fraction": 0.2534722222222222,
+    "R_fraction": 0.7465277777777778,
+    "C_hours": 12.166666666666666,
+    "R_hours": 35.833333333333336,
+    "participating_walls": 7,
+    "other_walls_fixed_R": 7,
+    "outward_face": "A"
+  },
+  "orientation": {
+    "period": [
+      4,
+      20,
+      5,
+      20
+    ],
+    "step_minutes": 5,
+    "switch": {
+      "day_of_year": 125,
+      "date": "05-05",
+      "at": "00:00",
+      "to": "cooling",
+      "face_label": "制冷面",
+      "window_start": "04-20",
+      "window_end": "05-04",
+      "window_crosses_year": false,
+      "prior_heating_kWh": 0.0,
+      "prior_cooling_kWh": 28.196717841470207,
+      "cooling_share": 1.0,
+      "consecutive_days": 7,
+      "reason": "前 15 日以制冷面对应需求为主，连续满足 7 天；当天 00:00 切换。"
+    },
+    "B_days": 15,
+    "A_days": 16,
+    "thermal_state": "R",
+    "walls": 14,
+    "fixed_A_loads": {
+      "heating_kWh": 0.0,
+      "cooling_kWh": 11.765432837999672,
+      "total_kWh": 11.765432837999672
+    },
+    "calendar_loads": {
+      "heating_kWh": 0.0,
+      "cooling_kWh": 19.256646885694842,
+      "total_kWh": 19.256646885694842
+    },
+    "annual_reference": {
+      "heating_kWh": 5016.153179298721,
+      "cooling_kWh": 6137.88442365981,
+      "total_kWh": 11154.037602958531
+    },
+    "rule": {
+      "dominant_share": 0.55,
+      "minor_annual_share": 0.02,
+      "persistence_days": 7,
+      "window_days": 15
+    },
+    "all_switches": [
+      {
+        "at": "00:00",
+        "consecutive_days": 7,
+        "cooling_share": 1,
+        "date": "05-05",
+        "day_of_year": 125,
+        "face_label": "制冷面",
+        "prior_cooling_kWh": 28.196717841470207,
+        "prior_heating_kWh": 0,
+        "reason": "前 15 日以制冷面对应需求为主，连续满足 7 天；当天 00:00 切换。",
+        "to": "cooling",
+        "window_crosses_year": false,
+        "window_end": "05-04",
+        "window_start": "04-20"
+      },
+      {
+        "at": "00:00",
+        "consecutive_days": 7,
+        "cooling_share": 0.008821315524808344,
+        "date": "11-26",
+        "day_of_year": 330,
+        "face_label": "供暖面",
+        "prior_cooling_kWh": 0.6028762256010916,
+        "prior_heating_kWh": 67.74024378927786,
+        "reason": "前 15 日以供暖面对应需求为主，连续满足 7 天；当天 00:00 切换。",
+        "to": "heating",
+        "window_crosses_year": false,
+        "window_end": "11-25",
+        "window_start": "11-11"
+      }
+    ]
+  },
+  "checks": {
+    "all_runs_passed": true,
+    "pending_warnings": [],
+    "state_and_face_outputs_checked": true,
+    "changed_basis_rejected": [
+      "step",
+      "weather",
+      "usage"
+    ],
+    "old_fixed_records_unchanged": true,
+    "new_simulations": 4
+  },
+  "meaning": "Building sensible demand, not electricity; workflow examples, not optimized controls or annual savings claims."
+}

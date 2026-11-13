@@ -1,0 +1,18 @@
+[
+  {
+    "MATERIAL_ID": 62,
+    "COLOR": 110,
+    "GROUP_ID": "木材及制品",
+    "NAME": null,
+    "CNAME": "松和云杉",
+    "CONDUCTIVITY": 0.35,
+    "DENSITY": 550.0,
+    "SPECIFIC_HEAT": 2512.0,
+    "S": 5.93,
+    "STEAM": 0.043,
+    "PATTERN": "木材",
+    "ERASEFLAG": 0,
+    "FLAG": 0,
+    "ANOTATION": null
+  }
+]

@@ -1,0 +1,2 @@
+﻿site_id,city,climate,month,left_heating_kWh,right_heating_kWh,heating_saved_kWh,heating_saved_MJ_m2,left_cooling_kWh,right_cooling_kWh,cooling_saved_kWh,cooling_saved_MJ_m2,left_total_kWh,right_total_kWh,total_saved_kWh,total_saved_MJ_m2
+weather_619646d7ba2b9d964c429c666e5b3ba4,长沙 · 公开示例,,1,44.97580831812175,39.876207302993365,5.0996010151283855,0.1383098930535442,0.0,0.0,0.0,0.0,44.97580831812175,39.876207302993365,5.0996010151283855,0.1383098930535442

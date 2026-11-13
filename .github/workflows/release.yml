@@ -1,0 +1,40 @@
+name: Publish public preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: public-preview-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and verify source archive
+        run: python3 scripts/build_release.py --output dist
+      - name: Publish versioned preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python3 -c "import json; print(json.load(open('RELEASE.json'))['version'])")
+          tag="v${version}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; existing assets are preserved."
+            exit 0
+          fi
+          gh release create "$tag" \
+            "dist/building-workbench-v${version}.zip" \
+            "dist/building-workbench-v${version}.zip.sha256" \
+            --target "$GITHUB_SHA" \
+            --title "$tag · 建筑热环境工作台公开预览" \
+            --notes-file docs/RELEASE_NOTES.md \
+            --prerelease
