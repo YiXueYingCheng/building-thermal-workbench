@@ -41,7 +41,7 @@ async function comparisonResultAction(button){
   resetComparisonDetails();
   const selected=await api('/api/comparisons/'+button.dataset.comparisonResults+'/sources');await alignResultComparison(selected);S.resultComparison=selected;S.comparisonData=null;S.comparisonExport=null;
   for(const side of ['left','right'])S.comparisonSources[side]=S.resultComparison[side].length===1?S.resultComparison[side][0].id:'';
-  S.comparisonSources.mode=S.resultComparison.comparison.metric==='temperature'?'natural':'controlled';S.climateFilter='';return true;
+  S.comparePage='results';S.comparisonSources.mode=S.resultComparison.comparison.metric==='temperature'?'natural':'controlled';S.climateFilter='';return true;
  }
  if(button.dataset.mapMetric){S.mapMetric=button.dataset.mapMetric;S.comparisonSelected=null;return true;}
  if(button.dataset.comparisonTable){S.comparisonTable=button.dataset.comparisonTable;S.comparisonSelected=null;return true;}

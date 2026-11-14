@@ -113,10 +113,13 @@ def describe(record,catalog):
         return dict(supported=False,note='此旧来源的几何尚未接入本页，请沿用原配置核对。')
     from building_configuration import baseline
     from model_adapter import VerifiedReader
-    building=copy.deepcopy(record['factors']['building']);building.pop('usage_profile',None);building.pop('envelope_overrides',None)
+    building=copy.deepcopy(record['factors']['building']);building.pop('usage_profile',None);building.pop('envelope_overrides',None);building.pop('library_constructions',None)
     expected=(catalog['records']['global_w00']['factors']['building'] if adapter=='global_frozen_v011' else catalog['ordinary_buildings'][building['id']]['building'])
     if building!=expected:raise ValueError('建筑身份或几何来源已改变，请先核对来源。')
     reader=VerifiedReader(catalog);base,m,job=baseline(catalog,reader,building['id'])
+    if record['factors']['building'].get('library_constructions'):
+        from construction_library import apply
+        apply(m,record)
     result=build(m,base['rooms']);reader.unchanged()
     return dict(result,supported=True,checked_at=now(),record_id=record['id'],revision=record['revision'],building_id=building['id'],building_name=building['name'],
                 source_sha256=job['model'].get('expected_sha256') or job['model']['sha256'],geometry_sha256=digest(result),

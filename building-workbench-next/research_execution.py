@@ -9,12 +9,19 @@ from pathlib import Path
 import copy,re,uuid,shutil,os,ctypes,time
 from foundation import ROOT,read_json,write_json,digest,now,owned
 import output_storage
-from research_sets import Sets,ROLES,LABELS,require,compatible,ref
+from research_sets import Sets,ALL_ROLES as ROLES,LABELS,require,compatible,ref
 from execution_inputs import load_review,OUTPUT_CONTRACT
 from daily_reference import CONTRACT,require_baseline
 from execution_queue import Queue,ensure_worker
 import resources
 from preparation_gate import slot,PreparationPaused
+
+def baseline_contract(record):
+ require(record['factors']['condition']['operation']['mode']=='controlled','对比集负荷计算需要温控运行。')
+ if record['factors']['scope']['period']==[1,1,12,31]:
+  require_baseline(record)
+  return CONTRACT
+ return OUTPUT_CONTRACT
 
 def owner_alive(pid):
  if not isinstance(pid,int) or pid<=0:return False
@@ -51,8 +58,8 @@ class Runs:
   require(type(revision) is int and isinstance(roles,list) and roles and all(k in ROLES for k in roles) and len(set(roles))==len(roles),'请明确选择本组成员。')
   roles=[role for role in ROLES if role in roles]
   catalog=self.catalog();sets=Sets(catalog,self.root);s=sets.get(ident);require(s['revision']==revision,'对比集已更新，请重新核对。')
-  records=sets.records(s);audit=compatible(records);require(audit['consistent'],'共同条件尚未一致：'+'；'.join(audit['issues']))
-  baseline=records['baseline'];require_baseline(baseline)
+  records=sets.records(s);require(set(roles)<=set(records),'所选成员不属于本组。');audit=compatible(records);require(audit['consistent'],'共同条件尚未一致：'+'；'.join(audit['issues']))
+  baseline=records['baseline'];baseline_contract(baseline)
   from model_adapter import capability
   for role in roles:
    cap=capability(records[role],catalog);require(cap['supported'],LABELS[role]+'：'+'；'.join(cap['reasons']))
@@ -62,7 +69,7 @@ class Runs:
   return dict(id=ident,revision=revision,set_sha256=s['sha256'],roles=roles,site_ids=sites,
    members={k:ref(records[k]) for k in roles},cases=len(sites)*len(roles),policy=policy,
    storage=storage,destination=destination,
-   note='全国范围保持在同一保存版本；按地点准备小清单，进度集中显示。W00 同次保留逐日、月度与全年；翻面另需匹配日历。')
+   note='按地点准备小清单，进度集中显示。全年 W00 同时保留逐日参考；短时段仅计算所选日期，不能代替全年日历参考。翻面另需匹配日历。')
  def start(self,ident,revision,roles,expected,submit=False,destination=None):
   require(type(submit) is bool,'提交选项无效。');p=self.preflight(ident,revision,roles,destination)
   require(p['set_sha256']==expected,'对比集版本与预览不同。');require(p['storage']['fits'],'当前空间不足以覆盖本轮留量与磁盘保留值，请减少本轮成员或调整保存位置。')
@@ -126,7 +133,7 @@ class Runs:
       m=build_bundle(r,catalog,self.root,site_ids=[sid],progress=lambda **v:progress(phase='generate',**v))
       progress(phase='prepare',stage='核对输出并准备预算清单',completed=0,total=1)
       token=EVENTS.set(lambda **v:progress(phase='prepare',**v))
-      try:prepared=prepare(self.root,m['id'],sets.store,dict(id=r['id'],revision=r['revision']),output_contract=CONTRACT if role=='baseline' else OUTPUT_CONTRACT)
+      try:prepared=prepare(self.root,m['id'],sets.store,dict(id=r['id'],revision=r['revision']),output_contract=baseline_contract(r) if role=='baseline' else OUTPUT_CONTRACT)
       finally:EVENTS.reset(token)
       s.setdefault('unit_seconds',[]).append(round(time.monotonic()-unit_start,3))
      require(len(prepared['cases'])==1 and prepared['cases'][0]['site_id']==sid,'地点清单与准备请求不一致。')
@@ -149,11 +156,15 @@ class Runs:
    s=self.raw(ident);f=self.futures.get(ident)
    if s['state']=='preparing' and not f and not owner_alive(s.get('owner_pid')):
     s.update(state='interrupted',message='准备服务曾重启，可从已保存清单继续')
-  q=Queue(self.root)
-  with q.db() as db:jobs={(r['batch'],r['idx']):dict(r) for r in db.execute('SELECT j.batch,j.idx,j.status,j.error,b.mode FROM jobs j JOIN batches b ON j.batch=b.id')}
-  for c in s['cases']:
-   j=jobs.get((c['batch_id'],0));c['status']=j['status'] if j else 'prepared';c['error']=j['error'] if j else None;c['paused']=bool(j and j['mode']=='pause')
-  s['counts']={key:sum(c['status']==key for c in s['cases']) for key in ('prepared','pending','running','passed','reused','review','failed','interrupted','cancelled')}
+  from preparation_status import group,approved_sources
+  bindings={};p=s['plan']
+  if p.get('id'):
+   sets=Sets(self.catalog(),self.root);snapshot=sets.get(p['id'])
+   if not members_match(snapshot,p):snapshot=sets.get(p['id'],p['revision'])
+   for role in p['roles']:
+    r=p['members'][role];record=sets.store.get(r['id'],r['revision'])
+    if ref(record)==r:bindings[role]=approved_sources(sets,record,snapshot)
+  s=group(self.root,s,bindings=bindings)
   if s.get('started_epoch'):
    s['preparation_elapsed_seconds']=round((time.time() if s['state']=='preparing' else s.get('finished_epoch',s['started_epoch']))-s['started_epoch'],1)
   values=s.get('unit_seconds',[]);left=max(0,s['plan']['cases']-len(s['cases']))
@@ -170,11 +181,17 @@ class Runs:
  def submit_prepared(self,ident):
   with self.lock:
    s=self.raw(ident);require(s['state']=='prepared','清单尚未全部准备完成。');p=s['plan']
+   projection=self.get(ident)
+   require(not projection['lifecycle']['unknown'],'准备与提交关联待核对；未新增计算。')
+   pending={c['review_id'] for c in projection['cases'] if c['lifecycle']['kind']=='unsubmitted'}
+   if not pending:return projection
    destination=p.get('destination') or output_storage.capture('local',self.root)
    output_storage.verify(destination,self.root,True)
    require(members_match(Sets(self.catalog(),self.root).get(p['id']),p),'本轮成员已更新，请按新版本核对；旧清单保留。')
-   for c in s['cases']:load_review(self.root,c['review_id'],c['plan_sha256'])
    for c in s['cases']:
+    if c['review_id'] in pending:load_review(self.root,c['review_id'],c['plan_sha256'])
+   for c in s['cases']:
+    if c['review_id'] not in pending:continue
     c['batch_id']=Queue(self.root).submit(c['review_id'],c['plan_sha256'],destination)['id'];self.write(s)
    s.update(state='submitted',submit=True,message='已提交本组计算');self.write(s)
    if self.workers:ensure_worker(self.root)

@@ -672,3 +672,27 @@ html.focused-view-open{overflow:hidden}
 
 /* Research task grouping and focused result window. */
 .queue-filters{display:flex;gap:18px;flex-wrap:wrap}.queue-filters label{display:grid;gap:6px;flex:1;min-width:220px}.queue-group{margin:14px 0;border:1px solid #ccdcd2;border-radius:12px;padding:16px;background:#f6f9f6}.queue-group>summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between}.queue-group>summary span{font-size:.9rem;color:#506e60}.queue-group .control{background:white}.queue-results-dialog{width:min(1400px,95vw);max-height:92vh;padding:0;border:1px solid #bfd4c8;border-radius:16px}.queue-results-dialog[open]{display:flex;flex-direction:column}.queue-results-dialog .focused-body{overflow:auto;padding:20px;min-height:120px}.queue-results-dialog::backdrop{background:#183c3055;backdrop-filter:blur(2px)}
+
+/* Transition: version annotations and deliberate Save As. */
+.version-note{margin:.65rem 0;padding:.6rem .8rem;border-left:3px solid #73988b;background:#f3f7f4}.version-note .note-text{white-space:pre-wrap;overflow-wrap:anywhere;margin:.35rem 0;max-height:9rem;overflow:auto}.version-note small{display:block;margin-top:.35rem}#version-note-dialog,#copy-plan-dialog{width:min(640px,92vw);border:1px solid #cbd8d0;border-radius:14px;padding:0}#version-note-dialog .viewer-body,#copy-plan-dialog .viewer-body{padding:1.2rem}#version-note-dialog textarea{width:100%;box-sizing:border-box}#version-note-dialog::backdrop,#copy-plan-dialog::backdrop{background:#213d3655}
+
+.comparison-page-tabs{display:flex;flex-wrap:wrap;gap:1rem;justify-content:space-between;position:sticky;top:0;z-index:3;background:#fff}.comparison-page-tabs [aria-pressed=true]{background:#385f50;color:white}.comparison-library .version-note .note-text{max-height:4rem}.comparison-library-list{gap:1rem}
+
+.rs-columns{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr))}
+
+/* Bounded provider catalog keeps batch controls within reach. */
+.wd-catalog{max-height:420px;overflow:auto}.wd-catalog th{position:sticky;top:0;background:#f2f6f3;z-index:1}.mc-detail fieldset{margin:16px 0;padding:16px;border:1px solid #cbd8d1;border-radius:10px}.mc-detail .check{display:flex;gap:8px;align-items:center;margin:12px 0}
+dialog.library-adoption{width:min(1100px,94vw);max-height:90dvh;padding:0;border:1px solid #cddbd2;border-radius:16px;color:#29433b}dialog.library-adoption[open]{display:flex;flex-direction:column}dialog.library-adoption::backdrop{background:#15352b66}.library-adoption .mc-preview-body{min-height:0;overflow:auto}.library-adoption footer{flex:none;padding:18px 24px;background:#f1f6f2}.library-adoption .viewer-head{flex:none}.library-construction-current{grid-column:1/-1}
+
+.mi-support,.mi-density{padding:16px;background:#f3f7f4;border:1px solid #d2dfd6;border-radius:10px;margin:16px 0}.mi-support .viewer-table,.mi-visible .viewer-table{max-height:340px;overflow:auto}.mi-support small{display:block;margin-top:8px}.mi-support table{min-width:700px}.mi-visible{margin-top:22px}#mi-dialog .mc-preview-body{overflow:auto;min-height:0}#mi-summary{margin:14px 0}#mi-summary .warning{border-left:4px solid #ad6724;padding:10px}
+
+/* Shared daily editor and compact workspace entry points. */
+.daily-source pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:160px;overflow:auto;font-size:12px}
+#daily-manager-detail{max-height:calc(100vh - 235px);overflow:auto;padding-right:10px}
+#daily-manager-list .daily-plan-item{padding:8px 10px;margin:4px 0;font-size:13px}
+.daily-plan-item small{font-size:11px;margin-top:3px}
+.workspace-recent{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.workspace-recent button{text-align:left;white-space:normal}.workspace-recent small{display:block;margin-top:6px}
+@media(max-width:700px){#daily-manager-detail{max-height:none;overflow:visible;padding-right:0}.workspace-recent{grid-template-columns:1fr}#daily-manager .daily-values{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+.daily-provenance{font-size:12px;max-height:190px;overflow:auto}.daily-provenance dt{font-weight:600}.daily-provenance dd{margin:2px 0 10px;overflow-wrap:anywhere}

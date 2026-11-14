@@ -8,10 +8,11 @@ from pathlib import Path
 from contextlib import closing
 from threading import RLock
 from foundation import ROOT,now
-from usage_schedules import profiles,save_profile
+from usage_schedules import profiles,validate_profile
+from component_library import Library
 
 # The local page server is threaded. Serialize lookup + save so simultaneous
-# "save as new" requests cannot bypass the shared numerical deduplication.
+# identical save requests cannot bypass the shared snapshot deduplication.
 SAVE_LOCK=RLock()
 
 def visibility(root=ROOT):
@@ -71,8 +72,31 @@ def _save(root,name,content,parent=None,copied_from=None):
  if copied_from:
   if not isinstance(copied_from,dict) or type(copied_from.get('revision')) is not int:raise ValueError('复制来源版本不完整。')
   selected=find(root,copied_from.get('id'),copied_from['revision'])
+  if copied_from.get('sha256')!=selected['snapshot']['sha256']:raise ValueError('复制来源摘要不匹配，请重新核对。')
   content=copy.deepcopy(content)
-  content['provenance']={'copied_from':{key:selected['snapshot'][key] for key in ('id','revision','name','sha256')}}
- result=save_profile(Path(root),name,content,parent)
+  content['provenance']={'copied_from':{key:selected['snapshot'][key] for key in ('id','revision','name','sha256')},
+      'source_provenance':copy.deepcopy(selected['snapshot']['content'].get('provenance',{})),
+      'source_origin':selected['origin'],'source_aliases':copy.deepcopy(selected['aliases'])}
+ result=_save_profile(Path(root),name,content,parent)
  row=find(root,result['profile']['id'],result['profile']['revision'])
  return dict(**result,hidden=row['hidden'],is_latest=row['is_latest'],latest_revision=row['latest_revision'])
+
+
+def _save_profile(root,name,content,parent=None):
+ if not isinstance(name,str) or not name.strip() or len(name)>100:raise ValueError('请填写 1–100 字的日计划名称。')
+ validate_profile(content)
+ if not parent:
+  # Library-only save policy: do not invalidate frozen calculation inputs.
+  rows=profiles(root);latest={}
+  for r in rows:
+   s=r['snapshot'];latest[s['id']]=max(latest.get(s['id'],0),s['revision'])
+  same=next((r for r in rows if r['snapshot']['revision']==latest[r['snapshot']['id']] and r['snapshot']['name']==name.strip() and r['snapshot']['content']==content),None)
+  if same:return dict(profile=same['snapshot'],reused=True)
+ return dict(profile=Library(root).save('daily',name,content,parent),reused=False)
+
+
+def copy_reference(root,ident,name):
+ from reference_library import daily_profiles
+ source=next((r['snapshot'] for r in daily_profiles() if r['snapshot']['content']['provenance']['reference_id']==ident),None)
+ if source is None:raise ValueError('日作息参考不存在。')
+ return save(root,name,source['content'],copied_from={k:source[k] for k in ('id','revision','sha256')})

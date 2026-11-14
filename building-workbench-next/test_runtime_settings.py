@@ -54,6 +54,14 @@ class RuntimeSettingsTests(unittest.TestCase):
         self.assertEqual(Path(result['import_reference_tables']), legacy.parents[2] / 'work/dest-model-only/tables/TEST.accdb')
         self.assertEqual(result['python'], str(Path(sys.executable).resolve()))
 
+    def test_converter_interface_survives_resolved_config(self):
+        portable = config(self.root)
+        self.assertEqual(portable['converter_interface'], 'portable')
+        old = dict(legacy_root=str(self.root.parent / 'legacy'), python=sys.executable)
+        resolved = settings.normalize_config(old, self.root)
+        self.assertEqual(resolved['converter_interface'], 'legacy')
+        self.assertEqual(settings.normalize_config(resolved, self.root)['converter_interface'], 'legacy')
+
     def test_explicit_optional_nulls_do_not_guess_external_data(self):
         result = config(self.root)
         for key in ('material_batch', 'import_reference_tables', 'public_material_catalog'):

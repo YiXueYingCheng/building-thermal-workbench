@@ -89,7 +89,8 @@ def execution(record, ident, mode, root):
     q = Queue(root)
     with q.db() as db:
         jobs = {r['idx']:dict(r) for r in db.execute('SELECT * FROM jobs WHERE batch=?',(ident,))}
-    results = {r['index']:r for r in q.results(ident)['results']}
+    from result_reading import results as readable_results
+    results = {r['index']:r for r in readable_results(root,ident)['results']}
     values = {}
     for c in p['cases']:
         if c['mode'] != mode:
@@ -110,7 +111,7 @@ def execution(record, ident, mode, root):
         values[sid] = dict(r or {}, status=status, mode=mode, period=c['period'],step_minutes=c['step_minutes'],
             weather_sha256=c['dependencies'][c['weather']],
             evidence=dict(kind='execution',batch_id=ident,index=c['index'],attempt=j['attempt'],identity=c['identity'],
-                result_path=j['result'],result_sha256=j['result_sha256'],model_sha256=c['model_sha256'],scientific_review=review))
+                result_path=j['result'],result_sha256=j['result_sha256'],model_sha256=c['model_sha256'],scientific_review=review,**({'data_retention':r['data_retention']} if r and r.get('data_retention') else {})))
     reader.unchanged()
     return dict(id=ident,kind='execution',record_sha256=digest(record),plan_sha256=b['checksum'],cases=values)
 

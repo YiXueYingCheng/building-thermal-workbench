@@ -23,7 +23,7 @@ configurationAction=async function(button){
 document.addEventListener('change',event=>{if(event.target.id==='envelope-target'){S.envelopeTarget=event.target.value;render();}});
 document.addEventListener('input',event=>{const t=event.target;if(!t.dataset.envelopeField||readonly())return;
  const all=S.configuration.data.envelope,row=all[S.envelopeTarget],x=copy(S.record.factors.building.envelope_overrides||{});
- if(x[row.pair])return;
+ if(x[row.pair]||(S.record.factors.building.library_constructions||[]).some(e=>e.target_ids.includes(row.id)))return;
  x[row.id]??={layers:row.layers.map(l=>({kind:l.kind,values:copy(l.values)}))};x[row.id].layers[Number(t.dataset.envelopeLayer)].values[t.dataset.envelopeField]=t.value===''?null:Number(t.value);
  setPath('factors.building.envelope_overrides',x);updateDirtyStatus();
 });

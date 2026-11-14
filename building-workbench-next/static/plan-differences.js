@@ -2,7 +2,7 @@
 S.planHistories={left:[],right:[]}; S.planDiffOnly=true;
 S.planComparisonDraft=null;
 const planLabels={
- id:'编号',name:'名称',building:'建筑',materials:'材料',condition:'工况',scope:'范围',numerics:'计算设置',
+ density_kg_m3:'密度 / kg/m³',specific_heat_J_kgK:'比热 / J/(kg·K)',visible_absorptance:'可见光吸收率',solar_input:'太阳输入依据',quantity:'所填物理量',value:'输入值',state_relationship:'状态关系',source_state:'基准状态',target_state:'目标状态',specific_heat:'比热关系',inputs:'推算时依据',property_source:'物性来源',method:'来源类型',note:'依据说明',id:'编号',name:'名称',building:'建筑',materials:'材料',condition:'工况',scope:'范围',numerics:'计算设置',
  definition_status:'建筑定义',zones:'热区数量',north_axis:'建筑朝向 / °',conditioned_area_m2:'温控面积 / m²',total_area_m2:'总面积 / m²',wall_ids:'外墙构件',
  definitions:'材料定义',applications:'材料应用',kind:'类型',model:'材料模型',state_identity:'状态区分方式',states:'状态',
  thermal_input:'热学输入方式',resistance_m2K_W:'热阻 / m²·K/W',thickness_mm:'厚度 / mm',conductivity_W_mK:'导热系数 / W/(m·K)',
@@ -54,8 +54,11 @@ function planFields(a,b,path=[],out=[]){
 }
 function planFieldName(path,group){
  let a=group==='numerics'?S.comparison?.left.numerics:S.comparison?.left.factors[group],b=group==='numerics'?S.comparison?.right.numerics:S.comparison?.right.factors[group];
+ let opticsA,opticsB;
  return path.map(k=>{
+  if(k==='optics'){opticsA=a;opticsB=b;}
   a=a?.[k];b=b?.[k];
+  if(typeof k==='string'&&/^[AB]_[RC]$/.test(k)&&typeof miOpticsName==='function'&&(opticsA||opticsB)){const x=opticsA?miOpticsName(opticsA,k):null,y=opticsB?miOpticsName(opticsB,k):null;return x&&y&&x!==y?x+' → '+y:x||y;}
   if(typeof k!=='number')return planLabels[k]||k;
   const title=x=>x?.name?(x.id&&x.id!==x.name?`${x.name} (${x.id})`:x.name):x?.id||null;
   const at=title(a),bt=title(b);
@@ -112,7 +115,7 @@ function planDifferencesView(){return `<section class="plan-differences"><div cl
 function planVersionLabel(r){return typeof r.revision==='number'?'版本 '+r.revision:'原来源版本';}
 function planVersionPick(side){
  const rows=S.planHistories[side]||[],current=S.comparison?.[side];
- return `<label class="field">${side==='left'?'基准方案':'研究方案'}的保存版本<select data-compare-version="${side}">${rows.map((r,i)=>`<option value="${esc(r.revision)}"${String(current?.revision)===String(r.revision)?' selected':''}>${esc(planVersionLabel(r)+(i===0?' · 最新保存':'')+' · '+readableTime(r.saved_at))}</option>`).join('')}</select></label>`;
+ return `<label class="field">${side==='left'?'基准方案':'研究方案'}的保存版本<select data-compare-version="${side}">${rows.map((r,i)=>`<option value="${esc(r.revision)}"${String(current?.revision)===String(r.revision)?' selected':''}>${esc(planVersionLabel(r)+(i===0?' · 最新保存':'')+' · '+versionNoteLabel({id:current?.id,revision:r.revision})+' · '+readableTime(r.saved_at))}</option>`).join('')}</select></label>`;
 }
 function capturePlanComparisonDraft(){
  const name=document.getElementById('comparison-name'),metric=document.getElementById('comparison-metric');

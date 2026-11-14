@@ -24,12 +24,17 @@ class PublicControlsTests(unittest.TestCase):
             write_json(root/REGISTRY,{'data':data,'sha256':digest(data)},root);source.write_text('{"changed":true}')
             with self.assertRaisesRegex(ValueError,'已变化'):merge({'example_bundle':True},root)
 
-    def test_public_guide_has_examples_without_development_claims(self):
+    def test_guide_separates_examples_from_unavailable_development_research(self):
         with tempfile.TemporaryDirectory() as tmp:
             c={'catalog_kind':'standalone_v1'};d=guide('test',c,Path(tmp));content=json.dumps(d,ensure_ascii=False)
             self.assertEqual(d['kind'],'public_preparation');self.assertEqual(len(d['examples']),3)
             self.assertEqual([x['key'] for x in factors(c)],['building','materials','condition','scope'])
-            for phrase in ('T05','五层','14.18%','北京示例','维护与回归'):self.assertNotIn(phrase,content)
+            for phrase in ('T05','14.18%','北京示例','维护与回归'):self.assertNotIn(phrase,content)
+            example_text=json.dumps(d['examples'],ensure_ascii=False)
+            self.assertNotIn('五层',example_text)
+            research=next(x for x in d['material_support'] if x['id']=='development_solid_eca')
+            self.assertIn('本通用入口未接入',research['status'])
+            self.assertIn('不推广为任意材料算法',research['control'])
             self.assertTrue(all(not x['records'] for x in d['examples']))
 
     def test_public_guide_uses_saved_dates_and_versions(self):

@@ -1,0 +1,65 @@
+{
+  "date": "2026-11-15",
+  "version": "v0.73.11-release-draft.1",
+  "passed": true,
+  "route": "ordinary ACCDB import, not template registration",
+  "repaired_sha256": "e8635e619eb353ec66d148e42781bc0f26227d8b2fa898845f487d9ab2995611",
+  "source_annual_values_checked": 840960,
+  "period": [
+    7,
+    15,
+    7,
+    17
+  ],
+  "step_minutes": 5,
+  "rooms": 11,
+  "conditioned_rooms": 6,
+  "engine_cases": [
+    {
+      "mode": "controlled",
+      "passed": true,
+      "rooms": 11,
+      "days": 3,
+      "loads": {
+        "heating_kWh": 0.0,
+        "cooling_kWh": 68.1983696403833,
+        "total_kWh": 68.1983696403833
+      },
+      "temperature_extrema": {
+        "min_C": 24.902319389482976,
+        "max_C": 32.845091417710805
+      },
+      "sql_completion_flags": {
+        "Completed": "FALSE",
+        "CompletedSuccessfully": "FALSE"
+      },
+      "warning_count": 0,
+      "severe_count": 0
+    },
+    {
+      "mode": "natural",
+      "passed": true,
+      "rooms": 11,
+      "days": 3,
+      "loads": null,
+      "temperature_extrema": {
+        "min_C": 25.01828368359473,
+        "max_C": 33.81490441344878
+      },
+      "sql_completion_flags": {
+        "Completed": "FALSE",
+        "CompletedSuccessfully": "FALSE"
+      },
+      "warning_count": 0,
+      "severe_count": 0
+    }
+  ],
+  "source_settings_retained": true,
+  "door_vertices_verified": true,
+  "sql_integrity_and_monthly_closure": true,
+  "old_short_case_numbers_equal": true,
+  "batch_export_verified": true,
+  "new_simulations": 2,
+  "actual_workspaces_modified": false,
+  "published": false
+}

@@ -3,7 +3,7 @@ function versionHistoryPanel(){
  const d=S.history;if(!d||d.record_id!==S.saved.id)return '';
  return `<section class="version-history" id="version-history"><div class="row"><h2>保存版本记录</h2><div class="actions"><button data-action="history">刷新记录</button><button data-action="close-version-history">收起记录</button></div></div><p class="muted">${esc(d.note)}</p><p id="version-history-dirty" class="${S.dirty?'warning':'muted'}">${S.dirty?'当前修改尚未保存；版本对照使用保存内容，切换版本前请先保存或撤销。':'可查看旧版，或将某版与当前查看的保存版本逐项对照。'}</p><div class="version-history-list">${d.versions.map(r=>{
   const selected=r.revision===S.saved.revision;
-  return `<article class="version-history-card${selected?' selected-version':''}" data-history-row="${esc(r.revision)}"><div class="row"><h3>${esc(planVersionLabel(r))}${r.latest?' · 最新保存':''}${selected?' · 正在查看':''}</h3><small class="muted">${esc(readableTime(r.saved_at))}</small></div><p>${esc(r.name)}</p><p class="version-change">${esc(r.changes.summary)}${!r.changes.first?' · 相对'+esc(planVersionLabel({revision:r.changes.previous_revision})):''}</p><p class="muted">${esc(periodLabel(r.period))} · ${r.step_minutes} min · ${r.site_count} 地点</p>
+  return `<article class="version-history-card${selected?' selected-version':''}" data-history-row="${esc(r.revision)}"><div class="row"><h3>${esc(planVersionLabel(r))}${r.latest?' · 最新保存':''}${selected?' · 正在查看':''}</h3><small class="muted">${esc(readableTime(r.saved_at))}</small></div><p>${esc(r.name)}</p>${versionNoteMarkup(r,true)}<p class="version-change">${esc(r.changes.summary)}${!r.changes.first?' · 相对'+esc(planVersionLabel({revision:r.changes.previous_revision})):''}</p><p class="muted">${esc(periodLabel(r.period))} · ${r.step_minutes} min · ${r.site_count} 地点</p>
   <p class="muted">${r.input_count===null?'计算记录暂未能读取':`${r.issues.length?'当前可核对记录：':''}${r.input_count} 个输入包 · ${r.batches.length} 个批次 · ${r.comparison_count} 个比较`}</p>
   ${r.batches?.length?`<ul class="version-batch-list">${r.batches.map(b=>`<li>${esc(b.status)} · ${(b.counts.passed||0)+(b.counts.reused||0)} / ${b.case_count} 项通过${b.counts.review?' · 待复核 '+b.counts.review:''}${b.counts.pending?' · 待算 '+b.counts.pending:''}${b.counts.running?' · 运行 '+b.counts.running:''}</li>`).join('')}</ul>`:''}
   ${r.historical?'<p class="muted">原正式 15 min 历史结果保留在此来源版本。</p>':''}
@@ -42,7 +42,7 @@ async function compareHistoryVersion(revision){
   await loadComparison();
   // Determine the metric from both pinned snapshots, never from an unsaved editor draft.
   if([S.comparison.left,S.comparison.right].some(r=>r.factors.condition.operation.mode==='natural'))S.planComparisonDraft.metric='temperature';
-  resetComparisonDetails();S.resultComparison=null;S.comparisonData=null;S.comparisonExport=null;S.view='compare';
+  resetComparisonDetails();S.resultComparison=null;S.comparisonData=null;S.comparisonExport=null;S.view='compare';S.comparePage='config';
   notice('正在对照两个保存版本，尚未新建比较关系。');
  }catch(error){Object.assign(S,previous);throw error;}
 }

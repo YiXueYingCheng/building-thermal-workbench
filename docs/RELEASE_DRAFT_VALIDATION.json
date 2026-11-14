@@ -1,0 +1,233 @@
+{
+  "version": "v0.73.11-release-draft.2",
+  "published": false,
+  "publication_ready": false,
+  "install_upgrade_baseline": {
+    "version": "v0.73.11-install-check.1",
+    "tests": 86,
+    "simulations": 4,
+    "old_rows_preserved": 27,
+    "old_files_preserved": 171,
+    "old_execution_preview_valid": true
+  },
+  "current_repaired_import": {
+    "date": "2026-11-15",
+    "version": "v0.73.11-release-draft.1",
+    "passed": true,
+    "route": "ordinary ACCDB import, not template registration",
+    "repaired_sha256": "e8635e619eb353ec66d148e42781bc0f26227d8b2fa898845f487d9ab2995611",
+    "source_annual_values_checked": 840960,
+    "period": [
+      7,
+      15,
+      7,
+      17
+    ],
+    "step_minutes": 5,
+    "rooms": 11,
+    "conditioned_rooms": 6,
+    "engine_cases": [
+      {
+        "mode": "controlled",
+        "passed": true,
+        "rooms": 11,
+        "days": 3,
+        "loads": {
+          "heating_kWh": 0.0,
+          "cooling_kWh": 68.1983696403833,
+          "total_kWh": 68.1983696403833
+        },
+        "temperature_extrema": {
+          "min_C": 24.902319389482976,
+          "max_C": 32.845091417710805
+        },
+        "sql_completion_flags": {
+          "Completed": "FALSE",
+          "CompletedSuccessfully": "FALSE"
+        },
+        "warning_count": 0,
+        "severe_count": 0
+      },
+      {
+        "mode": "natural",
+        "passed": true,
+        "rooms": 11,
+        "days": 3,
+        "loads": null,
+        "temperature_extrema": {
+          "min_C": 25.01828368359473,
+          "max_C": 33.81490441344878
+        },
+        "sql_completion_flags": {
+          "Completed": "FALSE",
+          "CompletedSuccessfully": "FALSE"
+        },
+        "warning_count": 0,
+        "severe_count": 0
+      }
+    ],
+    "source_settings_retained": true,
+    "door_vertices_verified": true,
+    "sql_integrity_and_monthly_closure": true,
+    "old_short_case_numbers_equal": true,
+    "batch_export_verified": true,
+    "new_simulations": 2,
+    "actual_workspaces_modified": false,
+    "published": false
+  },
+  "reference_sources": 9,
+  "reference_items": 1028,
+  "energyplus_reference": {
+    "passed": true,
+    "official_idf_sha256": "236379787d9075c6943588e35d433047b2e860fe8a57f36f937d05dbb515c879",
+    "license_sha256": "6056c62430939d292fe52a0a7e1cf037d30b110ddb58fe4d51397531d187d653",
+    "recorded_snapshot_sha256": "b9eb7f54db59a633bd99945b55893f853530a4aae9f9a034f1813e74a20917a8",
+    "recorded_hash_refers_to": "material-library.json extracted snapshot, not original IDF",
+    "matches": [
+      {
+        "kind": "material",
+        "id": "MAT-37b39178705f",
+        "name": "A1 - 1 IN STUCCO",
+        "fields_matched": [
+          "roughness",
+          "thickness",
+          "conductivity",
+          "density",
+          "specific_heat",
+          "thermal_absorptance",
+          "solar_absorptance",
+          "visible_absorptance"
+        ]
+      },
+      {
+        "kind": "material",
+        "id": "MAT-052a8c9850a0",
+        "name": "B5 - 1 IN DENSE INSULATION",
+        "fields_matched": [
+          "roughness",
+          "thickness",
+          "conductivity",
+          "density",
+          "specific_heat",
+          "thermal_absorptance",
+          "solar_absorptance",
+          "visible_absorptance"
+        ]
+      },
+      {
+        "kind": "material",
+        "id": "MAT-8325ba8a6d90",
+        "name": "C10 - 8 IN HW CONCRETE",
+        "fields_matched": [
+          "roughness",
+          "thickness",
+          "conductivity",
+          "density",
+          "specific_heat",
+          "thermal_absorptance",
+          "solar_absorptance",
+          "visible_absorptance"
+        ]
+      },
+      {
+        "kind": "material",
+        "id": "MAT-55fd4390c63c",
+        "name": "C12 - 2 IN HW CONCRETE",
+        "fields_matched": [
+          "roughness",
+          "thickness",
+          "conductivity",
+          "density",
+          "specific_heat",
+          "thermal_absorptance",
+          "solar_absorptance",
+          "visible_absorptance"
+        ]
+      },
+      {
+        "kind": "material",
+        "id": "MAT-05cc65e2d56a",
+        "name": "C4 - 4 IN COMMON BRICK",
+        "fields_matched": [
+          "roughness",
+          "thickness",
+          "conductivity",
+          "density",
+          "specific_heat",
+          "thermal_absorptance",
+          "solar_absorptance",
+          "visible_absorptance"
+        ]
+      },
+      {
+        "kind": "material",
+        "id": "MAT-1062d838e286",
+        "name": "E1 - 3 / 4 IN PLASTER OR GYP BOARD",
+        "fields_matched": [
+          "roughness",
+          "thickness",
+          "conductivity",
+          "density",
+          "specific_heat",
+          "thermal_absorptance",
+          "solar_absorptance",
+          "visible_absorptance"
+        ]
+      },
+      {
+        "kind": "material",
+        "id": "MAT-dac9049e427c",
+        "name": "E2 - 1 / 2 IN SLAG OR STONE",
+        "fields_matched": [
+          "roughness",
+          "thickness",
+          "conductivity",
+          "density",
+          "specific_heat",
+          "thermal_absorptance",
+          "solar_absorptance",
+          "visible_absorptance"
+        ]
+      },
+      {
+        "kind": "material",
+        "id": "MAT-8c92237bf014",
+        "name": "E3 - 3 / 8 IN FELT AND MEMBRANE",
+        "fields_matched": [
+          "roughness",
+          "thickness",
+          "conductivity",
+          "density",
+          "specific_heat",
+          "thermal_absorptance",
+          "solar_absorptance",
+          "visible_absorptance"
+        ]
+      },
+      {
+        "kind": "construction",
+        "id": "CON-2bb8da427744",
+        "name": "EXTWALL80",
+        "layers_matched": 3
+      },
+      {
+        "kind": "construction",
+        "id": "CON-762a89def294",
+        "name": "ROOF34",
+        "layers_matched": 4
+      },
+      {
+        "kind": "construction",
+        "id": "CON-0b411e5c8286",
+        "name": "FLOOR SLAB 8 IN",
+        "layers_matched": 1
+      }
+    ],
+    "user_authorization_unchanged": true
+  },
+  "authorization_scope_expanded": true,
+  "authorization_scope": "schedules and common library only",
+  "previous_validation_version": "v0.73.11-release-draft.1",
+  "current_reference_validation": "REFERENCE_DISTRIBUTION_VALIDATION.json",
+  "note": "Prior installation/upgrade and simulation evidence is inherited; this selection changes no calculation code or retained input values."
+}

@@ -4,11 +4,11 @@
 
 ## 1. 检查下载的整个压缩包
 
-从同一个 [v0.72.2 版本页面](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.72.2) 下载 `building-workbench-v0.72.2.zip` 和 `building-workbench-v0.72.2.zip.sha256`，将两者放在同一目录。在该目录打开 PowerShell：
+从 [v0.73.11 下载页](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.73.11) 下载 `building-workbench-v0.73.11.zip` 和同名 `.zip.sha256` 两份附件。将两者放在同一目录，在该目录打开 PowerShell：
 
 ```powershell
-Get-FileHash -LiteralPath .\building-workbench-v0.72.2.zip -Algorithm SHA256
-Get-Content -LiteralPath .\building-workbench-v0.72.2.zip.sha256 -Encoding UTF8
+Get-FileHash -LiteralPath .\building-workbench-v0.73.11.zip -Algorithm SHA256
+Get-Content -LiteralPath .\building-workbench-v0.73.11.zip.sha256 -Encoding UTF8
 ```
 
 第一条命令的 Hash 应与第二条输出开头的 64 位校验值完全相同，字母大小写可以不同。若不一致，重新下载同一版本，暂不使用该压缩包。
@@ -28,3 +28,5 @@ py -3.12 -B -X utf8 .\scripts\verify_manifest.py
 请在修改配置、源码或示例之前检查。若已经主动修改 `config.json` 等清单内文件，差异可能是预期结果；请使用另一份新解压的原始包检查下载完整性。不要用空配置覆盖已有研究工作区。
 
 GitHub 源码下载和 Release 附件都可以使用各自随包的 `MANIFEST.sha256`。Release 附件多一份干净的默认 `config.json`，源码下载则由安装步骤创建；不要交叉使用两份清单。运行后新增的环境、计算数据等未列入清单，不属于原始分发文件校验范围。
+
+旧平台升级后的配置会保留，不应要求整个旧工作区与原始发行包相同。升级助手会按实际更新清单自行校验，并保存 `UPGRADE_RECEIPT.json`；请同时按 [升级说明](UPGRADE_FROM_0_72_2.md) 核对旧方案和结果。

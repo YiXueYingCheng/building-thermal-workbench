@@ -107,7 +107,7 @@ class WorkspaceSetupTests(unittest.TestCase):
         boot=call('/api/bootstrap');token=boot['token'];self.assertEqual(boot['records'],[])
         self.assertTrue(boot['workspace']['standalone'])
         choices=call('/api/building-import-options')['choices']
-        self.assertEqual({c['id'] for c in choices},{'demo:daytime','demo:nighttime','demo:continuous'})
+        self.assertEqual({c['id'] for c in choices if c['kind']=='demo'},{'demo:daytime','demo:nighttime','demo:continuous'})
         preset=call('/api/material-library')['presets'][0]
         self.assertTrue(preset['builtin'])
         self.assertFalse((self.root/'data/components.sqlite').exists())

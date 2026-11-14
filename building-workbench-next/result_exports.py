@@ -33,6 +33,7 @@ def figure_kind(data):
 def annual_site_rows(data):
     site=data['sites'][0]
     return [dict(site_id=site['site_id'],city=site['city'],demand=kind,
+        data_retention='contains_retained_summary' if __import__('summary_retention').notices(data) else 'full_evidence',
         reference_kWh=site[f'left_{kind}_kWh'],study_kWh=site[f'right_{kind}_kWh'],
         saved_kWh=site[f'{kind}_saved_kWh'],saved_percent=site[f'{kind}_saved_percent'])
         for kind in ('heating','cooling','total')]
@@ -76,6 +77,9 @@ def export(data, root=ROOT):
     for name,rows in [('sites',data['sites']),('climates',data['classes']),('monthly',data['monthly']),('rooms',data['rooms'])]:
         if rows:
             table=[{k:v for k,v in r.items() if not k.endswith('_evidence') and not k.endswith('_pending_warnings')} for r in rows]
+            from summary_retention import notices
+            if notices(data):
+                for row in table:row['data_retention']='contains_retained_summary'
             if name=='sites':
                 from research_input_notes import export_text
                 for row in table:
@@ -153,6 +157,8 @@ left 为参考、right 为研究；saved 为参考减研究。空白保留为缺
         run=subprocess.run([str(python),'-X','utf8',str(ROOT/'plot_comparison.py'),str(stage)],capture_output=True,text=True,encoding='utf-8',
             timeout=90,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         if run.returncode:raise ValueError('论文图导出失败：'+run.stderr[-600:])
+    from summary_retention import export_notice
+    export_notice(stage,data)
     with zipfile.ZipFile(stage/'comparison.zip','w',zipfile.ZIP_DEFLATED) as archive:
         for p in sorted(stage.iterdir()):
             if p.name!='comparison.zip':archive.write(p,p.name)

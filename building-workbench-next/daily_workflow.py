@@ -34,17 +34,24 @@ def batch_label(mode,counts):
 
 def build(record,catalog,root,input_ready=True):
     root=Path(root).resolve();batches,jobs=rr.queue_snapshot(root)
-    out=dict(checked_at=now(),state='none',label='尚未创建逐日清单',preparations=[],batches=[],sites=[],issues=[],
+    out=dict(checked_at=now(),state='none',label='尚未创建逐日清单',preparations=[],preparation_history=[],batches=[],sites=[],issues=[],
         note='收起只隐藏清单，输入文件继续保留；未提交的清单不排队、不占计算进程。可从这里恢复，不必重新生成。')
-    for item in registry(root):
+    from preparation_status import Submissions,approved_sources
+    from research_sets import Sets
+    registered=registry(root);submissions=Submissions(root) if registered else None
+    bindings=approved_sources(Sets(catalog,root),record) if registered else []
+    for item in registered:
         try:
             folder=owned(root/'data/execution/reviews'/item['review'],root)
             plan=read_json(folder/'plan.json')
             if not exact_record(plan,record,folder):continue
-            # Submitted reviews belong to batches, not to the unsubmitted list.
-            if any(b['review']==item['review'] for b in batches):continue
+            life=submissions.review(item['review'],item['checksum'],bindings=bindings)
+            if life['kind'] in ('submitted','finished'):
+                out['preparation_history'].append(dict(id=item['review'],created=plan['created'],lifecycle=life));continue
             row=dict(id=item['review'],plan_sha256=item['checksum'],created=plan['created'],valid=False,site_ids=[c['site_id'] for c in plan['cases']],issue='')
             out['preparations'].append(row)
+            if life['kind'] in ('unknown','partial'):
+                row['issue']=life['label']+'；先核对关联批次，不重复提交。';continue
             try:
                 checked(root,item['review'],item['checksum'],item['bundle_id'],item['bundle_sha256'],record)
                 row['valid']=True

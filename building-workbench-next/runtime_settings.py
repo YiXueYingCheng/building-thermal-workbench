@@ -53,7 +53,13 @@ def normalize_config(value, root):
     if value.get('plot_font') is None:
         result['plot_font'] = defaults['plot_font']
     result['python'] = command(value.get('python') or sys.executable, root)
-    result['plot_python'] = command(value.get('plot_python') or result['python'], root)
+    plot_default = result['python']
+    if 'initialization' not in value and 'plot_python' not in value:
+        import importlib.util
+        plot_default = sys.executable
+        if importlib.util.find_spec('matplotlib') is None:
+            plot_default = str(Path.home() / 'AppData/Local/Programs/Python/Python312/python.exe')
+    result['plot_python'] = command(value.get('plot_python') or plot_default, root)
     powershell = value.get('powershell')
     if powershell is None:
         candidate = Path(os.environ.get('SystemRoot', 'C:/Windows')) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
@@ -63,6 +69,9 @@ def normalize_config(value, root):
     if type(port) is not int or not 1 <= port <= 65535:
         raise ValueError('port 必须是 1–65535 的整数。')
     result['port'] = port
+    result['converter_interface'] = value.get('converter_interface', 'portable' if value.get('conversion_root') else 'legacy')
+    if result['converter_interface'] not in ('portable', 'legacy'):
+        raise ValueError('converter_interface 仅支持 portable 或 legacy。')
     result['initialization'] = value.get('initialization', 'legacy_import')
     if result['initialization'] not in ('new_workspace', 'existing_catalog', 'legacy_import'):
         raise ValueError('initialization 仅支持 new_workspace、existing_catalog 或 legacy_import。')

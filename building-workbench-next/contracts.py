@@ -36,7 +36,7 @@ def normalize(record):
                 item['solar_absorptance']=1-rho if finite_number(rho) else None
         if definition.get('optics_depend_on_state') is False:
             for face in ('A','B'):
-                if face+'_R' in optics:optics[face+'_C']=copy.deepcopy(optics[face+'_R'])
+                if face+'_R' in optics and (definition.get('model') not in ('optical_surface_v1','solid_layer_v1','solid_variable_v1') or any(s.get('id')=='C' for s in definition.get('states',[]))):optics[face+'_C']=copy.deepcopy(optics[face+'_R'])
     return record
 
 def validate(record, sites=None):
@@ -52,6 +52,11 @@ def validate(record, sites=None):
         return errors+['必须提供建筑、材料、工况、范围四个因素。']
     if any(not isinstance(f['building'].get(k),str) or not f['building'][k].strip() for k in ('id','name')):
         errors.append('建筑需要保留编号和名称。')
+    if 'library_constructions' in f['building']:
+        try:
+            from construction_library import validate_bindings
+            validate_bindings(f['building']['library_constructions'])
+        except (ValueError,KeyError,TypeError,AttributeError) as error:errors.append(str(error))
     try:
         period=f['scope']['period']
         if not isinstance(period,list) or len(period)!=4 or any(type(v) is not int for v in period):
@@ -187,5 +192,7 @@ def validate_definitions(defs):
                     value=item.get(key)
                     if value is not None and (not finite_number(value) or not 0<=value<=1):
                         errors.append('光学参数应在 0–1 之间或待填。')
+        from material_types import supported, validate as validate_physical
+        if supported(definition):errors.extend(validate_physical(definition))
         materials[definition['id']]=set(state_ids)
     return materials,errors

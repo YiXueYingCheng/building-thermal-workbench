@@ -1,18 +1,22 @@
 """Presentation only: derive coverage and plot rows from the accepted paired table."""
 METRICS={'heating':'供暖显热需求','cooling':'制冷显热需求','total':'冷热需求合计'}
-LABELS={'baseline':'W00 · 原构造','fixed':'固定 ECA','flip':'翻面 ECA'}
+LABELS={'baseline':'W00 · 原构造','fixed':'固定 ECA','flip':'翻面 ECA','feedback':'翻面＋热阻反馈'}
+
+def roles(rows):return [k for k in LABELS if any(k+'_total_kWh' in r for r in rows)]
 
 def coverage(rows):
-    return dict(selected=len(rows),available={k:sum(r[k+'_total_kWh'] is not None for r in rows) for k in LABELS},
-        paired={k:sum(r[k+'_pair_status']=='paired' for r in rows) for k in ('fixed','flip')},
-        complete=sum(all(r[k+'_pair_status']=='paired' for k in ('fixed','flip')) for r in rows))
+    keys=roles(rows);research=[k for k in keys if k!='baseline']
+    return dict(selected=len(rows),available={k:sum(r[k+'_total_kWh'] is not None for r in rows) for k in keys},
+        paired={k:sum(r[k+'_pair_status']=='paired' for r in rows) for k in research},
+        complete=sum(all(r[k+'_pair_status']=='paired' for k in research) for r in rows))
 
 def plot_rows(rows):
-    out=[]
+    out=[];keys=roles(rows);research=[k for k in keys if k!='baseline']
     for r in rows:
         for metric,label in METRICS.items():
-            for role,condition in LABELS.items():
-                paired=any(r[k+'_pair_status']=='paired' for k in ('fixed','flip')) if role=='baseline' else r[role+'_pair_status']=='paired'
+            for role in keys:
+                condition=LABELS[role]
+                paired=any(r[k+'_pair_status']=='paired' for k in research) if role=='baseline' else r[role+'_pair_status']=='paired'
                 source=r[role+'_'+metric+'_kWh']
                 reason='' if paired else ('无可配对研究结果' if role=='baseline' else r[role+'_pair_reason'])
                 out.append(dict(site_id=r['site_id'],city=r['city'],metric=metric,metric_label=label,role=role,condition=condition,

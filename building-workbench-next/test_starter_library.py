@@ -17,8 +17,8 @@ class StarterLibraryTests(unittest.TestCase):
             root = Path(directory)
             catalog = dict(records={}, sites={})
             choices, donors = options(catalog, root)
-            self.assertEqual(len(choices['choices']), 3)
-            self.assertEqual(len(donors), 3)
+            self.assertEqual(len(choices['choices']), 11)
+            self.assertEqual(len(donors), 11)
             materials = inventory(catalog, root)
             self.assertEqual(materials['versions'], [])
             self.assertEqual(materials['presets'][0]['content']['id'], 'ECA_PUBLIC_EXAMPLE')
@@ -33,8 +33,8 @@ class StarterLibraryTests(unittest.TestCase):
         self.assertEqual(night['weekday'][7:19], [400]+[0]*10+[400])
         self.assertEqual(night['weekday'], night['weekend'])
         self.assertEqual(actual_pair(donors['demo:continuous']['rules']['equipment'], 50)['weekday'], [500]*24)
-        self.assertTrue(all(c['source']['license'] == 'CC BY 4.0' for c in choices))
-        self.assertTrue(all('不是规范值' in c['note'] for c in choices))
+        self.assertTrue(all(c['source']['license'] == 'CC BY 4.0' for c in choices if c['kind']=='demo'))
+        self.assertTrue(all('不是规范值' in c['note'] for c in choices if c['kind']=='demo'))
 
     def test_absolute_source_summary_keeps_units_and_values(self):
         donor = dict(rules={k:dict(weekday=[v]*24,weekend=[0]*24) for k,v in [('people',3),('lighting',200),('equipment',400)]},gains=dict(sensible_W_person=90,lighting_heat_fraction=.8))

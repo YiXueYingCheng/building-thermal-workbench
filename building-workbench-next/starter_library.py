@@ -5,6 +5,10 @@ from foundation import read_json, sha
 from usage_schedules import validate_load, validate_gains
 
 PACKAGE = Path(__file__).resolve().parents[1]
+def bundled_file(relative):
+    external = PACKAGE / relative
+    return external if external.is_file() else Path(__file__).resolve().parent / 'assets/reference-library' / relative
+
 UNITS = {'people': '人/间', 'people/m2': '人/m²', 'W': 'W/间', 'W/m2': 'W/m²'}
 CHANNELS = {'people': '人数', 'lighting': '照明', 'equipment': '设备'}
 
@@ -27,7 +31,7 @@ def describe_choice(ident, label, donor, kind='building'):
 
 
 def usage_templates():
-    path = PACKAGE / 'resources/starter-library/usage-profiles.json'
+    path = bundled_file('resources/starter-library/usage-profiles.json')
     data = read_json(path)
     if data.get('schema') != 1:
         raise ValueError('公用演示配置库版本不受支持。')
@@ -45,11 +49,13 @@ def usage_templates():
                      reference_source=dict(name=data['source'], version=data['version'], license=data['license'], sha256=sha(path)))
         donors[ident] = donor
         choices.append(describe_choice(ident, item['name'], donor, 'demo'))
-    return choices, donors
+    from reference_library import room_templates
+    extra, more = room_templates()
+    return choices + extra, {**donors, **more}
 
 
 def material_presets():
-    path = PACKAGE / 'examples/materials/ECA.json'
+    path = bundled_file('examples/materials/ECA.json')
     content = read_json(path)
     return [dict(id='builtin_eca', revision=1, name=content['name'], builtin=True,
                  content=content, license='CC BY 4.0', source='随包已授权 ECA 示例', source_sha256=sha(path))]

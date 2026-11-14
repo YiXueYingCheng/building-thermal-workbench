@@ -1,0 +1,178 @@
+{
+  "user_decision": "2026-11-15: 作息和公用配置库可随平台公开；其他此次讨论的源项目和独立材料不纳入。",
+  "unique_counts": {
+    "materials": 897,
+    "constructions": 47,
+    "daily_profiles": 28,
+    "annual_schedules": 48,
+    "room_templates": 8
+  },
+  "sources": [
+    {
+      "id": "DEST-01",
+      "name": "building1.accdb",
+      "sha256": "bee9a3d6c2717491874409ea85af3fc33746a29447e96a739509c01366b4b220",
+      "kind": "DeST 2.6 数据库快照",
+      "counts": {
+        "materials": 886,
+        "constructions": 37,
+        "daily_profiles": 20,
+        "annual_schedules": 46,
+        "room_templates": 7
+      },
+      "status": "authorized_common_library_entries_only",
+      "file_identity_verified": true,
+      "source_file_included": false,
+      "scope_note": "仅收录公用参考条目，来源原文件不随包提供；原来源与第三方条件保留。"
+    },
+    {
+      "id": "DEST-02",
+      "name": "building2_aerogel loaded_H.accdb",
+      "sha256": "84fb8f5b3868e2b0ac2614954d089d5febce7c6860e1392b08db7ab6e4aa1b49",
+      "kind": "DeST 2.6 数据库快照",
+      "counts": {
+        "materials": 888,
+        "constructions": 42,
+        "daily_profiles": 1,
+        "annual_schedules": 47,
+        "room_templates": 7
+      },
+      "status": "authorized_common_library_entries_only",
+      "file_identity_verified": true,
+      "source_file_included": false,
+      "scope_note": "仅收录公用参考条目，来源原文件不随包提供；原来源与第三方条件保留。"
+    },
+    {
+      "id": "DEST-03",
+      "name": "building2_aerogel loaded.accdb",
+      "sha256": "62c85aabd21cd23149a1d7a59060242460a8ef0e629e10a5123daf7b3978e40d",
+      "kind": "DeST 2.6 数据库快照",
+      "counts": {
+        "materials": 888,
+        "constructions": 42,
+        "daily_profiles": 0,
+        "annual_schedules": 47,
+        "room_templates": 7
+      },
+      "status": "authorized_common_library_entries_only",
+      "file_identity_verified": true,
+      "source_file_included": false,
+      "scope_note": "仅收录公用参考条目，来源原文件不随包提供；原来源与第三方条件保留。"
+    },
+    {
+      "id": "DEST-04",
+      "name": "building2_aerogel_H.accdb",
+      "sha256": "9950aac9c42c67552478fe14ad59cad93e876dca4cbd094776e3f4b5b003a776",
+      "kind": "DeST 2.6 数据库快照",
+      "counts": {
+        "materials": 888,
+        "constructions": 42,
+        "daily_profiles": 0,
+        "annual_schedules": 47,
+        "room_templates": 7
+      },
+      "status": "authorized_common_library_entries_only",
+      "file_identity_verified": true,
+      "source_file_included": false,
+      "scope_note": "仅收录公用参考条目，来源原文件不随包提供；原来源与第三方条件保留。"
+    },
+    {
+      "id": "DEST-05",
+      "name": "building2.accdb",
+      "sha256": "2462d0d1c6ae64be11f5bd34151dc4aa24436beb5c47dece0b1acb74f5dd76a0",
+      "kind": "DeST 2.6 数据库快照",
+      "counts": {
+        "materials": 887,
+        "constructions": 39,
+        "daily_profiles": 0,
+        "annual_schedules": 47,
+        "room_templates": 7
+      },
+      "status": "authorized_common_library_entries_only",
+      "file_identity_verified": true,
+      "source_file_included": false,
+      "scope_note": "仅收录公用参考条目，来源原文件不随包提供；原来源与第三方条件保留。"
+    },
+    {
+      "id": "DEST-06",
+      "name": "TEST_current_baseline.accdb",
+      "sha256": "373ad2061268e3a6d7cc0b9e1506014cb1677a65c1a8db37ec85f86495f2404d",
+      "kind": "DeST 2.6 数据库快照",
+      "counts": {
+        "materials": 886,
+        "constructions": 37,
+        "daily_profiles": 0,
+        "annual_schedules": 46,
+        "room_templates": 7
+      },
+      "status": "authorized_common_library_entries_only",
+      "file_identity_verified": true,
+      "source_file_included": false,
+      "scope_note": "仅收录公用参考条目，来源原文件不随包提供；原来源与第三方条件保留。"
+    },
+    {
+      "id": "EP-EXAMPLE",
+      "name": "EnergyPlus 26.1.0 ExampleFiles/PurchAirTables.idf",
+      "kind": "EnergyPlus 26.1 已有示例",
+      "sha256": "b9eb7f54db59a633bd99945b55893f853530a4aae9f9a034f1813e74a20917a8",
+      "url": "https://github.com/NatLabRockies/EnergyPlus/blob/v26.1.0/testfiles/PurchAirTables.idf",
+      "counts": {
+        "materials": 8,
+        "constructions": 3,
+        "daily_profiles": 0,
+        "annual_schedules": 0,
+        "room_templates": 0
+      },
+      "status": "original_license_preserved",
+      "official_idf_sha256": "236379787d9075c6943588e35d433047b2e860fe8a57f36f937d05dbb515c879",
+      "recorded_hash_refers_to": "material-library.json extracted snapshot, not original IDF",
+      "file_identity_verified": true,
+      "source_file_included": false,
+      "scope_note": "仅收录公用参考条目，来源原文件不随包提供；原来源与第三方条件保留。"
+    },
+    {
+      "id": "USER-EXCEL",
+      "name": "房间与作息输入参数_示例_修复版.xlsx",
+      "kind": "当前项目已保存作息",
+      "sha256": "d45327178ee8521618377ce2e1ae3fb437592d6793d023547758436ded533722",
+      "counts": {
+        "materials": 0,
+        "constructions": 0,
+        "daily_profiles": 10,
+        "annual_schedules": 0,
+        "room_templates": 0
+      },
+      "status": "authorized_common_library_entries_only",
+      "file_identity_verified": true,
+      "source_file_included": false,
+      "scope_note": "仅收录公用参考条目，来源原文件不随包提供；原来源与第三方条件保留。"
+    },
+    {
+      "id": "USER-LIBRARY",
+      "name": "公共配置库.xlsx",
+      "kind": "用户维护公共库",
+      "sha256": "0483824f4f16cac1a4333336dec9ee561018023e402b48b5c0390495999813a7",
+      "counts": {
+        "materials": 2,
+        "constructions": 0,
+        "daily_profiles": 0,
+        "annual_schedules": 0,
+        "room_templates": 0
+      },
+      "status": "authorized_common_library_entries_only",
+      "file_identity_verified": false,
+      "source_file_included": false,
+      "scope_note": "仅收录公用参考条目，来源原文件不随包提供；原来源与第三方条件保留。"
+    }
+  ],
+  "formation": "由 AI 协助从用户建筑 ACCDB 提取，之后由用户添加、修改和维护；AI 是整理工具，不是独立来源方。",
+  "selection": "../resources/reference-library/DISTRIBUTION.json",
+  "excluded": [
+    {
+      "kind": "materials",
+      "id": "MAT-9a980881db5c",
+      "name": "用户研究材料_10mm",
+      "reason": "独立研究材料，本次不扩大分发范围"
+    }
+  ]
+}

@@ -31,7 +31,7 @@ def resolve(record,catalog,base):
  from component_library import verify
  from usage_schedules import actual_pair
  s=source(catalog,base['building_id']);f=record['factors'];b=copy.deepcopy(f['building'])
- profile=b.pop('usage_profile',None);b.pop('envelope_overrides',None)
+ profile=b.pop('usage_profile',None);b.pop('envelope_overrides',None);b.pop('library_constructions',None)
  if b!=s['building']:raise ValueError('建筑几何、身份或来源已改变；请重新登记来源。')
  content=copy.deepcopy(verify(profile,'usage')['content'] if profile else base);validate_content(content,base)
  op=f['condition']['operation']
@@ -72,9 +72,14 @@ def preview(record,catalog):
  from model_adapter import VerifiedReader
  from usage_schedules import gain_defaults
  s=source(catalog,record['factors']['building']['id']);base,m,job=baseline(catalog,s['building']['id'])
+ envelope=s['envelope']
+ if record['factors']['building'].get('library_constructions'):
+  from construction_library import apply
+  from ordinary_envelope import inventory
+  apply(m,record);envelope=inventory(m)
  return dict(base=base,selected=record['factors']['building'].get('usage_profile',{}).get('content',base),walls=[],
   source_model=job['model'],eligible=True,material_template=None,controls_template=[],usage_sources=s['usage_sources'],
-  gain_defaults=gain_defaults(m),envelope=s['envelope'],source_notes=s['notes'])
+  gain_defaults=gain_defaults(m),envelope=envelope,source_notes=s['notes'])
 
 def compile_case(record,site_id,catalog,reader,operation_mode=None):
  from model_adapter import NotSupported,changes

@@ -60,7 +60,7 @@ def verify_case(folder,row):
 
 def code_identity():
     import model_adapter
-    names=('model_adapter.py','dynamic_adapter.py','calendar_library.py','calendar_preview.py',
+    names=('construction_library.py','material_types.py','surface_materials.py','model_adapter.py','dynamic_adapter.py','calendar_library.py','calendar_preview.py',
         'weather_import.py','source_locations.py','building_configuration.py','component_library.py',
         'usage_schedules.py','ordinary_building.py','ordinary_envelope.py','ordinary_materials.py',
         'ordinary_orientation.py','queue_calendar.py','transition_confirmation.py','workspace_setup.py')

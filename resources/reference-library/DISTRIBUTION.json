@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "date": "2026-11-15",
+  "version": "v0.73.11",
+  "user_decision": "作息和公用配置库可以随库公开，其他就算了。",
+  "authorized_scope": "作息、全年计划、房间配置、材料与构造公用参考快照；保留原来源和第三方条件",
+  "formation": "由 AI 协助从用户建筑 ACCDB 提取，之后由用户添加、修改和维护；AI 是整理工具，不是独立来源方。",
+  "license_scope": "作者的整理、说明及自有修改按既定 CC BY 4.0；原第三方内容不改授项目许可。",
+  "included_counts": {
+    "materials": 897,
+    "constructions": 47,
+    "daily_profiles": 28,
+    "annual_schedules": 48,
+    "room_templates": 8
+  },
+  "total": 1028,
+  "sources": 9,
+  "excluded": [
+    {
+      "kind": "materials",
+      "id": "MAT-9a980881db5c",
+      "name": "用户研究材料_10mm",
+      "reason": "独立研究材料，本次不扩大分发范围"
+    }
+  ],
+  "source_files_included": false,
+  "source_file_scope": "6 份其他建筑 ACCDB 及项目 Excel 原文件不随包提供；来源名称和校验值仅用于追溯。",
+  "previous_public_examples_preserved": true,
+  "data_version_preserved": "2026-11-14.1",
+  "retained_records_unchanged": true,
+  "annual_file_sha256": "4585630fc8148ea9827f600e93bf46ea0636045dcae3085e05a0bbd4d5ee7dbb",
+  "source_catalog_sha256": "8d8ea3cf56a7b5dfb3fcfd57b6c3548664d7067ce8d48cfe12f320463f845bcc",
+  "selected_catalog_sha256": "dc7cb664b8423f5e9b4f8ac1639b7c6a7d8e27c55e6c376222a59e9ffe3b5245",
+  "distributed_in": "v0.73.11",
+  "publication_scope": "authorized common library selection"
+}

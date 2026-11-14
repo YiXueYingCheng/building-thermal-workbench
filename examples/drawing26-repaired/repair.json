@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "name": "Drawing26 · 门洞修补版（普通导入）",
+  "file": "Drawing26_import_repaired.accdb",
+  "sha256": "e8635e619eb353ec66d148e42781bc0f26227d8b2fa898845f487d9ab2995611",
+  "bytes": 13934592,
+  "original_file": "../drawing26/Drawing26.accdb",
+  "original_sha256": "911ccc300f1af61f6a5fee686c2577ae8c1aff145aaf6249e4b5366eaa8d29fa",
+  "door_id": 2892,
+  "changes": [
+    {
+      "id": 2900,
+      "after": 10.61,
+      "before": 10.538439958390052,
+      "table": "POINT",
+      "field": "X",
+      "key": "POINT_ID"
+    },
+    {
+      "id": 2903,
+      "after": 10.61,
+      "before": 10.538439958390052,
+      "table": "POINT",
+      "field": "X",
+      "key": "POINT_ID"
+    },
+    {
+      "id": 2905,
+      "after": 10.61,
+      "before": 10.538439958390052,
+      "table": "POINT",
+      "field": "X",
+      "key": "POINT_ID"
+    },
+    {
+      "id": 2908,
+      "after": 10.61,
+      "before": 10.538439958390052,
+      "table": "POINT",
+      "field": "X",
+      "key": "POINT_ID"
+    },
+    {
+      "id": 2910,
+      "after": 10.61,
+      "before": 10.538439958390052,
+      "table": "POINT",
+      "field": "X",
+      "key": "POINT_ID"
+    },
+    {
+      "id": 2913,
+      "after": 10.61,
+      "before": 10.538439958390052,
+      "table": "POINT",
+      "field": "X",
+      "key": "POINT_ID"
+    },
+    {
+      "id": 2893,
+      "after": 2.506787887653142,
+      "before": 2.7,
+      "table": "SURFACE",
+      "field": "AREA",
+      "key": "SURFACE_ID"
+    },
+    {
+      "id": 2895,
+      "after": 2.506787887653142,
+      "before": 2.7,
+      "table": "SURFACE",
+      "field": "AREA",
+      "key": "SURFACE_ID"
+    },
+    {
+      "id": 1193,
+      "after": 1.813212112346858,
+      "before": 1.6199999999999983,
+      "table": "SURFACE",
+      "field": "AREA",
+      "key": "SURFACE_ID"
+    },
+    {
+      "id": 1195,
+      "after": 1.813212112346858,
+      "before": 1.6199999999999983,
+      "table": "SURFACE",
+      "field": "AREA",
+      "key": "SURFACE_ID"
+    }
+  ],
+  "method": "Clip left edge to common physical host limit x=10.61 m. Preserve right edge, height, material, room associations. Update door area and complementary middle-plane net opaque wall area.",
+  "author": "Zhao Bencheng",
+  "license": "CC-BY-4.0",
+  "modified": true,
+  "replaces_original": false
+}

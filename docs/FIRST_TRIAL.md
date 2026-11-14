@@ -1,12 +1,16 @@
 # 从 GitHub 下载并完成首次试用
 
-本指南供未参与开发的使用者试用 v0.72.2。希望验证的完整流程是：从 GitHub 获取 → 安装 → 登记示例 → 计算 → 查看并导出结果。
+> 当前版本为 v0.73.11 公开预览版。已有 v0.72.2 用户请先看 [升级与备份恢复](UPGRADE_FROM_0_72_2.md)，使用新包中的 Upgrade Workbench.cmd；不要直接覆盖旧工作区。
+
+> v0.73.11 补充：原公开模板与原始库继续保留；另有独立的 [Drawing26 门洞修补版普通导入示例](../examples/drawing26-repaired/README.md)，已验证普通导入及短期计算。请按文件版本区分，旧结果不自动替换。
+
+下文用于 v0.73.11 公开预览版的第三方试用；反馈时请注明使用版本。希望验证的完整流程是：从 GitHub 获取 → 安装 → 登记示例 → 计算 → 查看并导出结果。
 
 ## 1. 下载与解压
 
-在仓库右侧找到 **Releases**，进入 v0.72.2 公开预览版本，在附件中下载 `building-workbench-v0.72.2.zip`，解压到较短、可写的目录，例如 `C:\Workbench\building-workbench-v0.72.2`。
+打开 [v0.73.11 下载页](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.73.11)，在附件中下载 `building-workbench-v0.73.11.zip`，解压到较短、可写的目录，例如 `C:\Workbench\building-workbench-v0.73.11`。请认准附件名中的版本号，不要混用不同版本的包和校验文件。
 
-如果发行附件尚不可用，也可以通过仓库的 **Code → Download ZIP** 下载源码。自动生成的源码包不包含个人运行配置；按照下一步复制 `config.example.json` 即可。不要直接在 ZIP 内双击运行。
+也可以从 [v0.73.11 标签页](https://github.com/YiXueYingCheng/building-thermal-workbench/tree/v0.73.11) 通过 **Code → Download ZIP** 下载该版本源码；仓库 main 分支以后可能继续更新。自动生成的源码包不包含个人运行配置；按照下一步复制 `config.example.json` 即可。不要直接在 ZIP 内双击运行。
 
 Windows 是本版验证的平台。先安装 64 位 Python 3.12；稍后计算还需安装指定版本 EnergyPlus。软件环境和引擎不在源码包中。
 

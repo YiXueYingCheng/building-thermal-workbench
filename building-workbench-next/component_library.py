@@ -4,7 +4,7 @@ from contextlib import closing
 from pathlib import Path
 from foundation import ROOT,canonical,loads,digest,now
 
-KINDS=('usage','material','daily','calendar')
+KINDS=('usage','material','daily','calendar','construction')
 def payload_hash(row):return digest({k:v for k,v in row.items() if k!='sha256'})
 def verify(row,kind=None):
  if not isinstance(row,dict) or set(row)!={'kind','id','revision','name','created','content','sha256'}:raise ValueError('组件版本快照不完整。')

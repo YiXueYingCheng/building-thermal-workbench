@@ -10,6 +10,11 @@ import traceback
 import re
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+class WorkbenchHTTPServer(ThreadingHTTPServer):
+    # Accept simultaneous cold-page feature requests without dropping assets.
+    request_queue_size = 64
+
 from urllib.parse import urlparse, unquote, parse_qs
 from foundation import ROOT, config, read_json, loads, write_json, now, owned
 from manage import current
@@ -25,6 +30,12 @@ import resources
 import comparison_results
 import comparison_library
 import navigation_cache
+import storage_management
+import result_storage
+import result_availability
+import result_timeline
+import retention_cleanup
+import plan_deletion
 import navigation_lists
 import version_history
 import input_inspection
@@ -91,9 +102,16 @@ def make_server(root=ROOT,port=None,start_workers=False):
         token=secrets.token_urlsafe(32);write_json(token_path,dict(token=token),root)
     version=(root/'VERSION').read_text(encoding='utf-8').strip()
     inspections=Inspections(root)
-    input_jobs=InputJobs(root)
+    def preparation_bindings(ident,revision):
+        from preparation_status import approved_sources
+        from research_sets import Sets
+        return approved_sources(Sets(catalog,root),store.get(ident,revision))
+    input_jobs=InputJobs(root,preparation_bindings)
     result_reviews=result_review.Reviews(root)
     set_runs=SetRuns(root,lambda:catalog,workers=start_workers)
+    def cleanup_active():
+        return bool(result_reviews.active) or any(j['state'] in ('queued','running') for j in list(input_jobs.jobs.values())) or any(not f.done() for f in list(set_runs.futures.values()))
+    storage_requests=result_storage.Requests()
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
             super().setup()
@@ -118,9 +136,30 @@ def make_server(root=ROOT,port=None,start_workers=False):
         def error(self,status,message):self.send(status,dict(error=message))
 
         def do_GET(self):
+            try:
+                with storage_requests.enter():return self._do_GET()
+            except ValueError as e:return self.error(409,str(e))
+
+        def _do_GET(self):
             if not self.safe_host():return self.error(403,'访问主机不受支持。')
             url=urlparse(self.path);route=unquote(url.path);query=parse_qs(url.query)
             try:
+                if route=='/summary-retention.js':return self.send(200,(root/'static/summary-retention.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route in ('/result-timeline.js','/result-timeline.css'):
+                    return self.send(200,(root/'static'/route[1:]).read_bytes(),'text/javascript; charset=utf-8' if route.endswith('.js') else 'text/css; charset=utf-8')
+                if route=='/api/result-timeline/inventory':
+                    return self.send(200,result_timeline.inventory(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0])))
+                if route=='/api/result-timeline/daily':
+                    return self.send(200,result_timeline.daily(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0]),query.get('system',[''])[0],query.get('start',[''])[0],query.get('end',[''])[0]))
+                if route=='/result-availability.js':return self.send(200,(root/'static/result-availability.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route=='/api/result-availability':
+                    return self.send(200,result_availability.inspect(root,query.get('batch',[''])[0],int(query['index'][0])) if 'index' in query else result_availability.listing(root,query.get('batch',[''])[0]))
+                if route=='/storage-management.js':return self.send(200,(root/'static/storage-management.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route=='/api/storage-management':return self.send(200,storage_management.inventory(root))
+                if route=='/plan-deletion.js':return self.send(200,(root/'static/plan-deletion.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route=='/api/plan-deletion/history':return self.send(200,plan_deletion.history(root))
+                if route=='/api/storage-management/history':return self.send(200,storage_management.history(root))
+                if route=='/api/storage-management/result-impact':return self.send(200,result_storage.inspect(root,parse_qs(urlparse(self.path).query).get('attempt',[''])[0]))
                 if route=='/api/input-preparations/latest':return self.send(200,input_jobs.latest(query.get('id',[''])[0],int(query.get('revision',['0'])[0]),query.get('kind',[None])[0]))
                 match=re.fullmatch(r'/api/input-preparations/(job_[a-f0-9]{32})',route)
                 if match:return self.send(200,input_jobs.get(match[1]))
@@ -198,6 +237,26 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/material-catalog.js':return self.send(200,(root/'static/material-catalog.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/scope-results-viewer.js':return self.send(200,(root/'static/scope-results-viewer.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/input-workflow.js':return self.send(200,(root/'static/input-workflow.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route in ('/material-types.js','/material-inputs.js','/material-registration.js','/reference-library.js','/weather-downloads.js','/construction-library.js'):
+                    return self.send(200,(root/'static'/route[1:]).read_bytes(),'text/javascript; charset=utf-8')
+                if route=='/api/reference-library':
+                    import reference_library
+                    return self.send(200,reference_library.listing(root))
+                match=re.fullmatch(r'/api/reference-library/(annual|construction|material)/([A-Za-z0-9_-]+)',route)
+                if match:
+                    import reference_library
+                    function={'annual':reference_library.annual,'construction':reference_library.construction,'material':reference_library.material_draft}[match[1]]
+                    return self.send(200,function(match[2]))
+                if route=='/api/weather-downloads/catalog':
+                    import weather_downloads
+                    return self.send(200,weather_downloads.catalog())
+                if route=='/api/weather-downloads':
+                    import weather_downloads
+                    return self.send(200,weather_downloads.listing(root))
+                match=re.fullmatch(r'/api/weather-downloads/(download_[a-f0-9]{32})',route)
+                if match:
+                    import weather_downloads
+                    return self.send(200,weather_downloads.status(root,match[1]))
                 if route in ('/api/material-library','/api/material-library/source-materials'):
                     import material_catalog
                     return self.send(200,material_catalog.source_materials(catalog,root) if route.endswith('/source-materials') else material_catalog.inventory(catalog,root))
@@ -246,7 +305,8 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/api/workspace-guide':return self.send(200,capability_summary.guide(version,catalog,root))
                 if route.startswith('/api/workspace-docs/'):
                     docs={'todos':'规划/平台改进回顾与汇总待办_20261106.md','maintenance':'规划/当前能力与维护入口.md','readme':'README.md','recovery':'规划/存储与恢复操作说明.md','weather':'规划/新气象导入与来源更新_20261107.md','component-updates':'规划/建筑配置与材料来源更新_20261107.md','source-recovery':'规划/来源核对与缺失文件恢复_20261107.md','source-locations':'规划/来源位置登记与输入衔接_20261107.md','building-reuse':'规划/跨建筑映射确认与首轮复用_20261107.md','ordinary-materials':'规划/五层建筑ECA固定应用与构造核对_20261107.md'}
-                    docs.update({'public-examples':'../examples/README.md','public-install':'../docs/INSTALL.md','public-weather':'../examples/weather/来源说明.md'})
+                    docs.update({'storage-management':'../docs/STORAGE_MANAGEMENT.md','workflow-management':'../docs/WORKFLOW_MANAGEMENT.md','public-examples':'../examples/README.md','public-install':'../docs/INSTALL.md','public-weather':'../examples/weather/来源说明.md','reference-materials':'../docs/REFERENCE_LIBRARY_AND_MATERIALS.md','material-semantics':'../docs/MATERIAL_INPUTS.md','material-agent':'../docs/MATERIAL_AGENT_API.md'})
+                    docs['result-timeline']='../docs/RESULT_TIMELINE.md'
                     name=docs.get(route.removeprefix('/api/workspace-docs/'))
                     if not name:return self.error(404,'没有该说明文件。')
                     if not (root/name).is_file():return self.error(404,'当前公开包不包含该历史说明，请查看工作区说明。')
@@ -283,13 +343,25 @@ def make_server(root=ROOT,port=None,start_workers=False):
                         for r in sample.results(b['id'])['results']:values.append(dict(**r,validation_label=b['record_name']))
                     return self.send(200,dict(validation=True,id='validation',record_name='执行验收样本（非正式研究方案）',revision='本轮验证记录',results=values,proof=proof))
                 match=re.fullmatch(r'/api/execution/(batch_[a-f0-9]{32})/results',route)
-                if match:return self.send(200,queue.results(match[1]))
+                if match:
+                    from result_reading import results as readable_results
+                    return self.send(200,readable_results(root,match[1]))
                 if route=='/workspace-setup.js':return self.send(200,(root/'static/workspace-setup.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route=='/comparison-hub.js':return self.send(200,(root/'static/comparison-hub.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route=='/version-notes.js':return self.send(200,(root/'static/version-notes.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route.startswith('/api/version-notes/'):
+                    from version_notes import get as get_note
+                    revision=query.get('revision',[None])[0]
+                    if revision is None:raise ValueError('请指定保存版本。')
+                    if revision.isdigit():revision=int(revision)
+                    return self.send(200,get_note(store,route.removeprefix('/api/version-notes/'),revision))
                 if route=='/api/bootstrap':
+                    from material_types import support_paths
                     from workspace_setup import status as setup_status
+                    from version_notes import listing as note_listing
                     records=store.all();index=presentation.batch_index(root,compact=True);metadata=presentation.library_metadata(records,index);owners=store.member_owners()
                     proof_path=root/'verification/acceptance.json'
-                    return self.send(200,dict(version=version,token=token,workspace=setup_status(root,catalog),records=[dict(summary(r),**metadata[r['id']],research_set=owners.get(r['id'])) for r in records],
+                    return self.send(200,dict(version=version,token=token,material_support=support_paths(),version_notes=note_listing(store),workspace=setup_status(root,catalog),records=[dict(summary(r),**metadata[r['id']],research_set=owners.get(r['id'])) for r in records],
                         capability_guide=capability_summary.factors(catalog),sites=catalog['sites'],ordinary_weather_sites={k:v['site']['id'] for k,v in catalog.get('ordinary_buildings',{}).items()},climate_classes=catalog['global_bundle']['classes'],imported_at=catalog['created'],source_summary=catalog['global_bundle']['summary'],
                         comparisons=comparison_library.describe(store,index),verification=read_json(proof_path) if proof_path.exists() else None,
                         model_verification=read_json(root/'verification/model-input-parity.json') if (root/'verification/model-input-parity.json').exists() else None,
@@ -327,6 +399,12 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 traceback.print_exc();return self.error(500,'读取失败，请查看新工作区服务日志。')
 
         def do_POST(self):
+            try:
+                exclusive=unquote(urlparse(self.path).path) in ('/api/storage-management/execute','/api/storage-management/result-execute','/api/storage-management/retention-execute','/api/plan-deletion/execute')
+                with storage_requests.enter(exclusive):return self._do_POST()
+            except ValueError as e:return self.error(409,str(e))
+
+        def _do_POST(self):
             nonlocal catalog,store
             if not self.safe_host():return self.error(403,'访问主机不受支持。')
             try:
@@ -346,6 +424,14 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 route=unquote(urlparse(self.path).path)
                 if recovery_copy and route not in ('/api/calculation-budget','/api/capabilities','/api/preview','/api/research-input-notes'):
                     return self.error(403,'隔离恢复副本仅供核对，不提交计算或修改数据。')
+                if route=='/api/plan-deletion/preview':return self.send(200,plan_deletion.preview(root,catalog,body['id'],body['scope'],body.get('revision'),cleanup_active()))
+                if route=='/api/plan-deletion/execute':return self.send(200,plan_deletion.execute(root,catalog,body['id'],body['sha256'],body.get('confirmed'),cleanup_active()))
+                if route=='/api/storage-management/retention-preview':return self.send(200,retention_cleanup.preview(root,body['attempt'],cleanup_active()))
+                if route=='/api/storage-management/retention-execute':return self.send(200,retention_cleanup.execute(root,body['id'],body['sha256'],body.get('confirmed'),cleanup_active()))
+                if route=='/api/storage-management/result-preview':return self.send(200,result_storage.preview(root,body['attempt'],cleanup_active()))
+                if route=='/api/storage-management/result-execute':return self.send(200,result_storage.execute(root,body['id'],body['sha256'],body.get('confirmed'),cleanup_active()))
+                if route=='/api/storage-management/preview':return self.send(200,storage_management.preview(root,cleanup_active()))
+                if route=='/api/storage-management/execute':return self.send(200,storage_management.execute(root,body['id'],body['sha256'],body.get('confirmed'),cleanup_active()))
                 if route=='/api/workspace/engine/browse':
                     from database_picker import browse
                     return self.send(200,browse(root,body.get('path',''),kind='engine'))
@@ -427,6 +513,9 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     if route.endswith('-export') and body.get('expected_dataset_sha256')!=result['dataset_sha256']:
                         return self.error(409,'结果已有变化，请重新读取配对结果后再导出。')
                     return self.send(201 if route.endswith('-export') else 200,result_exports.export(result,root) if route.endswith('-export') else result)
+                if route=='/api/version-notes':
+                    from version_notes import save as save_note
+                    return self.send(200,save_note(store,body['id'],body['revision'],body['note'],body['expected_generation']))
                 if route=='/api/drafts':
                     return self.send(201,store.create(body['source_id'],body['base_revision'],body.get('changes',{})))
                 if route.startswith('/api/drafts/'):
@@ -449,10 +538,57 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     import ordinary_materials
                     record=store.update_payload(store.get(body['id'],body['revision']),body.get('changes',{}))
                     return self.send(200,ordinary_materials.preview(record,catalog,body.get('action','inspect'),body.get('state_id','R')))
+                if route=='/api/reference-library/save-construction':
+                    import construction_library
+                    construction_library.validate_content(body['content'])
+                    return self.send(201,Library(root).save('construction',body['name'],body['content'],body.get('parent')))
+                if route=='/api/reference-library/construction-preview':
+                    import construction_library
+                    record=store.update_payload(store.get(body['id'],body['revision']),body.get('changes',{}))
+                    return self.send(200,construction_library.preview(root,record,catalog,body['target'],body['selection']))
+                if route=='/api/reference-library/copy-construction':
+                    import reference_library
+                    return self.send(201,reference_library.copy_construction(root,body['id'],body['name']))
+                if route=='/api/reference-library/copy-daily':
+                    # Compatibility route; both entry points share validation,
+                    # source preservation and duplicate-save rules.
+                    return self.send(201,daily_library.copy_reference(root,body['id'],body['name'])['profile'])
+                if route=='/api/material-library/density-preview':
+                    from material_types import density_preview
+                    return self.send(200,density_preview(body['content'],body.get('source_state','R'),body.get('cp_rule','independent'),body.get('confirmed',False)))
+                if route=='/api/material-library/optics-preview':
+                    import surface_materials
+                    from model_adapter import compile_case,VerifiedReader
+                    record=store.update_payload(store.get(body['id'],body['revision']),body.get('changes',{}))
+                    if not surface_materials.enabled(record):raise ValueError('此核对入口用于新固定物性材料。')
+                    base=surface_materials.baseline(record);reader=VerifiedReader(catalog)
+                    model,_=compile_case(base,base['factors']['scope']['site_ids'][0],catalog,reader)
+                    audit=surface_materials.apply(model,record);reader.unchanged()
+                    return self.send(200,audit)
+                if route=='/api/material-library/targets':
+                    import surface_materials
+                    from model_adapter import compile_case, VerifiedReader
+                    record=store.update_payload(store.get(body['id'],body['revision']),body.get('changes',{}))
+                    base=surface_materials.baseline(record);reader=VerifiedReader(catalog)
+                    model,_=compile_case(base,base['factors']['scope']['site_ids'][0],catalog,reader)
+                    reader.unchanged()
+                    return self.send(200,surface_materials.target_rows(model))
+                if route=='/api/weather-downloads/browse':
+                    from output_picker import browse
+                    return self.send(200,browse(root,body.get('path',''),title='选择气象下载文件夹'))
+                if route in ('/api/weather-downloads/start','/api/weather-downloads/cancel','/api/weather-downloads/resume','/api/weather-downloads/register'):
+                    import weather_downloads
+                    op=route.rsplit('/',1)[1]
+                    if op=='start':result=weather_downloads.start(root,body.get('ids'),body.get('output'))
+                    elif op=='register':
+                        result=weather_downloads.register(root,body['id'],body.get('ids'),catalog,body.get('reviewed'))
+                        catalog=current(root);store=Store(catalog,root)
+                    else:result=getattr(weather_downloads,op)(root,body['id'])
+                    return self.send(200,result)
                 if route=='/api/material-library/adoption-preview':
                     import material_catalog
                     record=store.update_payload(store.get(body['id'],body['revision']),body.get('changes',{}))
-                    return self.send(200,material_catalog.adoption_preview(record,body['target'],catalog,root))
+                    return self.send(200,material_catalog.adoption_preview(record,body['target'],catalog,root,body.get('selection')))
                 if route=='/api/room-configuration/preview':return self.send(200,room_configuration.preview(body,catalog))
                 if route=='/api/components':
                     kind=body['kind'];content=body['content']
@@ -465,6 +601,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
                         normalized=normalize({'factors':{'materials':{'definitions':[content]}}})['factors']['materials']['definitions']
                         _,errors=validate_definitions(normalized)
                         if errors:raise ValueError('；'.join(errors))
+                        content=normalized[0]
                     else:raise ValueError('组件类型不受支持。')
                     return self.send(201,Library(root).save(kind,body['name'],content,body.get('parent')))
                 if route=='/api/capabilities':
@@ -553,7 +690,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
             except (ValueError,TypeError,AttributeError) as error:return self.error(400,str(error))
             except Exception:
                 traceback.print_exc();return self.error(500,'保存失败，已保存版本保持不变。')
-    server=ThreadingHTTPServer(('127.0.0.1',port),Handler)
+    server=WorkbenchHTTPServer(('127.0.0.1',port),Handler)
     server.daemon_threads=True
     if start_workers:
         observer=disk_sampling.Sampler(root)

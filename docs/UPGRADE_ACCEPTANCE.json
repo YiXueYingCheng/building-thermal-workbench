@@ -1,0 +1,48 @@
+{
+  "passed": true,
+  "from_version": "0.72.2",
+  "to_version": "0.73.11",
+  "unit_tests": 9,
+  "new_isolated_simulations": 2,
+  "updated_files": 156,
+  "backup_files": 510,
+  "old_database_rows": 27,
+  "old_data_preserved_at_upgrade": true,
+  "external_results_unchanged_at_upgrade": true,
+  "old_new_restored_loads_equal": true,
+  "loads": {
+    "R": {
+      "heating_kWh": 34.48098105597957,
+      "cooling_kWh": 0.0,
+      "total_kWh": 34.48098105597957
+    },
+    "C": {
+      "heating_kWh": 44.97580831812175,
+      "cooling_kWh": 0.0,
+      "total_kWh": 44.97580831812175
+    }
+  },
+  "comparison_and_exports_passed": [
+    "before",
+    "upgraded",
+    "restored"
+  ],
+  "saved_new_version_notes_and_plan_preserved_in_restore_sidecar": true,
+  "upgraded_new_external_export_preserved": true,
+  "restored_snapshot_exact": true,
+  "python_environment_preserved": true,
+  "versions_started": [
+    "0.72.2",
+    "0.73.11",
+    "0.72.2"
+  ],
+  "fixture_services_stopped": true,
+  "unchanged_actual_workspaces": "checked separately at finalization",
+  "published": false,
+  "limitations": [
+    "仅支持 v0.72.2 原路径升级；不迁移安装路径",
+    "恢复后新增资料保存在现场副本，不自动合并进旧数据库",
+    "外部原始来源和引擎不由本助手备份",
+    "另一台 Windows 设备试用安排在发布后"
+  ]
+}

@@ -100,6 +100,7 @@ def tables(data):
     sites=[];monthly=[];temperatures=[];systems=[];reviews=[]
     for r in data['results']:
         common={k:r[k] for k in ('index','site_id','city','climate','site_kind','mode','status','acceptance','accepted')}
+        common.update(data_retention=r.get('data_retention',{}).get('mode','full_evidence'))
         common.update(research_input_status=note['status'] if note else '',research_input_note=export_text(note))
         sites.append(dict(common,period='-'.join(map(str,r['period'])),step_minutes=r['step_minutes'],days=r.get('days'),
             **{k:r.get('loads',{}).get(k) if r.get('loads') is not None else None for k in ('heating_kWh','cooling_kWh','total_kWh')},
@@ -168,6 +169,8 @@ dataset.json 保存任务身份、来源路径及摘要；原始模型、气象�
 数据标识：{data['dataset_sha256']}
 '''
     (stage/'阅读说明.txt').write_text(text,'utf-8-sig')
+    from summary_retention import export_notice
+    export_notice(stage,data)
     files={str(p.relative_to(stage)).replace('\\','/'):sha(p) for p in stage.rglob('*') if p.is_file()}
     with zipfile.ZipFile(stage/'batch.zip','w',zipfile.ZIP_DEFLATED) as z:
         for name in files:z.write(stage/name,name)

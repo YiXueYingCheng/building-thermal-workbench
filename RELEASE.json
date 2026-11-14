@@ -1,94 +1,31 @@
 {
   "schema": 1,
-  "version": "0.72.2",
-  "prepared_on": "2026-11-13",
-  "copyright_holder": "Zhao Bencheng",
-  "code_license": "MIT",
-  "data_docs_license": "CC-BY-4.0",
-  "license_scope": "docs/LICENSE_SCOPE.md",
-  "license_confirmation": "Author explicitly selected MIT + CC BY 4.0 on 2026-11-13.",
-  "known_issues": "docs/KNOWN_ISSUES.md",
-  "validation": "docs/VALIDATION.json",
-  "based_on": "0.72.1",
-  "standalone_result_archives": [
-    {
-      "archive": "验收结果/Drawing26-ECA-长沙两日/两态对照结果.zip",
-      "unchanged_payload_files": 8,
-      "omitted_obsolete_preview": false
-    },
-    {
-      "archive": "验收结果/Drawing26-反馈与翻面/反馈与翻面示例结果.zip",
-      "unchanged_payload_files": 20,
-      "omitted_obsolete_preview": true
-    }
+  "version": "0.73.11",
+  "channel": "public_preview",
+  "published": true,
+  "publication_ready": true,
+  "base_public_version": "0.72.2",
+  "previous_install_candidate": "v0.73.11-install-check.1",
+  "user_reference_authorization": "schedules and common configuration library authorized; other newly discussed source projects and independent research material excluded",
+  "blocking_items": [],
+  "upgrade_guide": "docs/UPGRADE_FROM_0_72_2.md",
+  "release_notes": "docs/RELEASE_NOTES.md",
+  "reference_review": "docs/REFERENCE_DISTRIBUTION_REVIEW.md",
+  "repaired_example": "examples/drawing26-repaired/README.md",
+  "reference_scope_resolved": true,
+  "distribution_selection": "resources/reference-library/DISTRIBUTION.json",
+  "previous_release_draft": "v0.73.11-release-draft.2",
+  "prepared_on": "2026-11-15",
+  "distribution_state": "public_preview",
+  "upgrade_tool": "scripts/upgrade_workbench.py",
+  "upgrade_entry": "Upgrade Workbench.cmd",
+  "upgrade_supported_from": [
+    "0.72.2"
   ],
-  "license_finalization_checks": {
-    "author_choice": "MIT + CC BY 4.0",
-    "confirmed_on": "2026-11-13",
-    "license_texts_verified": true,
-    "guide_tests_rechecked": 4,
-    "result_archives_with_embedded_license": 2,
-    "computational_code_unchanged": true,
-    "frozen_samples_unchanged": true,
-    "new_simulations": 0,
-    "remote_publication": false
-  },
-  "distribution_revision": 6,
-  "third_party_notice_revision": {
-    "date": "2026-11-13",
-    "distribution_revision": 2,
-    "change": "Clarify destep development references and actual runtime use.",
-    "reference_document": "docs/DESTEP_REFERENCE.md",
-    "original_author": "Hongyuan Jia",
-    "original_copyright": "Copyright (c) 2024 Hongyuan Jia",
-    "original_license": "MIT",
-    "upstream_archive_and_license_unchanged": true,
-    "computational_code_and_samples_unchanged": true,
-    "protected_files_checked": 298,
-    "new_simulations": 0
-  },
-  "github_preparation_revision": {
-    "date": "2026-11-13",
-    "distribution_revision": 3,
-    "change": "Add GitHub first-use guide, feedback template, release notes and byte-preserving Git attributes.",
-    "reference_document": "docs/FIRST_TRIAL.md",
-    "computational_code_and_samples_unchanged": true,
-    "protected_files_checked": 317,
-    "new_simulations": 0,
-    "remote_publication": false,
-    "independent_computer_trial": "collect_after_publication"
-  },
-  "remote_publication_at_preparation": false,
+  "upgrade_validation": "docs/UPGRADE_ACCEPTANCE.json",
+  "post_publication_tasks": [
+    "Independent Windows device download and trial"
+  ],
   "repository_url": "https://github.com/YiXueYingCheng/building-thermal-workbench",
-  "publication_packaging": {
-    "workflow": ".github/workflows/release.yml",
-    "script": "scripts/build_release.py",
-    "computational_code_and_samples_unchanged": true
-  },
-  "homepage_revision": {
-    "date": "2026-11-13",
-    "change": "Real UI screenshots, exact engine version, integrity checker, feedback labels, actual repository links.",
-    "computational_code_and_samples_unchanged": true,
-    "drawing26_license_unchanged": true,
-    "new_simulations": 0
-  },
-  "solver_and_original_models_unchanged": true,
-  "calendar_and_starter_library_revision": {
-    "date": "2026-11-13",
-    "base_version": "0.72.1",
-    "python_tests_passed": 48,
-    "calendar_ui_regressions_passed": 5,
-    "browser_calendar_preview": true,
-    "browser_calendar_save": true,
-    "browser_calendar_apply": true,
-    "browser_scheme_save_and_reload": true,
-    "browser_queue_default_all": true,
-    "browser_material_copy_edit_save": true,
-    "browser_import_demo_choice_and_preview": true,
-    "original_scheme_preserved": true,
-    "protected_files_byte_identical": 125,
-    "new_simulations": 0,
-    "arbitrary_accdb_conversion_not_revalidated": true,
-    "independent_machine_v0722_trial": "pending"
-  }
+  "release_url": "https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.73.11"
 }

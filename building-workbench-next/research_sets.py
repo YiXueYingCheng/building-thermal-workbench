@@ -13,7 +13,8 @@ from contracts import calculation_recipe,record_digest,differences
 from calendar_library import stable_numbers
 
 ROLES=('baseline','fixed','flip')
-LABELS=dict(baseline='W00 · 原构造',fixed='固定 ECA',flip='翻面 ECA')
+ALL_ROLES=(*ROLES,'feedback')
+LABELS=dict(baseline='W00 · 原构造',fixed='固定 ECA',flip='翻面 ECA',feedback='翻面＋热阻反馈')
 COMMON=dict(building='建筑、基材与房间使用',operation='温控与运行作息',scope='地点与时段',numerics='步长与数值设置')
 
 def require(ok,message):
@@ -25,13 +26,13 @@ def same_record(a,b):
     # JSON through the browser turns 1.0 into 1; this is not a saved input change.
     return record_digest(stable_numbers(a))==record_digest(stable_numbers(b))
 
-def material_basis(record):
+def material_basis(record,include_thermal=True):
     """Compare installed material and active thermal state; the flip B face may differ."""
     m=record['factors']['materials'];controls=record['factors']['condition']['controls'];rows=[]
     for a in m['applications']:
         d=next(x for x in m['definitions'] if x['id']==a['material_id'])
         thermal=[c for c in controls if c['application_id']==a['id'] and c['channel']=='thermal']
-        rows.append(dict(application=a,model=d['model'],states=d['states'],optics_A={k:v for k,v in d['optics'].items() if k.startswith('A_')},thermal=thermal))
+        rows.append(dict(application=a,model=d['model'],states=d['states'],optics_A={k:v for k,v in d['optics'].items() if k.startswith('A_')},thermal=thermal if include_thermal else []))
     return stable_numbers(rows)
 
 def common(record):
@@ -45,15 +46,37 @@ def compatible(records):
     issues=[]
     b=records['baseline'];m=b['factors']['materials']
     if m.get('applications') or m.get('legacy_construction_overrides') or b['factors']['condition']['controls']:issues.append('W00 需保留原构造，不含研究材料应用或材料控制。')
-    for role in ('fixed','flip'):
+    for role in (k for k in records if k!='baseline'):
         r=records[role];c=r['factors']['condition']['controls']
         if not r['factors']['materials']['applications']:issues.append(LABELS[role]+'尚无研究材料应用。')
-        if any(x['mode']!='fixed' for x in c if x['channel']=='thermal'):issues.append(LABELS[role]+'本组首轮采用固定热学状态。')
+        thermal=[x for x in c if x['channel']=='thermal']
+        if role=='feedback':
+            if not any(x['mode']=='feedback' for x in thermal) or any(x['mode'] not in ('fixed','feedback') for x in thermal):issues.append(LABELS[role]+'需要明确的反馈作用范围，其余墙面保持固定。')
+        elif not thermal or any(x['mode']!='fixed' for x in thermal):issues.append(LABELS[role]+'的热学控制与成员角色不一致。')
         face=[x for x in c if x['channel']=='orientation']
         if not face or any(x['mode']!=('fixed' if role=='fixed' else 'calendar') for x in face):issues.append(LABELS[role]+'的朝向控制与角色不一致。')
     p=[r['provenance'] for r in records.values()]
-    if len({(r['adapter'],r['snapshot_id']) for r in p})!=1:issues.append('三个成员的建筑来源不同，需要先核对。')
+    if len({(r['adapter'],r['snapshot_id']) for r in p})!=1:issues.append('组内成员的建筑来源不同，需要先核对。')
     rows.append(dict(key='research_basis',label='两项 ECA 的热学、A 面与应用范围',equal=material_basis(records['fixed'])==material_basis(records['flip'])))
+    if 'feedback' in records:
+        rows.append(dict(key='feedback_basis',label='仅翻面与反馈的材料参数、A/B 两面及应用范围',equal=material_basis(records['flip'],False)==material_basis(records['feedback'],False) and records['flip']['factors']['materials']['definitions']==records['feedback']['factors']['materials']['definitions']))
+        def thermal_targets(record):
+            targets={}
+            for c in record['factors']['condition']['controls']:
+                if c['channel']!='thermal':continue
+                for wall in c['target_ids']:
+                    key=(c['application_id'],wall)
+                    require(key not in targets,'同一墙面存在重复热学控制。')
+                    targets[key]={k:v for k,v in c.items() if k not in ('id','target_ids')}
+            return targets
+        flip_targets=thermal_targets(records['flip']);feedback_targets=thermal_targets(records['feedback'])
+        rows.append(dict(key='feedback_unaffected',label='未参与反馈的墙面保持原固定状态',equal=set(flip_targets)==set(feedback_targets) and all(c['mode']=='feedback' or c==flip_targets.get(k) for k,c in feedback_targets.items())))
+    if 'feedback' in records:
+        from calendar_library import active_references
+        def calendar_content(r):
+            refs=active_references(r)
+            return [v['snapshot']['content'] for v in refs]
+        rows.append(dict(key='control_calendar',label='仅翻面与反馈使用同一逐日日历',equal=calendar_content(records['flip'])==calendar_content(records['feedback'])))
     issues += [r['label']+'不一致' for r in rows if not r['equal']]
     return dict(consistent=not issues,rows=rows,issues=issues)
 
@@ -87,18 +110,18 @@ class Sets:
 
     def describe(self,ident,revision=None,summary_only=False):
         s=self.get(ident,revision);r=self.records(s);out=dict(id=s['id'],revision=s['revision'],name=s['name'],notes=s['notes'],created=s['created'],sha256=s['sha256'],audit=compatible(r),
-            members={k:dict(**short(r[k]),source=v['source'],result_candidates=len(v.get('results',[]))) for k,v in s['members'].items()})
+            members={k:dict(**short(r[k]),source=v['source'],source_summary=short(self.store.get(v['source']['id'],v['source']['revision'])),result_candidates=len(v.get('results',[]))) for k,v in s['members'].items()})
         if summary_only:return out
         with self.store.connect() as db:out['history']=[dict(revision=row[0],created=row[1],name=loads(row[2])['name']) for row in db.execute('SELECT revision,created,payload FROM research_sets WHERE id=? ORDER BY revision DESC',(ident,))]
         out['latest_revision']=out['history'][0]['revision'];out['calendars']=[]
         from calendar_library import status
-        for role in ('flip',):
+        for role in (k for k in ('flip','feedback') if k in r):
             for row in status(r[role],self.catalog):out['calendars'].append(dict(role=role,**row))
         out['common']=common(r['baseline']);return out
 
     def create_preview(self,name,sources):
         require(isinstance(name,str) and 1<=len(name.strip())<=100,'请填写对比集名称。')
-        require(isinstance(sources,dict) and set(sources)==set(ROLES),'请明确选择三个成员的保存版本。')
+        require(isinstance(sources,dict) and set(sources) in (set(ROLES),set(ALL_ROLES)),'请明确选择三个或四个成员的保存版本。')
         records={}
         for role,v in sources.items():
             require(isinstance(v,dict) and set(v)=={'id','revision'} and type(v['revision']) is int,'来源需指定明确保存版本。')
@@ -125,6 +148,7 @@ class Sets:
         result_refs={k:self._bind_results(r) for k,r in source_records.items()}
         with self.store.connect() as db:
             db.execute('BEGIN IMMEDIATE')
+            for source in source_records.values():self.store.get(source['id'],source['revision'])
             # A double click creates only one set. Explicit copies can use a new name.
             for row in db.execute('SELECT payload FROM research_sets WHERE revision=1'):
                 old=loads(row[0])
@@ -137,7 +161,7 @@ class Sets:
                 db.execute('INSERT INTO versions VALUES(?,?,?,?)',(r['id'],1,canonical(r),at))
                 db.execute('INSERT INTO research_set_members VALUES(?,?,?)',(r['id'],ident,role))
                 members[role]=dict(record=ref(r),source=ref(source),results=result_refs[role])
-            s=dict(schema_version=1,id=ident,revision=1,name=p['name'],notes='',created=at,members=members,creation_sha256=expected,change=dict(kind='create',label='从三个指定版本建立独立成员'))
+            s=dict(schema_version=1,id=ident,revision=1,name=p['name'],notes='',created=at,members=members,creation_sha256=expected,change=dict(kind='create',label='从指定版本建立独立成员'))
             self._publish(db,s)
         return dict(id=ident,revision=1,reused=False)
 
@@ -151,10 +175,10 @@ class Sets:
         old=self.records(s);new=copy.deepcopy(old);role=request.get('role');shared=request.get('shared',[])
         require(isinstance(shared,list) and len(set(shared))==len(shared) and set(shared)<=set(COMMON),'共同条件选择无效。')
         if role is not None:
-            require(role in ROLES,'成员角色无效。');new[role]=self.store.update_payload(old[role],request.get('changes',{}))
+            require(role in old,'成员角色无效。');new[role]=self.store.update_payload(old[role],request.get('changes',{}))
             require(new[role]['factors']['building']['id']==old[role]['factors']['building']['id'],'本轮对比集保持建筑身份；跨建筑研究请另外创建。')
             for key in shared:
-                for other in ROLES:
+                for other in old:
                     if key=='operation':new[other]['factors']['condition']['operation']=copy.deepcopy(new[role]['factors']['condition']['operation'])
                     elif key=='numerics':new[other]['numerics']=copy.deepcopy(new[role]['numerics'])
                     else:new[other]['factors'][key]=copy.deepcopy(new[role]['factors'][key])
@@ -172,7 +196,7 @@ class Sets:
         from calendar_library import status
         rows=[]
         from research_change_summary import describe as change_summary
-        for role in ROLES:
+        for role in old:
             changed=not same_record(old[role],new[role]);same_recipe=recipe(old[role])==recipe(new[role])
             rows.append(dict(role=role,label=LABELS[role],changed=changed,from_revision=old[role]['revision'],to_revision=old[role]['revision']+int(changed),
                 factors=differences(old[role],new[role]),same_recipe=same_recipe,result_note='研究输入保持；已有结果候选可继续核对' if same_recipe else '研究输入变化；原结果保留，不作为修改后的新结果',
@@ -228,7 +252,7 @@ class Sets:
                     d=build(candidate['batch_id'],self.catalog,self.root)
                     require((d['record_id'],d['revision'])==(source['id'],source['revision']),'结果批次未绑定所选来源版本。')
                     require(d['plan_sha256']==candidate['plan_sha256'] and d['record_sha256']==candidate['source']['sha256'],'结果冻结输入与绑定来源不一致。')
-                    row.update(usable=d['counts']['accepted']>0,counts=d['counts'],results=[{k:r.get(k) for k in ('index','site_id','city','accepted','acceptance','status','status_label','loads','days','period','mode','step_minutes','weather_sha256','evidence','pending_warnings')} for r in d['results']],source=dict(name=source['name'],**candidate['source']))
+                    row.update(usable=d['counts']['accepted']>0,counts=d['counts'],results=[{k:r.get(k) for k in ('index','site_id','city','accepted','acceptance','status','status_label','loads','days','period','mode','step_minutes','weather_sha256','evidence','pending_warnings','data_retention')} for r in d['results']],source=dict(name=source['name'],**candidate['source']))
                 except (ValueError,KeyError,OSError) as e:row['reason']=str(e)
             out['members'][role]=rows
         out['dataset_sha256']=digest(out);out['checked_at']=now();return out

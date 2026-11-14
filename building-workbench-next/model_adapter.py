@@ -203,7 +203,7 @@ def _build_bundle(record,catalog,root,site_ids=None):
             from source_locations import prepare_case
             compiled.append(prepare_case(*compile_case(record,site,catalog,reader,operation_mode=mode),reader))
     reader.unchanged()
-    identity=dict(recipe=recipe_digest(normalize(record)),record=digest(record),adapter_sha256=digest({p.name:sha(p) for p in [Path(__file__),Path(__file__).with_name('dynamic_adapter.py'),Path(__file__).with_name('calendar_library.py'),Path(__file__).with_name('calendar_preview.py'),Path(__file__).with_name('weather_import.py'),Path(__file__).with_name('source_locations.py')]+([Path(__file__).with_name('building_configuration.py'),Path(__file__).with_name('component_library.py'),Path(__file__).with_name('usage_schedules.py')] if __import__('building_configuration').has_configuration(record) else [])+([Path(__file__).with_name(n) for n in ('ordinary_building.py','ordinary_envelope.py','ordinary_materials.py','ordinary_orientation.py','queue_calendar.py','transition_confirmation.py','building_configuration.py','component_library.py','usage_schedules.py')] if record['provenance']['adapter']=='ordinary_building_v1' else [])}))
+    identity=dict(recipe=recipe_digest(normalize(record)),record=digest(record),adapter_sha256=digest({p.name:sha(p) for p in [Path(__file__),Path(__file__).with_name('construction_library.py'),Path(__file__).with_name('material_types.py'),Path(__file__).with_name('surface_materials.py'),Path(__file__).with_name('dynamic_adapter.py'),Path(__file__).with_name('calendar_library.py'),Path(__file__).with_name('calendar_preview.py'),Path(__file__).with_name('weather_import.py'),Path(__file__).with_name('source_locations.py')]+([Path(__file__).with_name('building_configuration.py'),Path(__file__).with_name('component_library.py'),Path(__file__).with_name('usage_schedules.py')] if __import__('building_configuration').has_configuration(record) else [])+([Path(__file__).with_name(n) for n in ('ordinary_building.py','ordinary_envelope.py','ordinary_materials.py','ordinary_orientation.py','queue_calendar.py','transition_confirmation.py','building_configuration.py','component_library.py','usage_schedules.py')] if record['provenance']['adapter']=='ordinary_building_v1' else [])}))
     if reader.location_uses:identity['source_locations']=digest(reader.location_uses)
     if selected!=scope_sites:identity['selected_site_ids']=selected
     ident='inputs_'+digest(identity)[:32];folder=owned(root/'data/model-inputs'/ident,root)
@@ -260,6 +260,10 @@ def compile_base_case(record,site_id,catalog,reader=None,operation_mode=None,ref
 
 
 def capability(record,catalog):
+    import surface_materials
+    if surface_materials.enabled(record):return surface_materials.capability(record,catalog)
+    import construction_library
+    if construction_library.enabled(record):return construction_library.capability(record,catalog)
     from calendar_library import check_active
     try:check_active(record,catalog)
     except (ValueError,KeyError,TypeError,OSError) as error:return dict(supported=False,reasons=[str(error)])
@@ -273,6 +277,10 @@ def capability(record,catalog):
     except (ValueError,KeyError,TypeError,AttributeError,OSError) as error:return dict(supported=False,reasons=[str(error)])
 
 def compile_case(record,site_id,catalog,reader=None,operation_mode=None):
+    import surface_materials
+    if surface_materials.enabled(record):return surface_materials.compile_case(record,site_id,catalog,reader,operation_mode)
+    import construction_library
+    if construction_library.enabled(record):return construction_library.compile_case(record,site_id,catalog,reader,operation_mode)
     from calendar_library import check_active
     check_active(record,catalog)
     from ordinary_building import supported_source,compile_case as ordinary_compile

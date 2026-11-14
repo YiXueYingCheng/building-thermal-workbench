@@ -83,7 +83,27 @@ def candidate(record, reference, case, site_id):
     return not materials.get('applications') and not record['factors']['condition'].get('controls') and not materials.get('legacy_construction_overrides')
 
 
-def match_case(reference, case, plan, model, required_physical, weather_sha, reader):
+def numeric_representation_reference(reference, saved):
+    """Borrow only equal envelope values' int/float representation, never values.
+
+    Generated construction names hash those representations. Recompiling this
+    copy lets a saved 2500.0 match the browser's 2500 without ignoring names,
+    changing old physical hashes, or weakening any actual-model comparisons.
+    """
+    a=reference['factors']['building'].get('envelope_overrides')
+    b=saved['factors']['building'].get('envelope_overrides')
+    def equal(x,y):
+        if type(x) in (int,float) and type(y) in (int,float):return x==y
+        if type(x) is not type(y):return False
+        if isinstance(x,dict):return x.keys()==y.keys() and all(equal(x[k],y[k]) for k in x)
+        if isinstance(x,list):return len(x)==len(y) and all(equal(v,w) for v,w in zip(x,y))
+        return x==y
+    if not a or digest(a)==digest(b) or not equal(a,b):return None
+    r=copy.deepcopy(reference);r['factors']['building']['envelope_overrides']=copy.deepcopy(b)
+    return r
+
+
+def match_case(reference, case, plan, model, required_physical, weather_sha, reader, equivalent_physical=None):
     reasons = []
     for actual, expected, label in (
         (case['mode'], 'controlled', '运行模式'),
@@ -94,7 +114,7 @@ def match_case(reference, case, plan, model, required_physical, weather_sha, rea
         if actual != expected:reasons.append(label+'不同')
     if digest({k:v for k,v in model.items() if not k.startswith('Output')}) != case['physical_digest']:
         raise ValueError('冻结模型与物理内容校验值不一致。')
-    if not reasons and physical(model, case['dependencies'], reader) != required_physical:
+    if not reasons and physical(model, case['dependencies'], reader) not in (required_physical,equivalent_physical):
         reasons.append('实际建筑、使用配置、运行规则或数值模型不同')
     return reasons
 
@@ -202,6 +222,15 @@ def build(record, catalog, root=ROOT, accepted_only=False):
                     raise ValueError('算例时段/步长与冻结方案不一致。')
                 m=reader.json(dict(path=str(owned(folder/c['model_file'],folder)),sha256=c['model_sha256']))
                 different=match_case(reference,c,p,m,expected,weather_sha,reader)
+                if different==['实际建筑、使用配置、运行规则或数值模型不同']:
+                    equivalent=numeric_representation_reference(reference,r)
+                    if equivalent is not None:
+                        em,er=compile_case(equivalent,sid,catalog,reader,operation_mode='controlled')
+                        ep=physical(em,{x['path']:x['sha256'] for x in er['dependencies']},reader)
+                        different=match_case(reference,c,p,m,expected,weather_sha,reader,equivalent_physical=ep)
+                        if not different:item['input_equivalence']=dict(kind='equal_envelope_numeric_representation',
+                            note='构造参数逐值相同；按已保存的整数/小数形式重建后，完整实际模型匹配。',
+                            required_physical_sha256=expected,equivalent_physical_sha256=ep)
                 item['differences']=different;item['daily']=daily_coverage(m,p['output_contract'])
                 if different:item['status']='different';continue
                 reader.check(dict(path=str(owned(root/'data/model-inputs'/p['bundle_id']/'manifest.json',root/'data/model-inputs')),sha256=p['bundle_sha256']))

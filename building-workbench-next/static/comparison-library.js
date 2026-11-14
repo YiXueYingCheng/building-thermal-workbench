@@ -21,7 +21,7 @@ function updateComparisonMatch(){
 }
 function comparisonSummarySide(c,side){
  const d=c.display?.[side],ref=c[side];
- return `<div><span class="source-role">${side==='left'?'基准':'研究'}</span><p>${esc(d?.name||ref.id)}</p><small class="muted">${esc(planVersionLabel(ref))}${d&&!d.issue?' · '+esc(periodLabel(d.period))+' · '+d.step_minutes+' min · '+d.site_count+' 地点':''}</small>${d?.issue?'<p class="warning">此绑定版本暂未能读取；请核查原记录。</p>':''}</div>`;
+ return `<div><span class="source-role">${side==='left'?'基准':'研究'}</span><p>${esc(d?.name||ref.id)}</p>${versionNoteMarkup(ref)}<small class="muted">${esc(planVersionLabel(ref))}${d&&!d.issue?' · '+esc(periodLabel(d.period))+' · '+d.step_minutes+' min · '+d.site_count+' 地点':''}</small>${d?.issue?'<p class="warning">此绑定版本暂未能读取；请核查原记录。</p>':''}</div>`;
 }
 function comparisonLibraryRows(){
  const query=S.comparisonSearch.trim().toLocaleLowerCase(),filter=S.comparisonLibraryFilter;
@@ -29,11 +29,12 @@ function comparisonLibraryRows(){
   if(filter==='selected'&&!sameComparisonPair(c))return false;
   if(filter==='workspace'&&!['left','right'].every(s=>c.display?.[s]?.group==='workspace'))return false;
   if(filter==='sources'&&!['left','right'].some(s=>['sources','archived'].includes(c.display?.[s]?.group)))return false;
-  return !query||[c.name,comparisonMetricLabels[c.metric],c.display?.left?.name,c.display?.right?.name].filter(Boolean).join(' ').toLocaleLowerCase().includes(query);
+  return !query||[c.name,comparisonMetricLabels[c.metric],c.display?.left?.name,c.display?.right?.name,versionNoteText(c.left),versionNoteText(c.right)].filter(Boolean).join(' ').toLocaleLowerCase().includes(query);
  });
- return `<p class="muted">显示 ${rows.length} / ${S.boot.comparisons.length} 个比较。每条均固定自己的双方版本；批次在打开后选择。</p><div class="comparison-library-list">${rows.map(c=>`<article class="comparison-library-card" data-comparison-card="${esc(c.id)}"><div class="row"><h3>${esc(c.name)}</h3><span class="tag">${esc(comparisonMetricLabels[c.metric])}</span></div><div class="grid2">${comparisonSummarySide(c,'left')}${comparisonSummarySide(c,'right')}</div><div class="row"><small class="muted">保存于 ${esc(readableTime(c.created))}</small><div class="actions"><button data-open-comparison="${esc(c.id)}">查看配置差异</button><button data-comparison-results="${esc(c.id)}">查看结果与地图</button></div></div></article>`).join('')||'<p class="empty">没有符合条件的比较。可清空搜索或选择“全部比较”。</p>'}</div>`;
+ const size=6,pages=Math.max(1,Math.ceil(rows.length/size));S.comparisonLibraryPage=Math.min(S.comparisonLibraryPage||0,pages-1);const start=S.comparisonLibraryPage*size,visible=rows.slice(start,start+size);
+ return `<p class="muted">显示 ${rows.length} / ${S.boot.comparisons.length} 个比较。每条均固定自己的双方版本；批次在打开后选择。</p><div class="comparison-library-list">${visible.map(c=>`<article class="comparison-library-card" data-comparison-card="${esc(c.id)}"><div class="row"><h3>${esc(c.name)}</h3><span class="tag">${esc(comparisonMetricLabels[c.metric])}</span></div><div class="grid2">${comparisonSummarySide(c,'left')}${comparisonSummarySide(c,'right')}</div><div class="row"><small class="muted">保存于 ${esc(readableTime(c.created))}</small><div class="actions"><button data-open-comparison="${esc(c.id)}">查看配置差异</button><button data-comparison-results="${esc(c.id)}">查看结果与地图</button></div></div></article>`).join('')||'<p class="empty">没有符合条件的比较。可清空搜索或选择“全部比较”。</p>'}</div>${pages>1?`<div class="actions"><button data-comparison-list-page="${S.comparisonLibraryPage-1}"${S.comparisonLibraryPage===0?' disabled':''}>上一页</button><span>第 ${S.comparisonLibraryPage+1} / ${pages} 页</span><button data-comparison-list-page="${S.comparisonLibraryPage+1}"${S.comparisonLibraryPage+1>=pages?' disabled':''}>下一页</button></div>`:''}`;
 }
-function comparisonLibraryView(){return `<section class="section comparison-library"><details id="comparison-library"${S.comparisonLibraryOpen?' open':''}><summary>已保存的比较关系 · ${S.boot.comparisons.length}</summary><div class="grid2"><label class="field">查找比较<input id="comparison-search" value="${esc(S.comparisonSearch)}" placeholder="比较名称、双方方案或指标"></label><label class="field">显示范围<select id="comparison-library-filter">${options([['all','全部比较'],['workspace','双方均为本工作区方案'],['sources','含原平台或归档来源'],['selected','当前双方保存版本']],S.comparisonLibraryFilter)}</select></label></div><div id="comparison-library-rows">${comparisonLibraryRows()}</div></details></section>`;}
+function comparisonLibraryView(){return `<section class="section comparison-library"><details id="comparison-library"${S.comparisonLibraryOpen?' open':''}><summary>已保存的两两比较 · ${S.boot.comparisons.length}</summary><div class="grid2"><label class="field">查找比较<input id="comparison-search" value="${esc(S.comparisonSearch)}" placeholder="比较名称、双方方案或指标"></label><label class="field">显示范围<select id="comparison-library-filter">${options([['all','全部比较'],['workspace','双方均为本工作区方案'],['sources','含原平台或归档来源'],['selected','当前双方保存版本']],S.comparisonLibraryFilter)}</select></label></div><div id="comparison-library-rows">${comparisonLibraryRows()}</div></details></section>`;}
 async function openSavedComparison(id,results=false){
  const c=S.boot.comparisons.find(c=>c.id===id);if(!c)throw Error('没有找到该比较，请刷新比较列表。');
  const previous={...S,comparisonSources:{...S.comparisonSources}};
@@ -44,7 +45,7 @@ async function openSavedComparison(id,results=false){
    await loadComparison();
    if(S.resultComparison?.comparison.id!==id){resetComparisonDetails();S.resultComparison=null;S.comparisonData=null;S.comparisonExport=null;}
   }
-  S.view='compare';
+  S.view='compare';S.comparePage=results?'results':'config';
  }catch(error){Object.assign(S,previous);throw error;}
 }
 async function comparisonLibraryAction(button){
@@ -53,12 +54,12 @@ async function comparisonLibraryAction(button){
 }
 document.addEventListener('input',event=>{
  const id=event.target.id;
- if(id==='comparison-search'){S.comparisonSearch=event.target.value;document.getElementById('comparison-library-rows').innerHTML=comparisonLibraryRows();}
+ if(id==='comparison-search'){S.comparisonSearch=event.target.value;S.comparisonLibraryPage=0;document.getElementById('comparison-library-rows').innerHTML=comparisonLibraryRows();}
  if(['comparison-name','comparison-metric'].includes(id)){capturePlanComparisonDraft();updateComparisonMatch();}
 });
 document.addEventListener('change',event=>{
  const id=event.target.id;
- if(id==='comparison-library-filter'){S.comparisonLibraryFilter=event.target.value;document.getElementById('comparison-library-rows').innerHTML=comparisonLibraryRows();}
+ if(id==='comparison-library-filter'){S.comparisonLibraryFilter=event.target.value;S.comparisonLibraryPage=0;document.getElementById('comparison-library-rows').innerHTML=comparisonLibraryRows();}
  if(id==='comparison-metric'){capturePlanComparisonDraft();updateComparisonMatch();}
 });
 document.addEventListener('toggle',event=>{if(event.target.id==='comparison-library')S.comparisonLibraryOpen=event.target.open;},true);

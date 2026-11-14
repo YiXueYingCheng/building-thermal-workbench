@@ -1,7 +1,7 @@
 /* Imports change the weather library; adoption only changes the current draft. */
 S.weatherImport=null;
 const beforeWeatherSidebar=sidebar;
-sidebar=function(){return beforeWeatherSidebar().replace('导入 ACCDB 建筑</button>','导入 ACCDB 建筑</button><button data-weather-action="open">气象导入与来源更新</button>');};
+sidebar=function(){return beforeWeatherSidebar().replace(/(<button\b[^>]*data-import-action="open"[^>]*>[\s\S]*?<\/button>)/,'$1<button data-weather-action="open">气象导入与来源更新</button>');};
 scopeSites=function(){const own=S.boot.ordinary_weather_sites?.[S.record.factors.building.id];return Object.values(S.boot.sites).filter(s=>['reviewed_global','imported_epw_v1'].includes(s.source_kind)||(S.record.provenance.adapter==='ordinary_building_v1'&&s.id===own));};
 const beforeWeatherScope=scopePanel;
 scopePanel=function(){let html=beforeWeatherScope();

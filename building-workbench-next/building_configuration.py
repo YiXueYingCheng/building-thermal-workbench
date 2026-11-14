@@ -94,7 +94,7 @@ def validate_content(content,base):
  return content
 
 def resolve(record,catalog,base):
- f=record['factors'];b=copy.deepcopy(f['building']);profile=b.pop('usage_profile',None)
+ f=record['factors'];b=copy.deepcopy(f['building']);profile=b.pop('usage_profile',None);b.pop('library_constructions',None)
  if record['provenance']['adapter']!='global_frozen_v011' or b!=catalog['records']['global_fixed']['factors']['building']:raise ValueError('本轮建筑配置适配限于已核实的 Drawing26 全球来源。')
  content=copy.deepcopy(verify(profile,'usage')['content'] if profile else base);validate_content(content,base)
  op=f['condition']['operation'];original_op=catalog['records']['global_fixed']['factors']['condition']['operation']
@@ -120,6 +120,9 @@ def preview(record,catalog,root=None):
  from ordinary_building import supported_source,preview as ordinary_preview
  if supported_source(record):return ordinary_preview(record,catalog)
  base,model,job=baseline(catalog)
+ if record['factors']['building'].get('library_constructions'):
+  from construction_library import apply
+  apply(model,record)
  walls=[]
  for ident in catalog['records']['global_fixed']['factors']['building']['wall_ids']:
   surface=model['BuildingSurface:Detailed'][ident];construction=model['Construction'][surface['construction_name']]

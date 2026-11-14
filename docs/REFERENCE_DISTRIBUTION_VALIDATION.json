@@ -1,0 +1,67 @@
+{
+  "passed": true,
+  "version": "v0.73.11-release-draft.2",
+  "counts": {
+    "materials": 897,
+    "constructions": 47,
+    "daily_profiles": 28,
+    "annual_schedules": 48,
+    "room_templates": 8
+  },
+  "total": 1028,
+  "source_groups": 9,
+  "construction_layers_checked": 139,
+  "annual_schedules_checked": 48,
+  "annual_values_checked": 420480,
+  "annual_hashes_match": true,
+  "retained_records_unchanged": true,
+  "daily_aliases_preserved": 8,
+  "daily_snapshot_identities_preserved": 28,
+  "room_donors": 8,
+  "all_material_drafts_readable": 897,
+  "construction_copy_and_persistence": true,
+  "daily_copy_and_persistence": true,
+  "original_examples_and_licenses_unchanged": true,
+  "calculation_and_ui_code_unchanged": 227,
+  "included_source_databases": [
+    "examples/drawing26/Drawing26.accdb",
+    "examples/drawing26-repaired/Drawing26_import_repaired.accdb"
+  ],
+  "excluded_research_material_unselectable": true,
+  "earlier_candidate_unchanged": true,
+  "new_simulations": 0,
+  "published": false,
+  "browser": {
+    "passed": true,
+    "version": "v0.73.11-release-draft.2",
+    "checks": [
+      "workspace without buildings, engine or source ACCDB opens",
+      "Chinese IME search and retained reference names",
+      "material reference opens unified editor and saves independent version",
+      "construction reads retained layer names and saves independent copy",
+      "annual sequence previews and exports all 8760 hours",
+      "all eight room configurations available with units",
+      "28 bundled daily plans use unified copy and save flow",
+      "saved material survives reload; no scheme automatically created or changed"
+    ],
+    "errors": [],
+    "failed_requests": [],
+    "fixture_service_stopped": true,
+    "new_simulations": 0
+  },
+  "actual_workspaces": {
+    "transition": {
+      "unchanged": true,
+      "exact_files": 226,
+      "result_files": 46
+    },
+    "development": {
+      "unchanged": true,
+      "exact_files": 303,
+      "result_files": 1322
+    }
+  },
+  "fixture_service_stopped": true,
+  "selection_file": "../resources/reference-library/DISTRIBUTION.json",
+  "validation_scope": "Reference distribution selection and isolated UI; prior install/upgrade and simulation evidence retained, not rerun."
+}

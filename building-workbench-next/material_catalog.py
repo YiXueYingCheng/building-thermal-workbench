@@ -8,12 +8,11 @@ from contracts import normalize, validate
 
 def inventory(catalog, root=ROOT):
     fixed=catalog['records'].get('global_fixed')
-    template = copy.deepcopy(fixed['factors']['materials']['definitions'][0]) if fixed else dict(
-        id='user_equivalent_layer',name='',kind='single_layer',model='equivalent_resistance_no_layer_storage',
-        state_identity='independent',states=[dict(id=s,name=n,thermal_input='resistance',resistance_m2K_W=None,thickness_mm=None,conductivity_W_mK=None) for s,n in [('R','蓬松态'),('C','压缩态')]],
-        optics_depend_on_state=False,optics={},source_note='')
+    from material_types import template as new_template, CATEGORIES, support_paths
+    template = new_template()
     from starter_library import material_presets
-    return dict(versions=Library(root).all('material'), presets=material_presets(), template=template, checked_at=now())
+    from material_registration import inventory as registration
+    return dict(versions=Library(root).all('material'), presets=material_presets(), template=template, templates={k:new_template(k) for k in CATEGORIES}, support_paths=support_paths(), registration=registration(), checked_at=now())
 
 
 def source_materials(catalog, root=ROOT):
@@ -27,7 +26,9 @@ def source_materials(catalog, root=ROOT):
     public_path=config(root)['public_material_catalog']
     public=[];public_ref=None
     try:
-        if not public_path:raise ValueError('可在 public_material_catalog 配置公共材料目录。')
+        if not public_path:
+            from reference_library import source_path
+            public_path=source_path()
         public_path=Path(public_path)
         fingerprint=sha(public_path);public=read_json(public_path)['materials']
         if sha(public_path)!=fingerprint:raise ValueError('读取期间公共库发生变化。')
@@ -74,13 +75,21 @@ def material_label(kind,name,values,labels,public):
     return name,'公共库存在多个同物性名称，暂保留原编号' if names else '暂无可靠名称对应，保留原编号',candidates
 
 
-def adoption_preview(record, target, catalog, root=ROOT):
+def adoption_preview(record, target, catalog, root=ROOT, selection=None):
     from model_adapter import changes, capability
     if not isinstance(target, dict) or set(target) != {'id', 'revision', 'sha256'}:
         raise ValueError('请选择明确的材料库版本。')
     row = next((r for r in Library(root).all('material') if r['id'] == target['id'] and r['revision'] == target['revision']), None)
     if not row or row['sha256'] != target['sha256']:
         raise ValueError('材料版本不存在或已变化，请刷新材料库。')
+    from material_registration import check_adoption
+    check_adoption(record,row['content'])
+    from material_types import supported
+    if supported(row['content']):
+        from surface_materials import adoption
+        selection=selection or {}
+        if set(selection)-{'state_id','face','targets'}:raise ValueError('材料选用参数不受支持。')
+        return adoption(record,row,catalog,**selection)
     adapter = record['provenance']['adapter']
     if adapter not in ('global_frozen_v011', 'ordinary_building_v1'):
         raise ValueError('此来源暂保留原材料接法，请在已接通的 Drawing26 或五层方案中选用。')

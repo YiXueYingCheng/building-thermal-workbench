@@ -42,5 +42,11 @@ def build(ident,catalog,store,root=ROOT):
         except (OSError,ValueError,KeyError,TypeError,sqlite3.Error) as error:
             row['issues']=['该版本的计算记录暂未能读取：'+str(error)]
         rows.append(row)
-    return dict(record_id=ident,latest_revision=rows[0]['revision'],created=now(),versions=rows,
-        note='变更相对同方案上一保存版本；计算和比较仍归属各自绑定版本。计数复用已核对清单的查看索引，记录变化后更新；查看结果时继续核验结果文件。设备投入以计算队列当前设置为准。')
+    deleted=[]
+    with store.connect() as db:
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='plan_deleted_versions'").fetchone():
+            deleted=[r[0] for r in db.execute('SELECT revision FROM plan_deleted_versions WHERE record_id=? ORDER BY revision',(ident,))]
+    if deleted and rows[-1]['revision']!=1:
+        rows[-1]['changes']['summary']='最早保留版本；更早版本已删除，内容不再用于此处对照'
+    return dict(record_id=ident,latest_revision=rows[0]['revision'],created=now(),versions=rows,deleted_revisions=deleted,
+        note='变更相对同方案上一保留的保存版本；已删版本不参与内容对照，版本号不重排或复用。计算和比较仍归属各自绑定版本。计数复用已核对清单的查看索引，记录变化后更新；查看结果时继续核验结果文件。设备投入以计算队列当前设置为准。')

@@ -1,0 +1,83 @@
+{
+  "date": "2026-11-14T20:49:18.416344+08:00",
+  "version": "v0.73.4-transition.1",
+  "passed": true,
+  "source_sha256": "e8635e619eb353ec66d148e42781bc0f26227d8b2fa898845f487d9ab2995611",
+  "rooms": 11,
+  "conditioned_rooms": 6,
+  "period": [
+    7,
+    15,
+    7,
+    17
+  ],
+  "step_minutes": 5,
+  "modes": [
+    "controlled",
+    "natural"
+  ],
+  "choices": {
+    "name": "Drawing26 · 门洞修订示例",
+    "weather": "Changsha 576870 CSWD",
+    "mapping": {
+      "3": "source",
+      "4": "source",
+      "5": "source",
+      "6": "source",
+      "17": "source",
+      "30": "source"
+    },
+    "temperature": "source",
+    "availability": "source",
+    "thresholds": {},
+    "ground": "slab_default_soil",
+    "shading": "ignore",
+    "door_mm": 25.3,
+    "mapping_confirmed": true
+  },
+  "engine_cases": [
+    {
+      "mode": "controlled",
+      "passed": true,
+      "rooms": 11,
+      "days": 3,
+      "loads": {
+        "heating_kWh": 0.0,
+        "cooling_kWh": 68.1983696403833
+      },
+      "temperatures": {
+        "min_C": 24.902319389482976,
+        "max_C": 32.845091417710805
+      },
+      "elapsed_seconds": 2.0929999999934807,
+      "output_bytes": 2226371,
+      "sql_completion_flags": {
+        "Completed": "FALSE",
+        "CompletedSuccessfully": "FALSE"
+      }
+    },
+    {
+      "mode": "natural",
+      "passed": true,
+      "rooms": 11,
+      "days": 3,
+      "loads": {},
+      "temperatures": {
+        "min_C": 25.01828368359473,
+        "max_C": 33.81490441344878
+      },
+      "elapsed_seconds": 2.0309999999881256,
+      "output_bytes": 2093662,
+      "sql_completion_flags": {
+        "Completed": "FALSE",
+        "CompletedSuccessfully": "FALSE"
+      }
+    }
+  ],
+  "notes": [
+    "数据库导入副本，未修改配套DWG，也未声称修复DeST ARX打开异常。",
+    "SQL原始完成标志为FALSE，未篡改；按引擎退出码、err/end成功、4320分钟和3天覆盖、11房温度及月/时段能量一致性验收。",
+    "源库作息和设备参数保留；不替换成历史研究Excel的后期细化配置。"
+  ],
+  "source": "Existing isolated validation on 2026-11-14; not a new run."
+}

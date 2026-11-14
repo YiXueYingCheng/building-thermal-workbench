@@ -66,9 +66,10 @@ def build(sets,ident,revision,preparations):
     for p in preparations:
         for c in p['cases']:
             if c.get('batch_id'):continue
+            if c.get('lifecycle',{}).get('kind') in ('submitted','finished'):continue
             k=(c['role'],c['site_id'],c.get('review_id'))
             if k in prepared:continue
-            prepared.add(k);cases.append(dict(role=c['role'],site_id=c['site_id'],batch_id=None,index=0,status='prepared',origin='group',created=p['created'],paused=p.get('state')=='paused',error=c.get('error')))
+            prepared.add(k);cases.append(dict(role=c['role'],site_id=c['site_id'],batch_id=None,index=0,status='unknown' if c.get('lifecycle',{}).get('kind') in ('unknown','partial') else 'prepared',origin='group',created=p['created'],paused=p.get('state')=='paused',error=c.get('error')))
     counts=Counter(c['status'] for c in cases)
     return dict(id=ident,revision=snapshot['revision'],read_at=now(),cases=cases,counts=dict(counts),
         case_count=len(cases),submitted=sum(bool(c['batch_id']) for c in cases),preparations=preparations,issues=list(dict.fromkeys(issues)),

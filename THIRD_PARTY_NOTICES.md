@@ -23,3 +23,13 @@ Python 环境、EnergyPlus、Microsoft Access Runtime 和 Windows 字体不随�
 天气文件通过原站下载，来源与校验值见 [气象说明](examples/weather/来源说明.md)。数据使用者应保留相应数据集的引用和条件；本项目不把气象数据改为自身的代码或示例许可。
 
 生成的气候地图在图内注明 Beck 等来源、CC BY 4.0 和显示缩减，并在导出包附带地图说明与 atlas 许可。单独分享、改图时也应保留这些信息。
+
+## 随包作息与公用配置库
+
+`resources/reference-library` 保留原材料、构造、日作息和全年时刻表及来源编号，包含 DeST、EnergyPlus 示例与用户项目来源。作者已授权公用参考快照随平台公开；源项目文件及独立研究材料不新增收录。作者的整理与修改、软件原有参数及已识别的第三方示例分开记录，不统一改称作者原创。详见 [参考快照出处](resources/reference-library/PROVENANCE.md)。本项不改变 Drawing26、destep 或其他原有署名与许可。
+
+## EnergyPlus 示例参考及本轮来源清单
+
+随包公用参考库的 EP-EXAMPLE 部分来自 EnergyPlus 26.1.0 PurchAirTables.idf，含 8 个材料和 3 个构造；已逐项核对并保留 [同版本原许可](LICENSES/EnergyPlus-26.1.0.txt)。旧记录哈希对应提取的 material-library.json，官方原 IDF 的身份另记，二者不混用。这些条目不改用本项目 CC BY 4.0，也不表示任何原作者为本平台背书。
+
+来源、具体条目及排除项见 [随包清单](docs/REFERENCE_DISTRIBUTION_REVIEW.md)。用户于 2026-11-15 明确允许作息与公用配置库随平台公开；其他此次讨论的源建筑与独立材料不纳入。上述内容不改变 destep、地图、Drawing26 和其他原署名、原许可证。

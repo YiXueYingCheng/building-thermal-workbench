@@ -136,6 +136,10 @@ def idle(root):
 
 
 def create_backup(root=ROOT):
+    from result_storage import maintenance
+    with maintenance(root):return _create_backup(root)
+
+def _create_backup(root=ROOT):
     root=Path(root).resolve();idle(root)
     folder=owned(root/'backups',root);folder.mkdir(exist_ok=True)
     token='backup_'+uuid.uuid4().hex

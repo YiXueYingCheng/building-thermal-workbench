@@ -1,4 +1,4 @@
-"""Append-only draft versions, isolated from the source platform."""
+"""Immutable draft snapshots; unreferenced deletions have separate atomic receipts."""
 import copy
 from contextlib import contextmanager
 import sqlite3
@@ -108,6 +108,8 @@ class Store:
         name=name.strip()
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
+            # Revalidate under the write lock, after any concurrent controlled deletion.
+            self.get(left['id'],left['revision']);self.get(right['id'],right['revision'])
             # Old duplicate rows are preserved. Reuse the oldest exact match deterministically.
             for saved in db.execute('SELECT payload FROM comparisons ORDER BY created,id'):
                 row=loads(saved['payload'])
@@ -127,6 +129,8 @@ class Store:
         out['provenance']['parent_revision']=source['revision']
         out['record_sha256']=record_digest(out)
         with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            self.get(source_id,base_revision)
             db.execute('INSERT INTO versions VALUES (?,?,?,?)',(out['id'],1,canonical(out),out['saved_at']))
             db.execute('INSERT INTO events(at,action,record_id,revision) VALUES (?,?,?,?)',(out['saved_at'],'create',out['id'],1))
         return out
@@ -141,7 +145,10 @@ class Store:
             if row is None:raise KeyError('没有该草案。')
             if row['revision']!=expected_revision:raise Conflict('方案已在另一处更新；当前修改未覆盖已保存内容。')
             out=self.update_payload(loads(row['payload']),changes)
-            out.update(revision=expected_revision+1,saved_at=now())
+            highwater=expected_revision
+            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='plan_deleted_versions'").fetchone():
+                highwater=max(highwater,db.execute('SELECT COALESCE(MAX(revision),0) FROM plan_deleted_versions WHERE record_id=?',(ident,)).fetchone()[0])
+            out.update(revision=highwater+1,saved_at=now())
             out['record_sha256']=record_digest(out)
             db.execute('INSERT INTO versions VALUES (?,?,?,?)',(ident,out['revision'],canonical(out),out['saved_at']))
             db.execute('INSERT INTO events(at,action,record_id,revision) VALUES (?,?,?,?)',(out['saved_at'],'save',ident,out['revision']))

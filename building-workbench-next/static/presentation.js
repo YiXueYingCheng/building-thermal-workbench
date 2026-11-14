@@ -44,7 +44,7 @@ function resultSourceCard(side,c){
  const role=side==='left'?'基准侧':'研究侧';
  const counts=d?.counts;
  return `<section class="result-source-card"><span class="source-role">${role}</span><h3>${esc(r?.name||role+'方案')}</h3><p class="muted">${r?`${esc(planVersionLabel(r))} · ${esc(periodLabel(r.period))} · ${r.step_minutes} min · ${r.site_count} 地点`:'版本由此比较关系固定'}</p>
- <label class="field">${role}计算批次${c[side].length===1?'（已自动匹配唯一批次）':''}<select id="comparison-source-${side}">${options([['','请选择计算批次'],...c[side].map(x=>[x.id,sourceOptionLabel(x,c[side].length>1)])],S.comparisonSources[side])}</select></label>
+ ${r?versionNoteMarkup(r):''}<label class="field">${role}计算批次${c[side].length===1?'（已自动匹配唯一批次）':''}<select id="comparison-source-${side}">${options([['','请选择计算批次'],...c[side].map(x=>[x.id,sourceOptionLabel(x,c[side].length>1)])],S.comparisonSources[side])}</select></label>
  ${d?`<div class="source-status"><strong>${esc(d.status)}</strong><span>通过 ${(counts.passed||0)+(counts.reused||0)} / ${d.case_count} 项${counts.review?' · 待复核 '+counts.review:''}${counts.pending?' · 待算 '+counts.pending:''}${counts.running?' · 运行 '+counts.running:''}${counts.failed?' · 失败 '+counts.failed:''}${counts.interrupted?' · 中断 '+counts.interrupted:''}${counts.cancelled?' · 取消 '+counts.cancelled:''}</span></div><div class="actions">${d.kind==='historical'?'<button data-view="results">查看原正式历史结果</button>':`<button data-source-batch="${esc(selected.id)}">单独查看此批结果</button>`}</div>`:c[side].length?'':'<p class="warning">该保存版本尚无可选批次。</p>'}</section>`;
 }
 function clearUnmatchedResultComparison(){

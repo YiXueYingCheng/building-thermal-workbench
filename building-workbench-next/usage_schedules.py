@@ -85,7 +85,8 @@ def source_snapshot(root=ROOT):
  return data['content']
 def profiles(root=ROOT):
  source=source_snapshot(root)
- return source['daily']+[dict(snapshot=r,origin='本工作区日计划',aliases=[],binary=all(v in (0,1) for v in r['content']['values'])) for r in Library(root).all('daily')]
+ from reference_library import daily_profiles
+ return source['daily']+daily_profiles()+[dict(snapshot=r,origin='本工作区日计划',aliases=[],binary=all(v in (0,1) for v in r['content']['values'])) for r in Library(root).all('daily')]
 def save_profile(root,name,content,parent=None):
  if not isinstance(name,str) or not name.strip() or len(name)>100:raise ValueError('请填写 1–100 字的日计划名称。')
  validate_profile(content)

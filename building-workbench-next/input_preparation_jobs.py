@@ -8,7 +8,8 @@ import input_pipeline as pipeline
 from preparation_gate import slot
 
 class Jobs:
- def __init__(self,root):
+ def __init__(self,root,source_bindings=None):
+  self.source_bindings=source_bindings
   self.root=Path(root);self.folder=self.root/'data/input-preparations';self.pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='input-preparation');self.lock=RLock();self.jobs={}
   for path in self.folder.glob('job_*.json'):
    try:
@@ -21,6 +22,19 @@ class Jobs:
   out['elapsed_seconds']=round((time.time() if j['state'] in ('queued','running') else j.get('finished_epoch',time.time()))-j['started_epoch'],1)
   values=j.get('case_seconds',[]);left=max(0,j.get('total',0)-j.get('completed',0))
   if values and left:out['remaining_range_seconds']=[round(sum(values)/len(values)*left*.65),round(sum(values)/len(values)*left*1.65)]
+  if j['state']=='ready' and j['kind'] in ('prepare','daily') and j.get('result',{}).get('plan_sha256'):
+   from preparation_status import Submissions
+   result=out['result']
+   try:
+    bindings=self.source_bindings(j['record_id'],j['revision']) if self.source_bindings else []
+    life=Submissions(self.root).review(result['id'],result['plan_sha256'],bindings=bindings)
+   except (OSError,ValueError,KeyError,TypeError) as exc:
+    life=dict(kind='unknown',label='准备关联待核对',batches=[],counts={},covered=0,total=0,note=str(exc))
+   out['lifecycle']=life
+   out['stage']=life['label']
+   if life['batches']:
+    result['existing_batch']={k:life['batches'][0][k] for k in ('id','mode','created')}
+    result['existing_batch_count']=len(life['batches'])
   return out
  def update(self,j,**values):
   with self.lock:

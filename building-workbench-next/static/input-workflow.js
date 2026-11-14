@@ -20,7 +20,7 @@ async function recoverInputFlow(m){
   m.job=job;
   if(job.kind==='prepare'&&!m.generated)m.generated=await api('/api/model-inputs/'+job.bundle_id+'/manifest.json');
   if(['queued','running'].includes(job.state))await inputFlowTask(m,'正在继续读取后台输入准备进度…',async()=>{const result=await pollInputPreparation(m,job);if(job.kind==='prepare')m.prepared=result;else m.generated=result;m.message='输入准备完成；尚未提交计算。';});
-  else if(job.state==='ready'){if(job.kind==='prepare')m.prepared=job.result;else m.generated=job.result;m.message='已恢复本版本输入准备记录；尚未由此操作提交计算。';}
+  else if(job.state==='ready'){if(job.kind==='prepare')m.prepared=job.result;else m.generated=job.result;m.message=job.lifecycle?.label||'已恢复本版本的输入记录；提交与结果状态见方案流程。';}
   else m.error=job.error||'上次输入准备未完成；完成项保留，可重试续接。';
   renderInputFlow();
  }catch(e){m.error=e.message;renderInputFlow();}
@@ -111,7 +111,7 @@ function renderInputFlow(){
   if(!g&&!S.dirty&&S.planActivity?.inputs.length)body+=`<details><summary>本版本已有 ${S.planActivity.inputs.length} 份输入</summary>${S.planActivity.inputs.map(x=>`<button data-inspect-input="${esc(x.id)}"${m.pending?' disabled':''}>读取已有输入 · ${esc(readableTime(x.created))}</button>`).join('')}</details>`;
  }
  const phase=m.prepared||m.job?.kind==='prepare'?3:g||m.job?.kind==='generate'?2:1;
- const next=m.prepared?'budget':g?'prepare':'generate',label={budget:'前往预算与提交',prepare:'准备计算清单（不计算）',generate:'生成模型输入（不计算）'}[next];
+ const next=m.prepared?'budget':g?'prepare':'generate',label={budget:m.prepared?.existing_batch?'查看已有计算批次':'前往预算与提交',prepare:'准备计算清单（不计算）',generate:'生成模型输入（不计算）'}[next];
  d.innerHTML=`<header class="viewer-head"><div><p class="muted">${esc(m.name)} · 已保存 v${m.revision}</p><h2 id="input-workflow-title">计算安排与输入核对</h2></div><button data-input-flow="close">返回方案</button></header><div class="input-flow-steps" aria-label="输入准备进度"><span class="${phase===1?'current':''}">1 核对算例</span><span class="${phase===2?'current':''}">2 生成与检查输入</span><span class="${phase===3?'current':''}">3 预算与提交</span></div><div class="input-flow-body">${body}</div><footer class="viewer-foot input-flow-footer"><div id="input-flow-status" role="status" aria-live="polite" class="${m.error?'warning':m.pending?'input-flow-pending':''}"><strong>${esc(m.error||m.message||'生成输入与准备清单均不启动计算。')}</strong><div id="input-flow-progress">${inputProgressMarkup(m)}</div>${m.pending?'<p>可翻页、关闭后返回；生成完成后仍需明确提交计算。</p>':''}</div><div class="actions">${v.detail?'<button data-input-flow="back">返回输入摘要</button>':`<button class="primary" data-input-flow="${next}"${m.pending||m.recovering||S.dirty||(!g&&!p?.generation?.supported)?' disabled':''}>${label}</button>`}<button data-input-flow="close">返回方案</button></div></footer>`;
  if(!d.open)d.showModal();d.querySelector('.input-flow-body').scrollTop=oldY;
 }

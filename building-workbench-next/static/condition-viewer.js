@@ -59,7 +59,7 @@ async function conditionAction(b,v){const op=b.dataset.conditionView;
  const child=op==='material'||b.dataset.calendarLibrary==='open'||b.dataset.referenceReadiness||b.dataset.dailyReference||b.dataset.calendarPreview||b.hasAttribute('data-daily-open');
  conditionBegin();if(child){v.suspended=true;conditionDialog().close();}
  const token=Symbol();v.actionToken=token;v.pending=true;v.message='正在读取或处理…';if(!child)renderConditionViewer();
- try{if(op==='material')openMaterialViewer(b);else if(b.dataset.action==='check-capability')await refreshCapability();else await configurationAction(b);if(conditionCurrent()!==v||v.actionToken!==token)return;if(b.dataset.scheduleAction==='save-profile')v.message='日计划已保存并用于本方案运行覆盖；请回主页面保存方案版本。';else v.message='';conditionTrack();}
+ try{if(op==='material')openMaterialViewer(b);else if(b.dataset.action==='check-capability')await refreshCapability();else await configurationAction(b);if(conditionCurrent()!==v||v.actionToken!==token)return;if(b.dataset.scheduleAction==='save-profile')v.message='已打开统一日计划库；先核对并保存，采用到运行覆盖另行确认。';else v.message='';conditionTrack();}
  finally{if(conditionCurrent()===v&&v.actionToken===token){v.pending=false;if(child)conditionResume();else{conditionTrack();render();}}}
 }
 const conditionBeforeAction=configurationAction;

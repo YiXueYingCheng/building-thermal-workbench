@@ -70,7 +70,8 @@ def convert(p,request,catalog,root):
  weather=model/'weather'/Path(site['weather']['path']).name;shutil.copy2(site['weather']['path'],weather)
  if sha(weather)!=site['weather']['sha256']:raise ValueError('复制期间气象已变化。')
  ident='accdb_'+p.name.removeprefix('import_')
- args=[py,code/'convert_drawing26.py','--tables',p/'tables','--reference-tables',config(root)['import_reference_tables'],'--destep-source',code/'destep-source.zip','--source',source,'--source-original',source,'--output',model/'source-mapped','--project-id',ident,'--confirmed-door-thickness-mm','25.3','--align-world-north']
+ args=[py,code/'convert_drawing26.py','--tables',p/'tables','--source',source,'--source-original',source,'--output',model/'source-mapped','--project-id',ident,'--confirmed-door-thickness-mm','25.3','--align-world-north']
+ if config(root)['converter_interface']=='portable':args += ['--reference-tables',config(root)['import_reference_tables'],'--destep-source',code/'destep-source.zip']
  if request['shading']=='ignore':args.append('--ignore-shading')
  run_command(args,p/'convert.log',p)
  run_command([py,code/'check_source_openings.py','--tables',p/'tables','--output',model/'conversion'],p/'openings.log',p)

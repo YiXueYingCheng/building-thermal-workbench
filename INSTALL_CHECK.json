@@ -1,0 +1,11 @@
+{
+  "channel": "local-install-upgrade-validation",
+  "version": "v0.73.11-install-check.1",
+  "source_transition": "v0.73.11-transition.1",
+  "public_base": "0.72.2",
+  "publish": false,
+  "reference_library_distribution": "authorized_common_library_selection",
+  "dedicated_solid_eca_included": false,
+  "note": "Historical install-check baseline; current authorization and upgrade recovery are documented in RELEASE.json and docs/UPGRADE_ACCEPTANCE.json.",
+  "current_draft": "v0.73.11"
+}

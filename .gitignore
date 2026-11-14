@@ -13,3 +13,8 @@ examples/weather/downloads/
 *.ldb
 .DS_Store
 Thumbs.db
+
+# Local research results and upgrade receipts
+building-workbench-next/runs/
+building-workbench-next/backups/
+UPGRADE_RECEIPT.json
