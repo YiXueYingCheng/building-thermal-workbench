@@ -6,6 +6,7 @@ Completed checkpoints are only reused after all source and artifact hashes pass.
 from pathlib import Path
 import gc,json,os,shutil,time,uuid,sqlite3
 from contextvars import ContextVar
+from contextlib import closing
 from foundation import ROOT,owned,read_json,write_json,digest,sha,now
 from model_adapter import VerifiedReader,BUILD_LOCK,compile_case,uses_dynamic_adapter,ADAPTER
 from contracts import normalize,recipe_digest
@@ -18,17 +19,20 @@ def emit(**value):
 
 def resource_gate(root,progress,index,total):
     from resources import snapshot
-    policy=dict(reserve_gib=1.,disk_reserve_gib=5.)
     db=Path(root)/'data/execution/queue.sqlite'
-    if db.exists():
-        with sqlite3.connect(db.as_uri()+'?mode=ro',uri=True) as c:
-            row=c.execute("SELECT value FROM settings WHERE key='resources'").fetchone()
-            if row:policy.update(json.loads(row[0]))
     while True:
+        # A waiting task must honor resource settings changed in the queue UI.
+        # Close each read connection before waiting or compiling the next model.
+        policy=dict(reserve_gib=1.,disk_reserve_gib=5.)
+        if db.exists():
+            with closing(sqlite3.connect(db.as_uri()+'?mode=ro',uri=True)) as c:
+                row=c.execute("SELECT value FROM settings WHERE key='resources'").fetchone()
+                if row:policy.update(json.loads(row[0]))
         machine=snapshot(root)
         if machine['disk_free_gib']<policy['disk_reserve_gib']+.15:raise ValueError('磁盘余量不足以保留工作区设置并写入下一算例；完成项保留，可续接。')
-        if min(machine['available_gib'],machine['commit_available_gib'])>=policy['reserve_gib']+.35:return
-        progress(stage='等待内存余量，已完成项保留',completed=index,total=total)
+        required=policy['reserve_gib']+.35
+        if min(machine['available_gib'],machine['commit_available_gib'])>=required:return
+        progress(stage=f'等待内存：需可用 {required:.2f} GiB（保留 {policy["reserve_gib"]:g} + 本步余量 0.35），当前可用 {machine["available_gib"]:.2f} GiB、系统可提交 {machine["commit_available_gib"]:.2f} GiB；每 2 秒按最新设置检查，已完成项保留',completed=index,total=total)
         time.sleep(2)
 SUMMARY=('adapter','site_id','city','mode','period','step_minutes','source_model','weather',
          'dependencies','source_model_digest','generated_model_digest','exact_input_match',

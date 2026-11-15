@@ -1,4 +1,4 @@
-"""Offline, manifest-scoped v0.72.2 update and non-destructive backup recovery.
+"""Offline, manifest-scoped public update and non-destructive backup recovery.
 
 Standard library only. Never imports a workspace's application code, runs a
 simulation, installs dependencies or accesses GitHub. Recovery retains the
@@ -16,6 +16,8 @@ EXCLUDED = {'.venv', '.git', '__pycache__'}
 DATA_PARTS = {'data','runs','assets','verification','backups'}
 TOP = {'.github','building-workbench-next','dependencies','docs','examples','resources','scripts','LICENSES','验收结果'}
 ACTIVE = {'running','pending','queued','starting'}
+EXECUTORS = ('execution_inputs.py','execution_results.py','execution_queue.py','execution_worker.py','resources.py','daily_reference.py','resource_history.py','output_storage.py')
+COMPATIBILITY = 'building-workbench-next/data/execution/runtime-compatibility.json'
 
 class UpgradeError(ValueError): pass
 def fail(message): raise UpgradeError(message)
@@ -147,11 +149,19 @@ def stopped(target):
 def stop(target):
     target=safe_path(target);queue_idle(target);app=target/'building-workbench-next';h=health(target);ps=processes(target)
     if h and Path(h.get('root','')).resolve()!=app:fail('端口属于另一个平台，拒绝停止。')
-    if any('server.py' not in row['CommandLine'] for row in ps):fail('该工作区仍有计算或准备进程，请等它们完成；不会强行结束。')
+    workers=[row for row in ps if 'execution_worker.py' in row['CommandLine']]
+    if workers:
+        marker=app/'data/execution/worker.json'
+        state=read(marker) if marker.is_file() else {}
+        if state.get('active')!=0 or Path(state.get('root','')).resolve()!=app or state.get('pid') not in {row['ProcessId'] for row in workers}:
+            fail('计算后台的空闲状态尚未确认，请等待任务完成后再升级。')
+    if any(not any(name in row['CommandLine'] for name in ('server.py','execution_worker.py')) for row in ps):fail('该工作区仍有计算或准备进程，请等它们完成；不会强行结束。')
     if h and h.get('pid') not in {r['ProcessId'] for r in ps}:fail('服务身份核对失败，未停止任何进程。')
     for row in ps:
+        queue_idle(target)
         env=dict(os.environ,WB_UPGRADE_APP=str(app),WB_UPGRADE_PID=str(int(row['ProcessId'])))
-        script="""$ErrorActionPreference='Stop'; $p=Get-CimInstance Win32_Process -Filter ('ProcessId='+$env:WB_UPGRADE_PID); if ($p) { if (-not $p.CommandLine -or $p.CommandLine.IndexOf($env:WB_UPGRADE_APP,[StringComparison]::OrdinalIgnoreCase) -lt 0 -or $p.CommandLine -notmatch 'server.py') { throw 'Process identity changed' }; Stop-Process -Id $p.ProcessId -ErrorAction Stop }"""
+        env['WB_UPGRADE_COMMAND']=row['CommandLine']
+        script="""$ErrorActionPreference='Stop'; $p=Get-CimInstance Win32_Process -Filter ('ProcessId='+$env:WB_UPGRADE_PID); if ($p) { if (-not $p.CommandLine -or $p.CommandLine -cne $env:WB_UPGRADE_COMMAND) { throw 'Process identity changed' }; Stop-Process -Id $p.ProcessId -ErrorAction Stop }"""
         p=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],env=env,capture_output=True,creationflags=0x08000000)
         if p.returncode:fail('停止服务未完成，请检查该工作区状态。')
     for _ in range(30):
@@ -160,12 +170,32 @@ def stop(target):
     stopped(target)
     return dict(stopped=True,target=str(target))
 
+def compatibility_plan(source,target,oldversion,incoming):
+    # This is an explicit, hash-bound metadata update; no plan/result is rewritten.
+    if oldversion.removeprefix('v')!='0.73.11':return None
+    contract=read(child(source,'EXECUTOR_COMPATIBILITY.json'))
+    before=contract['from_code_hashes'];after=contract['to_code_hashes']
+    if set(before)!=set(EXECUTORS) or set(after)!=set(EXECUTORS):fail('升级兼容清单不完整。')
+    for name in EXECUTORS:
+        rel='building-workbench-next/'+name
+        if sha(child(target,rel))!=before[name] or incoming.get(rel)!=after[name]:
+            fail('计算程序与已核对的 v0.73.11 升级基线不一致：'+name)
+    app=target/'building-workbench-next'
+    frozen={str(app/n):before[n] for n in EXECUTORS};current={str(app/n):after[n] for n in EXECUTORS}
+    path=child(target,COMPATIBILITY)
+    metadata=read(path) if path.exists() else {'upgrades':[]}
+    if not isinstance(metadata.get('upgrades'),list):fail('旧计算兼容记录格式异常，请先保留并核对。')
+    # Existing entries remain unchanged. Only this exact official baseline is admitted.
+    entry=dict(id='public-0.73.11-to-0.73.12',kind='audited_reference_path_update',from_code_hashes=frozen,to_code_hashes=current)
+    if entry not in metadata['upgrades']:metadata['upgrades'].append(entry)
+    return dict(path=COMPATIBILITY,before=sha(path) if path.exists() else None,value=metadata)
+
 def plan(source,target):
     source=safe_path(source);target=safe_path(target)
     if source==target or source.is_relative_to(target) or target.is_relative_to(source):fail('新包必须解压在旧平台之外的独立文件夹。')
     incoming=manifest(source);old=manifest(target,False)
     oldversion=(target/'building-workbench-next/VERSION').read_text('utf8').strip()
-    if oldversion.removeprefix('v')!='0.72.2':fail('本工具本次只支持 v0.72.2 原路径升级；检测到 '+oldversion)
+    if oldversion.removeprefix('v') not in ('0.72.2','0.73.11'):fail('本工具支持 v0.72.2 或 v0.73.11 原路径升级；检测到 '+oldversion)
     if not (target/'building-workbench-next/config.json').is_file():fail('请选择含旧配置的完整平台包根目录。')
     if sha(source/'requirements-lock.txt')!=sha(target/'requirements-lock.txt'):fail('锁定依赖已变化，本版工具不自动升级 Python 环境。')
     writes=[];conflicts=[]
@@ -184,9 +214,9 @@ def plan(source,target):
     if conflicts:fail('发现自行修改或同名新增文件，未覆盖。请先另存这些修改，再恢复原发行文件：\n'+'\n'.join(conflicts[:20]))
     writes.append(dict(path='MANIFEST.sha256',before=sha(target/'MANIFEST.sha256'),after=sha(source/'MANIFEST.sha256')))
     return dict(schema=1,source=str(source),target=str(target),old_version=oldversion,new_version=(source/'building-workbench-next/VERSION').read_text('utf8').strip(),
-        source_manifest_sha256=sha(source/'MANIFEST.sha256'),writes=writes,external_roots=[str(p) for p in external_roots(target)],
+        source_manifest_sha256=sha(source/'MANIFEST.sha256'),writes=writes,compatibility=compatibility_plan(source,target,oldversion,incoming),external_roots=[str(p) for p in external_roots(target)],
         preserved=['旧 config.json','data / runs / assets 及所有未列入更新的文件','已有 .venv','外置结果位置与内容'],
-        note='只更新列出的发行文件；不会删除旧文件、自动改造物性或重算。')
+        note='更新列出的发行文件；v0.73.11 另增加经文件校验的旧结果兼容记录。不会删除旧文件、自动改造物性或重算。')
 
 def room_for(path,needed):
     while not path.exists():path=path.parent
@@ -248,6 +278,13 @@ def _apply(source,target,folder):
             if sha(temp)!=row['after']:fail('复制校验失败：'+n)
             os.replace(temp,dest);receipt['updated'].append(n);dump(folder/'UPGRADE.json',receipt)
         replaced={r['path'] for r in p['writes']}
+        compat=p['compatibility']
+        if compat:
+            dest=child(target,compat['path'])
+            if (sha(dest) if dest.exists() else None)!=compat['before']:fail('计算兼容记录在升级期间发生变化。')
+            dest.parent.mkdir(parents=True,exist_ok=True);dump(dest,compat['value'])
+            if read(dest)!=compat['value']:fail('升级后计算兼容记录校验失败。')
+            replaced.add(compat['path']);receipt['updated'].append(compat['path']);dump(folder/'UPGRADE.json',receipt)
         for item in info['sets']:
             unchanged={n:v for n,v in item['files'].items() if item['folder']!='workspace' or n not in replaced}
             verify_copy(Path(item['original']),unchanged)
@@ -320,7 +357,7 @@ def _restore(folder):
 
 def prompt_path(text):return safe_path(input(text).strip().strip('"'))
 def wizard():
-    print('建筑热环境工作台 · 升级与恢复助手\n只支持 v0.72.2 原路径升级；不会自动计算或上传。')
+    print('建筑热环境工作台 · 升级与恢复助手\n支持 v0.72.2 或 v0.73.11 原路径升级；不会自动计算或上传。')
     mode=input('输入 1 升级旧平台；输入 2 从备份恢复：').strip()
     if mode=='1':
         target=prompt_path('旧平台包根目录（含 Start Workbench.cmd）：')

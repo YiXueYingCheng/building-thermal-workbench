@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "from_version": "0.73.11",
+  "to_version": "0.73.12",
+  "from_code_hashes": {
+    "execution_inputs.py": "77f119f78f15e7151e5776a9edb246a08a76b638856896fa3917eafa0c6e83b6",
+    "execution_results.py": "17aa805f5e438dea4606587ed46e0e1aac0f53399f770339180af3dc21c1e86d",
+    "execution_queue.py": "a1a797023f68fe63a0047f83aacd938317db11ef3c937fbd758a83d5998362eb",
+    "execution_worker.py": "6835c7a480b4f9137ee5872220aaccb31cb3313fd7a2e8e1137bd8376a294eeb",
+    "resources.py": "c9c330914ab84b5dd3a2619782280ea73b0b1c83a75cc140698ed5e54676b040",
+    "daily_reference.py": "2ed98a53fffd48ec53f557c47663c020ef33e9a6fa0d3f8284cfbc6a55765ea8",
+    "resource_history.py": "dd0c168e0f381d20dcd393d800b5c2b970db2e76cb131fc7200a81ebdf8ec0d8",
+    "output_storage.py": "047d70ba06c17d1a6a5607e5d3c695887f79ffb9c677d469b05f36783f7b37ee"
+  },
+  "to_code_hashes": {
+    "execution_inputs.py": "16814366a9f4cd5a12ad89fdae64b25eb0dfbc14f3d489a8025f7d743e0aada1",
+    "execution_results.py": "17aa805f5e438dea4606587ed46e0e1aac0f53399f770339180af3dc21c1e86d",
+    "execution_queue.py": "a1a797023f68fe63a0047f83aacd938317db11ef3c937fbd758a83d5998362eb",
+    "execution_worker.py": "6835c7a480b4f9137ee5872220aaccb31cb3313fd7a2e8e1137bd8376a294eeb",
+    "resources.py": "c9c330914ab84b5dd3a2619782280ea73b0b1c83a75cc140698ed5e54676b040",
+    "daily_reference.py": "2ed98a53fffd48ec53f557c47663c020ef33e9a6fa0d3f8284cfbc6a55765ea8",
+    "resource_history.py": "dd0c168e0f381d20dcd393d800b5c2b970db2e76cb131fc7200a81ebdf8ec0d8",
+    "output_storage.py": "047d70ba06c17d1a6a5607e5d3c695887f79ffb9c677d469b05f36783f7b37ee"
+  },
+  "scope": "Reference cache path fallback only; model, solver, output contract and numeric validation unchanged. Original plans and results retain their hashes."
+}

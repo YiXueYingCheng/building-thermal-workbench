@@ -50,6 +50,7 @@ def plot(folder, font=None):
             +d['period_label']+'；建筑显热需求，不是设备耗电。数据快照：'+d['dataset_sha256'][:16],fontsize=8,color='#516259')
         name=f'figure-{page:02d}'
         if (folder/'summary-retention.json').exists():fig.text(.99,.99,'Retained summary; raw details removed',ha='right',va='top',fontsize=7,color='#805600')
+        if (folder/'user-review-notes.json').exists():fig.text(.99,.955,'User-reviewed warnings retained; see review notes',ha='right',va='top',fontsize=7,color='#805600')
         for ext in ('svg','pdf','png'):fig.savefig(folder/(name+'.'+ext),dpi=300,facecolor='white')
         plt.close(fig);pages.append(dict(page=page,site_ids=ids,files=[name+'.'+ext for ext in ('svg','pdf','png')]))
     (folder/'figure-pages.json').write_text(json.dumps(dict(pages=pages,dataset_sha256=d['dataset_sha256']),ensure_ascii=False,indent=2),encoding='utf-8')

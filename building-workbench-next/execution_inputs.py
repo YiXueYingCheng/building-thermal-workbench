@@ -28,7 +28,26 @@ def portable_reference(root,path,checksum,suffix):
     """Only Unicode/long external paths need small content-addressed local copies."""
     path=Path(path).resolve()
     if str(path).isascii() and len(str(path))<230:return str(path)
-    target=owned(Path(root)/'assets'/(checksum[:24]+suffix),root);target.parent.mkdir(parents=True,exist_ok=True)
+    asset_root=Path(root)/'assets'
+    if not str(asset_root).isascii() or len(str(asset_root))>180:
+        from foundation import config
+        import tempfile
+        configured=config(root).get('reference_cache_root')
+        candidates=[Path(configured)] if configured else [Path(os.environ.get('LOCALAPPDATA') or tempfile.gettempdir())/'BuildingThermalWorkbench'/'references',Path(tempfile.gettempdir())/'BTWB-references']
+        asset_root=None
+        for base in candidates:
+            if not base.is_absolute() or not str(base).isascii() or len(str(base))>150:continue
+            candidate=base/('workspace_'+digest(str(Path(root).resolve()))[:16])
+            try:
+                candidate.mkdir(parents=True,exist_ok=True)
+                marker=candidate/'workspace.json';identity=dict(workspace=str(Path(root).resolve()),kind='hashed_reference_copies_v1')
+                if marker.exists() and read_json(marker)!=identity:raise ValueError('计算引用缓存归属不符，请保留核查。')
+                if not marker.exists():write_json(marker,identity,candidate)
+                asset_root=candidate;break
+            except OSError:continue
+        if asset_root is None:
+            raise ValueError('工作区可以使用中文路径，但气象与作息需要可写的短英文引用目录。请在 config.json 的 reference_cache_root 中设置独立的英文文件夹，例如 D:/BTWB-references；无需移动已有工作区或结果。')
+    target=owned(asset_root/(checksum[:24]+suffix),asset_root);target.parent.mkdir(parents=True,exist_ok=True)
     if not target.exists():
         data=path.read_bytes()
         import hashlib

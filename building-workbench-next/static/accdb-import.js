@@ -45,7 +45,7 @@ action=async function(button){const act=button.dataset.importAction,id=button.da
   if(act==='cancel'){const id=m.current.id;await api('/api/building-imports/cancel',{id});delete m.forms[id];m.info='撤销记录将收起；可勾选“显示已撤销记录”查看，原文件和检查记录保留。';await refreshImport();return;}
   if(act==='inspect'){m.current=await api('/api/building-imports/inspect',{path:m.path});await refreshImport();return;}
   if(act==='convert'){await api('/api/building-imports/convert',{id:m.current.id,request:m.forms[m.current.id]});await refreshImport();return;}
-  if(act==='publish'){await api('/api/building-imports/publish',{id:m.current.id,expected_sha256:m.current.acceptance.sha256});await bootstrap();render();await refreshImport();return;}
+  if(act==='publish'){const published=await api('/api/building-imports/publish',{id:m.current.id,expected_sha256:m.current.acceptance.sha256});await bootstrap();if(!S.record&&published.record_id){await loadRecord(published.record_id);S.view='editor';}render();await refreshImport();return;}
  }catch(e){m.error=e.message;renderImport();}
 };
 document.addEventListener('input',event=>{const t=event.target,m=S.databaseImport;if(!t.closest('#accdb-import-dialog'))return;if(t.hasAttribute('data-import-path')){m.path=t.value;return;}const f=m.forms[m.current?.id];if(!f)return;if(t.dataset.importMapping)f.mapping[t.dataset.importMapping]=t.value;else if(t.dataset.importTemp)f.thresholds[t.dataset.importTemp]=t.value===''?null:Number(t.value);else if(t.dataset.importField){const k=t.dataset.importField;f[k]=t.type==='checkbox'?t.checked:k==='door_mm'?(t.value===''?null:Number(t.value)):t.value;}});

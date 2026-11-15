@@ -1,16 +1,16 @@
 # 从 GitHub 下载并完成首次试用
 
-> 当前版本为 v0.73.11 公开预览版。已有 v0.72.2 用户请先看 [升级与备份恢复](UPGRADE_FROM_0_72_2.md)，使用新包中的 Upgrade Workbench.cmd；不要直接覆盖旧工作区。
+> 当前版本为 v0.73.12 公开预览版。已有 v0.73.11 用户请看 [升级与备份恢复](UPGRADE_FROM_0_73_11.md)，v0.72.2 用户请看 [对应说明](UPGRADE_FROM_0_72_2.md)，使用新包中的 Upgrade Workbench.cmd；不要直接覆盖旧工作区。
 
-> v0.73.11 补充：原公开模板与原始库继续保留；另有独立的 [Drawing26 门洞修补版普通导入示例](../examples/drawing26-repaired/README.md)，已验证普通导入及短期计算。请按文件版本区分，旧结果不自动替换。
+> v0.73.11 已加入：原公开模板与原始库继续保留；另有独立的 [Drawing26 门洞修补版普通导入示例](../examples/drawing26-repaired/README.md)，已验证普通导入及短期计算。请按文件版本区分，旧结果不自动替换。
 
-下文用于 v0.73.11 公开预览版的第三方试用；反馈时请注明使用版本。希望验证的完整流程是：从 GitHub 获取 → 安装 → 登记示例 → 计算 → 查看并导出结果。
+下文用于 v0.73.12 公开预览版的第三方试用；反馈时请注明使用版本。希望验证的完整流程是：从 GitHub 获取 → 安装 → 登记示例 → 计算 → 查看并导出结果。
 
 ## 1. 下载与解压
 
-打开 [v0.73.11 下载页](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.73.11)，在附件中下载 `building-workbench-v0.73.11.zip`，解压到较短、可写的目录，例如 `C:\Workbench\building-workbench-v0.73.11`。请认准附件名中的版本号，不要混用不同版本的包和校验文件。
+打开 [v0.73.12 下载页](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.73.12)，在附件中下载 `building-workbench-v0.73.12.zip`，解压到较短、可写的目录，例如 `C:\Workbench\building-workbench-v0.73.12`。请认准附件名中的版本号，不要混用不同版本的包和校验文件。
 
-也可以从 [v0.73.11 标签页](https://github.com/YiXueYingCheng/building-thermal-workbench/tree/v0.73.11) 通过 **Code → Download ZIP** 下载该版本源码；仓库 main 分支以后可能继续更新。自动生成的源码包不包含个人运行配置；按照下一步复制 `config.example.json` 即可。不要直接在 ZIP 内双击运行。
+也可以从 [v0.73.12 标签页](https://github.com/YiXueYingCheng/building-thermal-workbench/tree/v0.73.12) 通过 **Code → Download ZIP** 下载该版本源码；仓库 main 分支以后可能继续更新。自动生成的源码包不包含个人运行配置；按照下一步复制 `config.example.json` 即可。不要直接在 ZIP 内双击运行。
 
 Windows 是本版验证的平台。先安装 64 位 Python 3.12；稍后计算还需安装指定版本 EnergyPlus。软件环境和引擎不在源码包中。
 
@@ -67,3 +67,7 @@ if (-not (Test-Path .\building-workbench-next\config.json)) { Copy-Item .\buildi
 ## 已知范围
 
 这是先公开、再收集独立电脑使用反馈的预览版。本版没有完成第二台机器的安装验收。Drawing26 源库的通用导入会因门洞边界问题停止；首次试用请走上面的专用模板入口。模板复现不表示源几何问题已经修正，详见 [已知限制](KNOWN_ISSUES.md)。
+
+## v0.73.12 本次重点反馈
+
+请优先反馈首次导入后是否能进入编辑、中文目录下能否准备输入、等待内存提示是否清楚，以及一月等非全年结果能否按实际时段核对。遇到警告请试读核查依据；需要采用时自行填写理由和用途范围，检查比较及导出是否保留说明。旧用户请先完成备份升级并核对原方案、结果和保存路径。反馈附版本、卡住步骤、报错文字及必要日志；避免公开个人原始项目和路径。

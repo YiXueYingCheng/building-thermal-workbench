@@ -1,31 +1,30 @@
 {
   "schema": 1,
-  "version": "0.73.11",
+  "version": "0.73.12",
   "channel": "public_preview",
   "published": true,
   "publication_ready": true,
-  "base_public_version": "0.72.2",
-  "previous_install_candidate": "v0.73.11-install-check.1",
+  "base_public_version": "0.73.11",
   "user_reference_authorization": "schedules and common configuration library authorized; other newly discussed source projects and independent research material excluded",
   "blocking_items": [],
-  "upgrade_guide": "docs/UPGRADE_FROM_0_72_2.md",
+  "upgrade_guide": "docs/UPGRADE_FROM_0_73_11.md",
   "release_notes": "docs/RELEASE_NOTES.md",
   "reference_review": "docs/REFERENCE_DISTRIBUTION_REVIEW.md",
   "repaired_example": "examples/drawing26-repaired/README.md",
   "reference_scope_resolved": true,
   "distribution_selection": "resources/reference-library/DISTRIBUTION.json",
-  "previous_release_draft": "v0.73.11-release-draft.2",
   "prepared_on": "2026-11-15",
   "distribution_state": "public_preview",
   "upgrade_tool": "scripts/upgrade_workbench.py",
   "upgrade_entry": "Upgrade Workbench.cmd",
   "upgrade_supported_from": [
-    "0.72.2"
+    "0.72.2",
+    "0.73.11"
   ],
-  "upgrade_validation": "docs/UPGRADE_ACCEPTANCE.json",
+  "upgrade_validation": "docs/RELEASE_VALIDATION_0_73_12.json",
   "post_publication_tasks": [
     "Independent Windows device download and trial"
   ],
   "repository_url": "https://github.com/YiXueYingCheng/building-thermal-workbench",
-  "release_url": "https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.73.11"
+  "release_url": "https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.73.12"
 }

@@ -501,7 +501,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     return self.send(200,result_reviews.start(body['batch'],body['index'],body.get('force') is True))
                 if route=='/api/result-reviews/accept':
                     if body.get('confirmed') is not True:raise ValueError('请先确认已查看结论及适用范围。')
-                    return self.send(200,result_review.accept(root,body['id'],body['report_sha256']))
+                    return self.send(200,result_review.accept(root,body['id'],body['report_sha256'],body.get('decision')))
                 if route=='/api/storage-verify':return self.send(200,storage_recovery.check_backup(body['id'],root))
                 if route=='/api/batch-export':
                     result=batch_results.build(body['id'],catalog,root)

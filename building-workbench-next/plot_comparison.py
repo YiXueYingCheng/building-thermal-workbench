@@ -41,6 +41,7 @@ def plot_site(folder,d):
     fig.text(.075,.025,'Positive reduction: lower demand; negative: higher demand. Sensible demand, not equipment electricity.\n'+
         ('Twelve full months.' if d['annual'] else f'Selected dates only: {period}; partial-month totals.')+f" Dataset: {d['dataset_sha256'][:16]}",fontsize=8)
     if __import__('summary_retention').notices(d):fig.text(.99,.99,'Retained summary; raw details removed',ha='right',va='top',fontsize=7,color='#805600')
+    if (folder/'user-review-notes.json').exists():fig.text(.99,.955,'User-reviewed warnings retained; see review notes',ha='right',va='top',fontsize=7,color='#805600')
     for ext in ('svg','pdf','png'):fig.savefig(folder/('figure.'+ext),dpi=300,facecolor='white')
     plt.close(fig)
     (folder/'figure_caption.txt').write_text(f"{period} sensible heating and cooling demand at {site['city']} ({site['site_id']}). Panel (a) compares reference and study totals in kWh; panel (b) shows monthly reference-minus-study contributions, positive for reduced demand and negative for increased demand. The plotted period is {d['period']}; monthly values contain only selected dates. Reference: {d['records']['left']['name']} v{d['records']['left']['revision']}; study: {d['records']['right']['name']} v{d['records']['right']['revision']}. This single-site result is not a climate-type or global estimate. Timesteps: {d['step_minutes']} min. Dataset: {d['dataset_sha256']}. See dataset.json for pinned sources and scientific review evidence.",encoding='utf-8')
@@ -89,6 +90,7 @@ def plot(folder):
         'Land: Natural Earth (public domain); @d3-maps/atlas 1.0.0 (MIT), © 2026 Georgii Bukharov. See MAP_ATTRIBUTION.md.')
     fig.text(.02,.016,attribution,fontsize=7,color='#4b5563')
     if __import__('summary_retention').notices(d):fig.text(.99,.99,'Retained summary; raw details removed',ha='right',va='top',fontsize=7,color='#805600')
+    if (folder/'user-review-notes.json').exists():fig.text(.99,.955,'User-reviewed warnings retained; see review notes',ha='right',va='top',fontsize=7,color='#805600')
     for ext in ('svg','pdf','png'):fig.savefig(folder/('figure.'+ext),dpi=300,facecolor='white')
     plt.close(fig)
     (folder/'figure_caption.txt').write_text(f"{period} sensible heating and cooling demand reduction for the selected reference and study schemes. Class values are equal-weight means of paired representative sites; vertical ranges show site minima and maxima, not confidence intervals. Results are normalized by {d['conditioned_area_m2']} m² of conditioned floor area. Climate-type values are mapped onto an existing 0.5° display grid and are not simulations at every grid cell. Missing results remain missing. The figure uses {d['paired_sites']} paired sites, {d['step_minutes']} min simulation timesteps, and dataset {d['dataset_sha256']}. See dataset.json for pinned scheme revisions, source batches, excluded sites and review notes. Climate map source: {a['manifest']['source'].get('classification_url','')}.\n"+attribution,encoding='utf-8')

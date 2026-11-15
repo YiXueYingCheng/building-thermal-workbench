@@ -1,0 +1,43 @@
+{
+  "version": "v0.73.12",
+  "date": "2026-11-15",
+  "scope": "Windows local isolated acceptance; no actual research results adopted by release process",
+  "upgrade_regression_tests": 12,
+  "official_07311_upgrade": {
+    "passed": true,
+    "old": "0.73.11",
+    "new": "0.73.12",
+    "original_results_and_drafts_unchanged": true,
+    "private_evidence_absent": true,
+    "periods": [
+      "January",
+      "annual"
+    ],
+    "user_adoption": true,
+    "batch_and_comparison_export": true,
+    "restore_exact": true,
+    "new_data_retained": true,
+    "restored_startup": true,
+    "idle_server_and_worker_stop": true,
+    "new_simulations": 0
+  },
+  "workflow_fix_acceptance": {
+    "January_and_annual_review": true,
+    "missing_tampered_incomplete_outputs_and_severe_error_rejected": true,
+    "explicit_user_adoption_and_idempotency": true,
+    "original_results_preserved": true,
+    "legacy_specialist_adoption_compatible": true,
+    "batch_comparison_csv_svg_pdf_png_review_notes": true,
+    "http_confirmation_required": true,
+    "first_import_navigation_and_existing_draft_preservation": true,
+    "unicode_workspace_real_energyplus_smoke_days": 1,
+    "cache_hash_check": true,
+    "downloaded_script_block_diagnostic": true,
+    "memory_wait_policy_reload_tests": 6
+  },
+  "limitations": [
+    "Final browser layout requires user trial; not claimed as visually verified.",
+    "Independent device trial remains pending.",
+    "Private research inputs and results are not distributed."
+  ]
+}

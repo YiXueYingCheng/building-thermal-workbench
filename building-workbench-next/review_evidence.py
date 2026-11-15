@@ -8,6 +8,7 @@ from foundation import ROOT, read_json, sha, owned
 import output_storage
 
 LABELS = {
+    'user_review_with_notes_v1': '用户判断与用途说明（非自动消除警告）',
     'annual_warmup_sensitivity_assessment': '年度初始化敏感性与原警告复核',
     'corrected_five_storey_full_weather_function_replay': '修正基准核对与全年天气函数事件复核',
     'corrected_five_storey_exact_event_replay': '修正基准核对与同引擎湿球函数复核',
@@ -16,6 +17,7 @@ LABELS = {
     'same_engine_full_year_function_replay_and_prior_weather_review': '全年数值函数复核与已审查气象核对',
 }
 SCOPE_LABELS = {
+    'user_review_with_notes_v1': '用户判断与用途说明（非自动消除警告）',
     'Frozen W00 model, 5 min, controlled sensible heating/cooling demand; same adopted weather and disabled rain/wetbulb-dependent equipment paths':
         '本次冻结的 W00 模型，5 min 步长，温控显热冷热需求；沿用所采用的气象，关闭雨淋及依赖湿球温度的设备。',
 }
@@ -51,10 +53,20 @@ def reviewed(result, root=ROOT):
             raise ValueError('复核结论未接受该结果')
         if not review['scope'] or review['scope'] != conclusion['scientific_scope'] or review['evidence_kind'] != conclusion['evidence_kind']:
             raise ValueError('接受范围与依据不一致')
-        return dict(decision='accepted_with_notes',label='附说明接受',
+        user=review['evidence_kind']=='user_review_with_notes_v1'
+        decision=conclusion.get('user_decision',{})
+        if user:
+            if evidence.get('automatic_warning_clearance') is not False or not evidence.get('technical_checks_passed'):
+                raise ValueError('用户审阅缺少独立完整性检查或警告保留声明')
+            if not all(isinstance(decision.get(k),str) and decision[k].strip() for k in ('reviewer','reason','scope')) or decision.get('acknowledged') is not True:
+                raise ValueError('用户审阅说明不完整')
+            if decision['scope']!=review['scope']:
+                raise ValueError('用户声明的用途发生变化')
+        return dict(decision='accepted_with_notes',label='用户审阅后采用' if user else '附说明接受',
+                    evidence_kind=review['evidence_kind'],user_decision=decision if user else None,
                     method=LABELS.get(review['evidence_kind'],'逐项科研复核'),
                     reviewed_at=review['reviewed_at'],scope=review['scope'],display_scope=SCOPE_LABELS.get(review['scope'],review['scope']),
-                    note='结论仅适用于本次冻结输入与研究指标；原始警告和结果保留。',
+                    note=('用户自行判断警告对所述用途的影响；平台仅核对完整性，未证明警告无害。' if user else '结论仅适用于本次冻结输入与研究指标；原始警告和结果保留。'),
                     warnings=raw['pending_warnings'],original_result=str(original),
                     original_result_sha256=review['original_result_sha256'],
                     evidence=str(evidence_path),evidence_sha256=review['evidence_sha256'])

@@ -7,7 +7,7 @@ class UpgradeTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory(prefix='wb-upgrade-test-');self.root=Path(self.temp.name)
         self.old=self.root/'旧平台 with spaces';self.new=self.root/'新包';self.out=self.root/'外置结果';self.saved=self.root/'备份'
-        for r,version in ((self.old,'0.72.2'),(self.new,'0.73.11')):
+        for r,version in ((self.old,'0.72.2'),(self.new,'0.73.12')):
             (r/'building-workbench-next').mkdir(parents=True)
             (r/'building-workbench-next/VERSION').write_text(version)
             (r/'building-workbench-next/server.py').write_text('program '+version)
@@ -92,5 +92,45 @@ class UpgradeTests(unittest.TestCase):
         with u.exclusive(self.old):
             with self.assertRaisesRegex(u.UpgradeError,'已有升级'):u.apply(self.new,self.old,self.saved)
         self.assertFalse(self.saved.exists())
+
+    def public_7311(self):
+        app=self.old/'building-workbench-next';newapp=self.new/'building-workbench-next'
+        (app/'VERSION').write_text('v0.73.11')
+        for n in u.EXECUTORS:
+            (app/n).write_text('old executor '+n);(newapp/n).write_text('new executor '+n)
+        u.dump(self.new/'EXECUTOR_COMPATIBILITY.json',dict(from_code_hashes={n:u.sha(app/n) for n in u.EXECUTORS},to_code_hashes={n:u.sha(newapp/n) for n in u.EXECUTORS}))
+        self.make_manifest(self.new)
+        # The old release manifest must not include user's data.
+        lines=(self.old/'MANIFEST.sha256').read_text().splitlines()
+        lines=[line for line in lines if not line.endswith('building-workbench-next/VERSION')]
+        lines += [u.sha(app/n)+'  building-workbench-next/'+n for n in ('VERSION',*u.EXECUTORS)]
+        (self.old/'MANIFEST.sha256').write_text('\n'.join(lines)+'\n')
+        return app.resolve(),newapp.resolve()
+
+    def test_7311_exact_compatibility_backup_and_restore(self):
+        app,newapp=self.public_7311();path=self.old/u.COMPATIBILITY;path.parent.mkdir(parents=True)
+        existing={'upgrades':[{'id':'prior','from_code_hashes':{},'to_code_hashes':{}}]};u.dump(path,existing)
+        before=u.scan(self.old);receipt=u.apply(self.new,self.old,self.saved)
+        current=u.read(path);self.assertEqual(current['upgrades'][0],existing['upgrades'][0])
+        entry=current['upgrades'][-1];self.assertEqual(set(entry['from_code_hashes']),{str(app/n) for n in u.EXECUTORS})
+        self.assertEqual(entry['to_code_hashes'],{str(app/n):u.sha(app/n) for n in u.EXECUTORS})
+        self.assertIn(u.COMPATIBILITY,receipt['updated'])
+        self.assertEqual(u.restore(self.saved)['state'],'complete');self.assertEqual(u.scan(self.old),before)
+
+    def test_7311_unknown_executor_refused_even_if_old_manifest_changed(self):
+        app,_=self.public_7311();(app/'execution_results.py').write_text('unverified changes')
+        lines=(self.old/'MANIFEST.sha256').read_text().splitlines()
+        lines=[(u.sha(app/'execution_results.py')+'  building-workbench-next/execution_results.py') if line.endswith('building-workbench-next/execution_results.py') else line for line in lines]
+        (self.old/'MANIFEST.sha256').write_text('\n'.join(lines)+'\n')
+        with self.assertRaisesRegex(u.UpgradeError,'基线不一致'):u.plan(self.new,self.old)
+        self.assertFalse(self.saved.exists())
+
+    def test_stop_rejects_unverified_or_busy_worker(self):
+        app=self.old/'building-workbench-next';marker=app/'data/execution/worker.json';marker.parent.mkdir(parents=True)
+        row=dict(ProcessId=123,CommandLine=str(app/'execution_worker.py'))
+        with patch.object(u,'processes',return_value=[row]):
+            for state in ({},dict(active=1,root=str(app),pid=123),dict(active=0,root=str(app),pid=999)):
+                u.dump(marker,state)
+                with self.assertRaisesRegex(u.UpgradeError,'空闲状态'):u.stop(self.old)
 
 if __name__=='__main__':unittest.main()

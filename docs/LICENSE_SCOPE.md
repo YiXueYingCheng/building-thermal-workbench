@@ -20,7 +20,7 @@ Copyright (c) 2026 Zhao Bencheng。
 
 ## 公用参考库范围说明
 
-`resources/reference-library` 已按作者 2026-11-15 的授权收录作息与公用配置库，具体范围见 [随包清单](REFERENCE_DISTRIBUTION_REVIEW.md)。作者的整理、说明及自有修改按 CC BY 4.0；条目保留原来源，软件原有数据及 EnergyPlus 示例不改授本项目许可。源项目数据库、Excel 原文件和独立“用户研究材料_10mm”未新增收录。本说明适用于 v0.73.11 公开预览版。
+`resources/reference-library` 已按作者 2026-11-15 的授权收录作息与公用配置库，具体范围见 [随包清单](REFERENCE_DISTRIBUTION_REVIEW.md)。作者的整理、说明及自有修改按 CC BY 4.0；条目保留原来源，软件原有数据及 EnergyPlus 示例不改授本项目许可。源项目数据库、Excel 原文件和独立“用户研究材料_10mm”未新增收录。本说明适用于 v0.73.11 和 v0.73.12 公开预览版，许可与署名范围未改变。
 
 ## 第三方例外
 

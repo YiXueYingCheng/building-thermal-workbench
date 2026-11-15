@@ -3,7 +3,7 @@ repository-code: "https://github.com/YiXueYingCheng/building-thermal-workbench"
 message: "If you use this workbench in research, please cite this software and the data sources you use."
 type: software
 title: "建筑热环境工作台 / Building Thermal Environment Workbench"
-version: "v0.73.11"
+version: "v0.73.12"
 date-released: "2026-11-15"
 license: "MIT"
 authors:

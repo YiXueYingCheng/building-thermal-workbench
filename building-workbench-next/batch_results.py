@@ -63,7 +63,7 @@ def _build(ident, catalog, root=ROOT):
             climate=site.get('climate') or '',site_kind=site.get('site_kind') or '地点',
             country=site.get('country') or '',latitude=site.get('latitude'),longitude=site.get('longitude'),
             accepted=accepted,acceptance='reviewed' if review else 'passed' if accepted else r['status'],
-            status_label='附说明接受' if review else STATUS.get(r['status'],r['status']),review_info=review,
+            status_label=review['label'] if review else STATUS.get(r['status'],r['status']),review_info=review,
             pending_warnings=r.get('pending_warnings',[]),error=None,
             loads_MJ_m2={k.replace('_kWh','_MJ_m2'):v*3.6/area for k,v in r['loads'].items()} if area and r.get('loads') else None))
     # Failure and interruption explanations are queue metadata, not zero loads.
@@ -100,6 +100,8 @@ def tables(data):
     sites=[];monthly=[];temperatures=[];systems=[];reviews=[]
     for r in data['results']:
         common={k:r[k] for k in ('index','site_id','city','climate','site_kind','mode','status','acceptance','accepted')}
+        from review_annotations import summary
+        common.update(review_note=summary(r.get('review_info')),review_status=r['status_label'])
         common.update(data_retention=r.get('data_retention',{}).get('mode','full_evidence'))
         common.update(research_input_status=note['status'] if note else '',research_input_note=export_text(note))
         sites.append(dict(common,period='-'.join(map(str,r['period'])),step_minutes=r['step_minutes'],days=r.get('days'),
@@ -123,14 +125,16 @@ def load_export(ident, root=ROOT):
 
 def export(data, root=ROOT):
     if not data['counts']['completed']:raise ValueError('本批尚无已完成结果。')
-    key=digest(dict(dataset=data['dataset_sha256'],exporter=sha(ROOT/'batch_results.py'),reviewer=sha(ROOT/'review_evidence.py'),csv_writer=sha(ROOT/'result_exports.py')))
+    key=digest(dict(annotations=sha(ROOT/'review_annotations.py'),dataset=data['dataset_sha256'],exporter=sha(ROOT/'batch_results.py'),reviewer=sha(ROOT/'review_evidence.py'),csv_writer=sha(ROOT/'result_exports.py')))
     ident='batch_export_'+key[:32];folder=owned(Path(root)/'data/batch-exports'/ident,root)
     if folder.exists():return load_export(ident,root)[1]
     stage=folder.parent/('.preparing_'+uuid.uuid4().hex);stage.mkdir(parents=True)
     write_json(stage/'dataset.json',data,root)
     outputs,reviews=tables(data)
+    from review_annotations import annotate,export_notes
+    export_notes(stage,data,root)
     for name,rows in outputs.items():
-        if rows:(stage/(name+'.csv')).write_bytes(csv_bytes(rows))
+        if rows:(stage/(name+'.csv')).write_bytes(csv_bytes(annotate(rows,data)))
     write_json(stage/'review-notes.json',reviews,root)
     # Small original/evidence documents travel with the export. Raw SQL and
     # weather remain linked by identity and hash rather than being duplicated.

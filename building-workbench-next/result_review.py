@@ -1,6 +1,6 @@
 """Explicit result review: bounded evidence checks, then separate adoption.
 
-No building simulations. Unknown warnings stay pending; raw results are immutable.
+No building simulations. Users may explicitly adopt warnings with a recorded scope; raw results are immutable.
 Methods cover the corrected five-storey sensible-load cases: the exact Beijing
 event, or full-year weather-function evidence whose events match the current log.
 """
@@ -61,6 +61,7 @@ def status(root,ident):
     if (p/'report.json').exists():
         out['report']=read_json(p/'report.json');out['report_sha256']=sha(p/'report.json')
     if (p/'acceptance.json').exists():out['acceptance']=read_json(p/'acceptance.json')
+    if (p/'decision.json').exists():out['user_decision']=read_json(p/'decision.json')['user_decision']
     return out
 
 def latest(root,batch,index):
@@ -118,7 +119,7 @@ def check_orientation_outputs(sql,calendar):
     require(len(rows)==13+len(daily),'出现未预期的翻面输出频率。')
     return dict(A_days=sum(calendar),B_days=365-sum(calendar),rows=rows,monthly_and_annual_match=True)
 
-def analyse(root,ident):
+def analyse_specialist(root,ident):
     root=Path(root).resolve();p=folder(root,ident);job=read_json(p/'job.json');checks=[]
     def check(label,ok,detail=''):
         require(ok,label+'未通过。'+detail);checks.append(dict(label=label,passed=True,detail=detail))
@@ -237,13 +238,25 @@ def analyse(root,ident):
         next_step='确认采用后，本结果列为附说明接受；逐日结果可继续用于匹配条件的翻面日历。',
         evidence_sha256=sha(p/'outcome.json'),limits=['不是重新运行全年模型或修改引擎。','结论仅适用于这一冻结结果，不会按警告名称自动放行其他结果。','原日志、数值及警告完整保留。']),root)
 
-def accept(root,ident,expected):
+def analyse(root,ident):
+    from user_result_review import analyse as inspect
+    return inspect(root,ident)
+
+ACCEPT_LOCK=threading.RLock()
+def accept(root,ident,expected,decision=None):
+    with ACCEPT_LOCK:
+        return _accept(root,ident,expected,decision)
+
+def _accept(root,ident,expected,decision=None):
     from execution_queue import Queue
     from review_evidence import reviewed
     root=Path(root).resolve();p=folder(root,ident);report=read_json(p/'report.json');job=read_json(p/'job.json')
     require(sha(p/'report.json')==expected,'复核报告已变化，请重新读取。')
-    require(job['state']=='ready' and report['recommendation']=='accept_with_notes','目前没有可采用的复核结论。')
-    evidence=read_json(p/'outcome.json');require(evidence['passed'] is True and sha(p/'outcome.json')==report['evidence_sha256'],'复核依据不完整。')
+    require(job['state']=='ready' and report['recommendation'] in ('accept_with_notes','user_decision'),'目前没有可采用的复核结论。')
+    if report['recommendation']=='user_decision':
+        from user_result_review import prepare_decision
+        prepare_decision(root,ident,report,job,decision)
+    evidence=read_json(p/'outcome.json');require(evidence['passed'] is True and sha(p/'outcome.json')==(read_json(p/'decision.json')['evidence_sha256'] if report['recommendation']=='user_decision' else report['evidence_sha256']),'复核依据不完整。')
     for ref in evidence['verified_sources']:require(sha(ref['path'])==ref['sha256'],'复核引用资料发生变化，请重新检查。')
     b,j,raw=target(root,job['batch'],job['index'])
     if j['status']=='passed' and raw.get('scientific_review',{}).get('id')==ident:

@@ -157,7 +157,11 @@ def run_command(args,log,cwd):
    # Only the child handle created above is eligible for termination; no PID from disk is trusted.
    if p.poll() is None:p.terminate()
    p.wait()
- if p.returncode:raise ValueError('数据库读取或转换未通过，详见 '+str(log))
+ if p.returncode:
+  message=Path(log).read_text(encoding='utf-8',errors='replace')
+  if Path(log).name=='extract.log' and any(k in message for k in ('PSSecurityException','UnauthorizedAccess','about_Execution_Policies','数字签名')):
+   raise ValueError('Windows 阻止了数据库读取脚本，尚未开始读取建筑。这不是建筑文件损坏。确认来自可信下载后，在包根目录的 PowerShell 运行：Unblock-File -LiteralPath ".\\building-workbench-next\\extract_database.ps1"，然后重新检查文件。此操作只解除该文件的下载标记，不修改全局执行策略；若仍提示签名要求，请联系设备管理员核对组织策略。原日志：'+str(log))
+  raise ValueError('数据库读取或转换未通过，详见 '+str(log))
 
 def inspect(path,p,root):
  check_cancel(p)

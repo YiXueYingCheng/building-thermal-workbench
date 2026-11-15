@@ -1,8 +1,8 @@
 # 安装与首次使用
 
-> 当前版本为 v0.73.11 公开预览版。已有 v0.72.2 用户请先看 [升级与备份恢复](UPGRADE_FROM_0_72_2.md)，使用新包中的 Upgrade Workbench.cmd；不要直接覆盖旧工作区。
+> 当前版本为 v0.73.12 公开预览版。已有 v0.73.11 用户请看 [升级与备份恢复](UPGRADE_FROM_0_73_11.md)，v0.72.2 用户请看 [对应说明](UPGRADE_FROM_0_72_2.md)，使用新包中的 Upgrade Workbench.cmd；不要直接覆盖旧工作区。
 
-> v0.73.11 补充：原公开模板与原始库继续保留；另有独立的 [Drawing26 门洞修补版普通导入示例](../examples/drawing26-repaired/README.md)，已验证普通导入及短期计算。请按文件版本区分，旧结果不自动替换。
+> v0.73.11 已加入：原公开模板与原始库继续保留；另有独立的 [Drawing26 门洞修补版普通导入示例](../examples/drawing26-repaired/README.md)，已验证普通导入及短期计算。请按文件版本区分，旧结果不自动替换。
 
 已验证 Windows、64 位 CPython 3.12.7。本分发包沿用已完成的同机独立目录验收；第二台机器、全新 Windows 与不同 Office 组合尚未验证。
 
@@ -53,3 +53,11 @@ cd building-workbench-next
 ```
 
 这些检查使用临时工作区和合成气象，不启动 EnergyPlus；实际计算验收与适用范围见包内 `验收结果` 和 [范围说明](SCOPE.md)。
+
+## v0.73.12 常见问题
+
+- 导入提示 `extract_database.ps1` 未签名：Windows 拦截了下载的脚本，不表示建筑文件坏了。确认本包来源可信后，在包根目录 PowerShell 执行 `Unblock-File -LiteralPath ".\building-workbench-next\extract_database.ps1"`，再重试导入。此操作仅移除这个文件的下载标记，不修改全局执行策略；单位管理策略仍限制时请联系管理员。
+- 第一次确认导入建筑后会进入来源方案并出现编辑、比较和计算入口。再次导入保留当前正在编辑的方案。
+- 工作区可以含中文；需要英文引用路径的气象/作息文件会复制到当前用户的独立缓存。若账户及临时目录均含中文且没有可用英文位置，可在 config.json 中设置 `"reference_cache_root": "D:/BTWB-references"`，选择可写的独立英文完整路径；不必搬动整个工作区。
+- 输入准备显示等待内存时，资源设置现在会实时读取。请根据可用内存调整预留或关闭占用较高的应用；没有取消资源保护。
+- 结果复核按实际时段核查，详见 [警告与用户采用](RESULT_REVIEW.md)。

@@ -65,7 +65,7 @@ def export(data, root=ROOT):
     if data['blocked'] or not data['paired_sites']:raise ValueError('当前没有可导出的有效配对，请先检查结果来源和排除原因。')
     kind=figure_kind(data);assets=map_assets(root) if kind=='climate' else None
     notices={'MAP_ATTRIBUTION.md':ROOT/'third_party/THIRD_PARTY_MAPS.md','atlas-LICENSE.txt':ROOT/'third_party/atlas-LICENSE.txt'} if assets else {}
-    key=digest(dict(dataset=data['dataset_sha256'],map=assets['manifest'] if assets else None,notices={k:sha(v) for k,v in notices.items()},figure=kind,exporter=sha(ROOT/'result_exports.py'),plotter=sha(ROOT/'plot_comparison.py')))
+    key=digest(dict(annotations=sha(ROOT/'review_annotations.py'),dataset=data['dataset_sha256'],map=assets['manifest'] if assets else None,notices={k:sha(v) for k,v in notices.items()},figure=kind,exporter=sha(ROOT/'result_exports.py'),plotter=sha(ROOT/'plot_comparison.py')))
     ident='comparison_export_'+key[:32];folder=owned(root/'data/comparison-exports'/ident,root)
     if folder.exists():return load_export(ident,root)[1]
     stage=folder.parent/('.preparing_'+uuid.uuid4().hex);stage.mkdir(parents=True)
@@ -73,7 +73,9 @@ def export(data, root=ROOT):
     if assets:write_json(stage/'map.json',assets,root)
     for name,source in notices.items():
         (stage/name).write_bytes(source.read_bytes())
-    if kind=='site':(stage/'period-loads.csv').write_bytes(csv_bytes(annual_site_rows(data)))
+    from review_annotations import annotate,export_notes
+    export_notes(stage,data,root)
+    if kind=='site':(stage/'period-loads.csv').write_bytes(csv_bytes(annotate(annual_site_rows(data),data)))
     for name,rows in [('sites',data['sites']),('climates',data['classes']),('monthly',data['monthly']),('rooms',data['rooms'])]:
         if rows:
             table=[{k:v for k,v in r.items() if not k.endswith('_evidence') and not k.endswith('_pending_warnings')} for r in rows]
@@ -85,7 +87,7 @@ def export(data, root=ROOT):
                 for row in table:
                     for side,note in data.get('research_input_notes',{}).items():
                         row[side+'_research_input_note']=export_text(note)
-            (stage/(name+'.csv')).write_bytes(csv_bytes(table))
+            (stage/(name+'.csv')).write_bytes(csv_bytes(annotate(table,data)))
     readme=f'''比较名称：{data['comparison']['name']}
 参考：{data['records']['left']['name']}，版本 {data['records']['left']['revision']}，来源 {data['left']['id']}
 研究：{data['records']['right']['name']}，版本 {data['records']['right']['revision']}，来源 {data['right']['id']}

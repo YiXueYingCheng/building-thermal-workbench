@@ -1,15 +1,16 @@
 # 建筑热环境工作台
 
-**v0.73.11 · 公开预览版 · 2026-11-15。** 欢迎未参与开发的使用者从 GitHub 获取并试用。作息和公用配置参考库已按作者确认的范围随包提供；源项目文件和独立研究材料不额外收录。
+**v0.73.12 · 公开预览版 · 2026-11-15。** 欢迎未参与开发的使用者从 GitHub 获取并试用。作息和公用配置参考库已按作者确认的范围随包提供；源项目文件和独立研究材料不额外收录。
 
-- **[下载 v0.73.11 公开预览包](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/download/v0.73.11/building-workbench-v0.73.11.zip)** · [SHA256 校验文件](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/download/v0.73.11/building-workbench-v0.73.11.zip.sha256)
+- **[下载 v0.73.12 公开预览包](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/download/v0.73.12/building-workbench-v0.73.12.zip)** · [SHA256 校验文件](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/download/v0.73.12/building-workbench-v0.73.12.zip.sha256)
 - [首次试用与反馈指引](docs/FIRST_TRIAL.md) · [下载完整性校验](docs/VERIFY_DOWNLOAD.md) · [全部历史版本](https://github.com/YiXueYingCheng/building-thermal-workbench/releases)
 
 Windows 本地研究工作台，用于整理建筑、材料、工况和计算范围，核对输入后调用 EnergyPlus，比较并导出建筑显热需求结果。
 
 - [本轮功能与验收范围](docs/RELEASE_NOTES.md)
 - [安装与首次使用](docs/INSTALL.md)
-- **已有 v0.72.2：先看 [升级与备份恢复](docs/UPGRADE_FROM_0_72_2.md)，再双击新包中的 `Upgrade Workbench.cmd`。**
+- **已有 v0.73.11：先看 [升级与备份恢复](docs/UPGRADE_FROM_0_73_11.md)。v0.72.2 请看 [对应升级说明](docs/UPGRADE_FROM_0_72_2.md)。均从新包运行 `Upgrade Workbench.cmd`。**
+- [结果警告的核对与用户采用](docs/RESULT_REVIEW.md)
 - [原 Drawing26 / ECA 模板示例](examples/README.md)
 - [Drawing26 修补版普通导入示例](examples/drawing26-repaired/README.md)
 - [材料计算方式与适用范围](docs/MATERIAL_INPUTS.md)
@@ -36,4 +37,4 @@ if (-not (Test-Path .\building-workbench-next\config.json)) { Copy-Item .\buildi
 
 自有代码采用 MIT；已明确范围的自有示例、结果和文档采用 CC BY 4.0。Copyright (c) 2026 Zhao Bencheng。公用参考库保留原来源及第三方条件，具体范围见随包清单。引擎、Python 环境、天气原文件、本次验收工作区和实际研究数据不随发行包提供。
 
-[GitHub 仓库](https://github.com/YiXueYingCheng/building-thermal-workbench) · [v0.73.11 发布说明与附件](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.73.11) · [旧版 v0.72.2 下载（保留）](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.72.2)。推荐引用请注明实际使用版本；作者信息见 [AUTHORS.md](AUTHORS.md)。
+[GitHub 仓库](https://github.com/YiXueYingCheng/building-thermal-workbench) · [v0.73.12 发布说明与附件](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.73.12) · [旧版 v0.72.2 下载（保留）](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.72.2)。推荐引用请注明实际使用版本；作者信息见 [AUTHORS.md](AUTHORS.md)。
