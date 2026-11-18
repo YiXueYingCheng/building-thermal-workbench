@@ -64,7 +64,11 @@ def writable(folder):
         if path.read_bytes() != payload:
             raise OSError('写入回读不一致。')
     finally:
-        if path.is_file():path.unlink()
+        if path.is_file():
+            try:path.unlink()
+            except OSError as error:
+                import warnings
+                warnings.warn('结果目录写入回读检查已结束，但检查临时文件未能清理：'+str(path)+'；'+str(error),RuntimeWarning)
 
 MARKER='.building-workbench-next-output.json'
 

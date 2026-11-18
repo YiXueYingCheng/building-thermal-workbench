@@ -37,7 +37,7 @@ TEMPS={'low':'AC_T_MIN_SCHEDULE','heat':'SET_T_MIN_SCHEDULE','cool':'SET_T_MAX_S
 def ref(p):return dict(path=str(Path(p).resolve()),sha256=sha(p),status='verified')
 def save(p,v,root):write_json(p,v,root)
 def folder(root,ident):
- if not isinstance(ident,str) or not re.fullmatch('import_[a-f0-9]{32}',ident):raise ValueError('导入编号无效。')
+ if not isinstance(ident,str) or not re.fullmatch('import_(?:[a-f0-9]{12}|[a-f0-9]{32})',ident):raise ValueError('导入编号无效。')
  return owned(Path(root)/'data/building-imports'/ident,root)
 
 @contextmanager
@@ -53,6 +53,17 @@ def locked(root):
 
 def backend(root):
  return Path(config(root)['conversion_root'])
+
+def door_mapper(root):
+ import importlib.util
+ path=backend(root)/'door_mapping.py'
+ spec=importlib.util.spec_from_file_location('_accdb_door_mapping',path)
+ module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+ return module
+
+def inspect_doors(d,root):
+ reference=Path(config(root)['import_reference_tables'])
+ return door_mapper(root).inspect_doors(d,read_json(reference/'SYS_DOOR.json'),read_json(reference/'SYS_MATERIAL.json'))
 
 def table_data(p):return {x.stem:read_json(x) for x in (p/'tables').glob('*.json')}
 def index(rows,key):
@@ -105,12 +116,7 @@ def analyse(d,root):
  reference=Path(reference)
  if not all((reference/name).is_file() for name in ('SYS_DOOR.json','SYS_MATERIAL.json')):
   raise ValueError('门窗/材料参考表不完整，需要 SYS_DOOR.json 和 SYS_MATERIAL.json。')
- doors=index(d['SYS_DOOR'],'DOOR_ID');materials=index(d['SYS_MATERIAL'],'MATERIAL_ID')
- checked_doors=index(read_json(reference/'SYS_DOOR.json'),'DOOR_ID');checked_materials=index(read_json(reference/'SYS_MATERIAL.json'),'MATERIAL_ID')
- for row in d['DOOR']:
-  t=doors.get(row['DOOR_CONSTRUCTION'],{})
-  if t!=checked_doors.get(row['DOOR_CONSTRUCTION']) or materials.get(t.get('MATERIAL_ID'))!=checked_materials.get(t.get('MATERIAL_ID')) or t.get('GAP_LENGTH')!=25.3 or t.get('MATERIAL_ID')!=62:
-   errors.append('门类型 '+str(row['DOOR_CONSTRUCTION'])+'不属于已核对的标准木门；当前不会推断其厚度或物性。')
+ door_models,door_errors=inspect_doors(d,root);errors.extend(door_errors)
  source_types=[]
  for tid,t in types.items():
   members=[r for r in rooms if r['TYPE']==tid]
@@ -136,7 +142,7 @@ def analyse(d,root):
   source_hvac_supported=not hvac_issues,source_hvac_issues=list(dict.fromkeys(hvac_issues)),
   shading_count=len(d['SHADING']),shaded_windows=sum(bool(w['CURTAIN'] or w['SHADINGID']) for w in d['WINDOW']),
   south_direction=d['ENVIRONMENT'][0]['SOUTH_DIRECTION'] if d['ENVIRONMENT'] else None,
-  door_count=len(d['DOOR']),window_count=len(d['WINDOW']),table_count=len(d),
+  door_count=len(d['DOOR']),door_models=door_models,window_count=len(d['WINDOW']),table_count=len(d),
   notes=['几何沿用源中面并转为真北；玻璃采用等效 U、SHGC≈0.87×SC；默认土壤及直接接地须明确确认。',
    '人数、功率上下限和比例计划保留单位；当前仅接通可无损表达为每日及工作日/周末的配置。',
    '空调归属保留源库，温控使用四阈值显热需求模型；设备系统、通风、动态材料不随导入自动接通。'])
@@ -201,17 +207,18 @@ def options(catalog,root):
   sources=source_snapshot(root)['rooms'] if bid=='drawing26_global_frozen' else catalog['ordinary_buildings'][bid]['usage_sources']
   for room in base['rooms']:
    key=bid+':'+room['id'];details=sources.get(room['id'],{});rules={ch:copy.deepcopy(details.get('channels',{}).get(ch,{}).get('rule',room['loads'][ch])) for ch in CHANNELS}
-   donors[key]=dict(rules=rules,gains={k:gains[room['id']][k] for k in ('sensible_W_person','lighting_heat_fraction')},source_building=bid,source_room=room['id'],baseline_sha256=base['baseline_sha256'])
-   choices.append(describe_choice(key,label+(' 示例原配置' if bid=='drawing26_global_frozen' else ' 原配置')+' · '+room['zone']+(' · '+details['use'] if details.get('use') else ''),donors[key]))
+   donors[key]=dict(rules=rules,gains={k:gains[room['id']][k] for k in ('sensible_W_person','lighting_heat_fraction')},source_building=bid,source_room=room['id'],baseline_sha256=base['baseline_sha256'],room_type=details.get('use',''))
+   choices.append(describe_choice(key,label+(' 示例原配置' if bid=='drawing26_global_frozen' else ' 原配置')+' · '+room['zone']+' · '+(details.get('use') or '用途未标注'),donors[key]))
  weather=[dict(id=k,name=v['name']) for k,v in catalog['sites'].items() if v.get('eligible') and (v.get('weather') or {}).get('sha256')]
  return dict(choices=choices,weather=weather),donors
 
 def validate_request(req,review,catalog,root):
- allowed={'name','weather','mapping','temperature','thresholds','availability','ground','shading','door_mm','mapping_confirmed'}
+ allowed={'name','weather','mapping','temperature','thresholds','availability','ground','shading','door_mm','door_confirmations','mapping_confirmed'}
  if not isinstance(req,dict) or set(req)-allowed:raise ValueError('导入选择包含未支持字段。')
  if not isinstance(req.get('name'),str) or not 1<=len(req['name'].strip())<=80:raise ValueError('请输入 1–80 字的建筑名称。')
  if req.get('ground')!='slab_default_soil' or req.get('mapping_confirmed') is not True:raise ValueError('请明确确认直接接地、默认土壤和转换模型。')
- if review['door_count'] and (type(req.get('door_mm')) not in (int,float) or req['door_mm']!=25.3):raise ValueError('当前已核对标准木门需明确选择 25.3 mm 厚度。')
+ if 'door_models' in review:door_mapper(root).validate_confirmation(req,review['door_models'])
+ elif review['door_count'] and (type(req.get('door_mm')) not in (int,float) or req['door_mm']!=25.3):raise ValueError('此前木门检查记录需确认 25.3 mm；其他门类型请重新检查来源。')
  if req.get('shading') not in ('reject','ignore'):raise ValueError('请选择附加遮阳处理。')
  if req['shading']=='reject' and (review['shading_count'] or review['shaded_windows']):raise ValueError('存在附加遮阳；当前不能无损转换，未获明确忽略选择。')
  opts,donors=options(catalog,root);mapping=req.get('mapping')
@@ -254,7 +261,15 @@ def start(root,action,path=None,ident=None,request=None,catalog=None):
   if any(k.startswith(str(root)) for k in JOBS):raise ValueError('已有数据库导入正在处理。')
   if action=='inspect':
    if not isinstance(path,str) or not path.strip():raise ValueError('请填写数据库完整路径。')
-   ident='import_'+uuid.uuid4().hex;p=folder(root,ident);p.mkdir(parents=True)
+   # Keep old 32-character IDs readable; new imports use short random names.
+   # Exclusive creation and the registry check prevent accidental ID reuse.
+   for attempt in range(32):
+    ident='import_'+uuid.uuid4().hex[:12];p=folder(root,ident)
+    if (root/'data/imported-buildings'/(ident+'.json')).exists():continue
+    try:p.mkdir(parents=True,exist_ok=False)
+    except FileExistsError:continue
+    break
+   else:raise ValueError('无法分配独立的导入目录，请稍后重试。')
   elif action=='convert':
    p=folder(root,ident)
    check_cancel(p)

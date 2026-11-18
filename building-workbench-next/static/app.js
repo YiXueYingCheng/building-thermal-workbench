@@ -101,7 +101,7 @@ function render(){renderNav();app.innerHTML=resultIndexReturnView()+(S.view==='r
 async function bootstrap(){S.boot=await api('/api/bootstrap');}
 let recordLoadEpoch=0;
 async function loadRecord(id,revision,accept=()=>true){
- if(S.usageDirty)throw new Error('建筑配置还有未保存编辑，请先保存配置版本或撤销。');
+ if(S.usageDirty)throw usagePendingError('切换方案或版本');
  if(S.dirty)throw new Error('当前修改尚未保存，请保存或撤销后切换方案。');
  const epoch=++recordLoadEpoch,record=await api('/api/records/'+encodeURIComponent(id)+(revision!==undefined?'?revision='+encodeURIComponent(revision):''));
  if(epoch!==recordLoadEpoch||!accept())return false;
@@ -169,7 +169,7 @@ document.addEventListener('change',async event=>{
    }
    if(t.dataset.between!==undefined){setPath(`factors.materials.applications.${t.dataset.between}.between_layers`,t.value.split('/').map(x=>x.trim()).filter(Boolean));updateDirtyStatus();return;}
    if(t.dataset.period){const parts=t.value.split('-').map(Number);const p=copy(S.record.factors.scope.period);p.splice(t.dataset.period==='start'?0:2,2,...(parts.length===2?parts:[null,null]));setPath('factors.scope.period',p);updateDirtyStatus();return;}
-   if(t.dataset.site){const ids=new Set(S.record.factors.scope.site_ids);t.checked?ids.add(t.dataset.site):ids.delete(t.dataset.site);setPath('factors.scope.site_ids',[...ids]);render();}
+   if(t.dataset.site){const ids=new Set(S.record.factors.scope.site_ids),site=t.dataset.site,list=t.closest('.scope-site-list'),listY=list?.scrollTop,mainY=scrollY;t.checked?ids.add(site):ids.delete(site);setPath('factors.scope.site_ids',[...ids]);render();if(listY!==undefined){const current=document.querySelector('.scope-site-list');if(current)current.scrollTop=listY;}document.querySelector(`[data-site="${CSS.escape(site)}"]`)?.focus({preventScroll:true});scrollTo({top:mainY,behavior:'instant'});}
  }catch(error){notice(error.message);}
 });
 document.addEventListener('input',event=>{const t=event.target;if(t.id==='search'){S.search=t.value;const list=document.querySelector('.record-list');list.innerHTML=libraryList();}else if(t.matches('input[data-path]')&&!readonly()){setPath(t.dataset.path,t.type==='number'?(t.value===''?null:Number(t.value)):t.value);updateDirtyStatus();}});

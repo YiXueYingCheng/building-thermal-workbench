@@ -62,7 +62,7 @@ def reviewed(result, root=ROOT):
                 raise ValueError('用户审阅说明不完整')
             if decision['scope']!=review['scope']:
                 raise ValueError('用户声明的用途发生变化')
-        return dict(decision='accepted_with_notes',label='用户审阅后采用' if user else '附说明接受',
+        return dict(decision='accepted_with_notes',label=('用户强制采用' if decision.get('acceptance_mode')=='bulk_force' else '用户审阅后采用') if user else '附说明接受',
                     evidence_kind=review['evidence_kind'],user_decision=decision if user else None,
                     method=LABELS.get(review['evidence_kind'],'逐项科研复核'),
                     reviewed_at=review['reviewed_at'],scope=review['scope'],display_scope=SCOPE_LABELS.get(review['scope'],review['scope']),

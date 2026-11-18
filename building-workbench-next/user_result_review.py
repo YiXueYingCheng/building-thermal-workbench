@@ -21,7 +21,7 @@ def inspect(root,job):
     check('绑定本次待复核结果',j['status']=='review' and binding(j)==job['binding'])
     verify_artifacts(raw)
     check('模型、日志与结果原文件校验值一致',True)
-    plan=load_review(root,b['review'],b['checksum']);case=plan['cases'][j['idx']]
+    plan=load_review(root,b['review'],b['checksum'],historical=True);case=plan['cases'][j['idx']]
     check('保存方案、冻结输入与算例一致',case['identity']==j['identity'])
     run=output_storage.result_folder(raw,root)
     check('实际执行模型与冻结模型一致',sha(run/'model.epJSON')==case['model_sha256'])
@@ -38,7 +38,7 @@ def inspect(root,job):
     check('引擎正常结束、无严重错误且数据库完整',True)
     check('覆盖所选日期与步长，单位和汇总一致',True,
           f"{raw['period'][0]}月{raw['period'][1]}日—{raw['period'][2]}月{raw['period'][3]}日，{raw['days']} 天，{raw['step_minutes']} min；不要求全年。")
-    fields=('status','site_id','city','mode','period','days','step_minutes','loads','monthly','rooms','temperatures','temperature_extrema','warnings','pending_warnings','checks','daily_reference')
+    fields=('status','site_id','city','mode','period','days','step_minutes','loads','monthly','rooms','temperatures','temperature_extrema','warnings','pending_warnings','checks','daily_reference','time_detail','output_contract')
     check('重新读取的数值和警告与原汇总一致',all(fresh.get(k)==raw.get(k) for k in fields))
     check('确有待用户判断的警告',bool(raw['pending_warnings']))
     _,current,_=target(root,j['batch'],j['idx']);verify_artifacts(raw)
@@ -85,6 +85,8 @@ def prepare_decision(root,ident,report,job,decision):
         value=decision.get(key)
         require(isinstance(value,str) and 1<=len(value.strip())<=limit,f'请填写{label}（最多 {limit} 字）。')
         clean[key]=value.strip()
+    if decision.get('acceptance_mode')=='bulk_force':
+        clean.update(acceptance_mode='bulk_force',bulk_review_id=decision.get('bulk_review_id'))
     clean['acknowledged']=True
     b,j,raw,checks,_,_=inspect(root,job)
     clean['reviewed_at']=now()

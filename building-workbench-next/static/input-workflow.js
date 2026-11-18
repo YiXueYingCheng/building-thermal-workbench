@@ -19,8 +19,8 @@ async function recoverInputFlow(m){
   const job=await api('/api/input-preparations/latest?id='+encodeURIComponent(m.id)+'&revision='+m.revision);if(!job)return;
   m.job=job;
   if(job.kind==='prepare'&&!m.generated)m.generated=await api('/api/model-inputs/'+job.bundle_id+'/manifest.json');
-  if(['queued','running'].includes(job.state))await inputFlowTask(m,'正在继续读取后台输入准备进度…',async()=>{const result=await pollInputPreparation(m,job);if(job.kind==='prepare')m.prepared=result;else m.generated=result;m.message='输入准备完成；尚未提交计算。';});
-  else if(job.state==='ready'){if(job.kind==='prepare')m.prepared=job.result;else m.generated=job.result;m.message=job.lifecycle?.label||'已恢复本版本的输入记录；提交与结果状态见方案流程。';}
+  if(['queued','running'].includes(job.state))await inputFlowTask(m,'正在继续读取后台输入准备进度…',async()=>{const result=await pollInputPreparation(m,job);if(job.kind==='prepare'){m.prepared=result;m.outputContract=result.output_contract;}else m.generated=result;m.message='输入准备完成；尚未提交计算。';});
+  else if(job.state==='ready'){if(job.kind==='prepare'){m.prepared=job.result;m.outputContract=job.result.output_contract;}else m.generated=job.result;m.message=job.lifecycle?.label||'已恢复本版本的输入记录；提交与结果状态见方案流程。';}
   else m.error=job.error||'上次输入准备未完成；完成项保留，可重试续接。';
   renderInputFlow();
  }catch(e){m.error=e.message;renderInputFlow();}
@@ -80,8 +80,8 @@ async function inspectInputFlow(m,id){
 async function prepareInputFlow(m,id){
  if(S.dirty)throw Error('请先保存或撤销未保存修改，再准备计算清单。');
  await inputFlowTask(m,'正在核对输入并准备预算清单…本操作不提交计算。',async()=>{
-  const job=await api('/api/input-preparations',{id:m.id,revision:m.revision,kind:'prepare',bundle_id:id});
-  m.prepared=await pollInputPreparation(m,job);
+  const job=await api('/api/input-preparations',{id:m.id,revision:m.revision,kind:'prepare',bundle_id:id,output_contract:m.outputContract||'monthly_period_v1'});
+  m.prepared=await pollInputPreparation(m,job);m.outputContract=m.prepared.output_contract;
   m.message=m.prepared.existing_batch?'已找到本输入的原批次，未重新排队。':'计算清单已准备；下一步查看预算，再明确提交。';
  });
 }
@@ -104,6 +104,7 @@ function renderInputFlow(){
  if(v.detail&&m.inspection){S.inputInspection=m.inspection;body=inputFlowInspectionMarkup().replace('<button data-action="close-input-inspection">收起输入核对</button>','<button data-input-flow="back">← 返回输入摘要</button>');}
  else{
   body=`<details class="input-flow-settings"><summary>计算设置 · ${S.record.numerics.step_minutes} min · ${esc(periodLabel(S.record.factors.scope.period))}</summary>${select('求解步长 / min','numerics.step_minutes',[1,2,5,10,15,30,60].map(x=>[x,String(x)]),S.record.numerics.step_minutes)}<p>修改步长后需返回方案保存版本。设备投入在计算队列中统一管理。</p>${ordinaryTimeBasis()}</details>`;
+  body+=outputResolutionMarkup(m);
   if(S.dirty)body+='<p class="warning">当前有未保存修改，请先返回方案保存版本。已有模型仍属于原保存版本。</p>';
   if(g){body+=`<section class="input-flow-result"><h3>模型输入已就绪</h3><p>${g.case_count} 个算例 · 已保存 v${m.revision} · 尚未由此操作提交计算。</p><p class="muted">下表为已生成模型；变化数相对源模型，不是相对上一次编辑，也不是错误数量。</p>${caseListView('generated')}<button data-input-flow="inspect"${m.pending?' disabled':''}>查看模型差异与实际参数</button><details><summary>来源与完整记录</summary><a href="/api/model-inputs/${esc(g.id)}/manifest.json" target="_blank" rel="noopener">差异与来源清单 ↗</a> · <a href="/api/model-inputs/${esc(g.id)}/record.json" target="_blank" rel="noopener">绑定方案版本 ↗</a><p><button data-input-flow="generate"${m.pending?' disabled':''}>重新核对并生成输入</button></p></details></section>`;}
   else if(p){body+=`<h3>待生成的算例</h3><p>${p.selected_sites} 个地点 · ${p.case_count} 个算例。这里只确认将计算什么，尚未生成模型。</p>${[...(p.errors||[]),...(p.requirements||[])].map(x=>`<p class="warning">${esc(x)}</p>`).join('')}${caseListView('preview')}`;}

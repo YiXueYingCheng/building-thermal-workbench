@@ -88,7 +88,7 @@ def room_templates():
         validate_gains(gains)
         ident = 'reference:'+item['id']
         donor = dict(rules=rules, gains=gains, source_building='excel_reference_v1', source_room=item['id'],
-            baseline_sha256=digest(item), source_label='Excel 参考 · '+item['name'],
+            baseline_sha256=digest(item), source_label='Excel 参考 · '+item['name'], room_type=item['name'],
             note='来源参考，非现行规范值；只采用人数、照明、设备作息及显热设置，保留目标建筑空调与温控配置。',
             reference_source=dict(name=data['source_workbook'], version=data['version'],
                 origins=item['origins'], distribution=data['distribution'], sha256=data['source_workbook_sha256']))

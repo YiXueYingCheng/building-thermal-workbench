@@ -126,7 +126,7 @@ def analyse_specialist(root,ident):
     b,j,raw=target(root,job['batch'],job['index'])
     check('本次结果与待复核记录一致',j['status']=='review' and binding(j)==job['binding'])
     verify_artifacts(raw);check('原始输入、日志和结果文件完整',True)
-    plan=load_review(root,b['review'],b['checksum']);case=plan['cases'][j['idx']]
+    plan=load_review(root,b['review'],b['checksum'],historical=True);case=plan['cases'][j['idx']]
     check('复核绑定本次算例',case['identity']==j['identity'])
     record=read_json(root/'data/execution/reviews'/b['review']/'record.json')
     run=output_storage.result_folder(raw,root);model=read_json(run/'model.epJSON')
@@ -269,7 +269,7 @@ def _accept(root,ident,expected,decision=None):
         require(j['status']=='passed' and j['result_sha256']==done['result_sha256'],'已采用的结果记录发生变化。')
         reviewed(raw,root);return done
     require(j['status']=='review' and binding(j)==job['binding'],'待复核结果已变化，请重新检查。')
-    load_review(root,b['review'],b['checksum']);verify_artifacts(raw)
+    load_review(root,b['review'],b['checksum'],historical=True);verify_artifacts(raw)
     c=evidence['review_conclusions'][0]
     require(len(evidence['review_conclusions'])==1 and c['identity']==j['identity'] and c['original_result_sha256']==j['result_sha256'] and c['batch']==j['batch'] and c['index']==j['idx'],'依据未绑定本次结果。')
     at=now();result=copy.deepcopy(raw)

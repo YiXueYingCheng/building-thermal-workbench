@@ -15,6 +15,8 @@ from execution_queue import Queue
 from execution_inputs import load_review,execution_revision
 from execution_results import verify
 import resources
+import cpu_budget
+import worker_runtime
 from resource_history import ResourceHistory, startup_wait_seconds
 
 class ProcessGroup:
@@ -72,6 +74,8 @@ def memory_history(q):
 def publish_status(root, payload):
     """Status is observational: an I/O failure must not close the owned process group."""
     try:
+        payload.setdefault('process_created',worker_runtime.process_info(os.getpid())['created'])
+        payload.setdefault('ready',True)
         write_json(Path(root)/'data/execution/worker.json',payload,root)
         return True
     except OSError as error:
@@ -113,12 +117,15 @@ def complete_attempt(q,r,rc):
 
 
 def run(root,idle_exit=False):
-    q=Queue(root);lock=(q.folder/'worker.lock').open('a+b');lock.seek(0)
-    if lock.read(1)==b'':lock.write(b'0');lock.flush()
+    q=Queue(root);lock=(q.folder/'worker.lock').open('a+b')
+    # Do not read a byte another worker may have locked on Windows.
+    if lock.seek(0,2)==0:lock.write(b'0');lock.flush()
     lock.seek(0)
     try:msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
-    except OSError:lock.close();return
-    active={};group=ProcessGroup();last_status=0;history_status=[0.]
+    except OSError as error:
+        lock.close()
+        raise OSError('无法取得后台独占锁：可能已有后台运行或文件权限受限。不会删除锁文件。原始错误：'+str(error)) from error
+    active={};group=None;last_status=0;history_status=[0.]
     def history_progress(completed,total):
         if time.monotonic()-history_status[0]<2:return
         policy=q.policy()
@@ -128,11 +135,17 @@ def run(root,idle_exit=False):
         publish_status(root,dict(pid=os.getpid(),root=str(root),heartbeat=now(),active=len(active),resources=policy,machine=machine,foreign_engine_pids=[],reason=reason,phase='memory_history',budget=None))
         history_status[0]=time.monotonic()
     try:
+        publish_status(root,dict(pid=os.getpid(),root=str(root),heartbeat=now(),active=0,ready=False,reason='正在核对中断任务。'))
+        group=ProcessGroup()
         q.recover()
+        publish_status(root,dict(pid=os.getpid(),root=str(root),heartbeat=now(),active=0,reason='后台已启动，正在准备资源预算。'))
         history=ResourceHistory(root,progress=history_progress)
         while True:
             for key,r in list(active.items()):
                 r['memory']=resources.process_memory(r['proc']._handle);r['peak']=max(r['peak'],r['memory']['peak_gib'],r['memory']['peak_commit_gib'])
+                r['cpu'].sample(r['proc']._handle)
+                r['memory'].update(cpu_percent=r['cpu'].percent,cpu_peak_percent=r['cpu'].peak,
+                    cpu_settling_seconds=max(0,cpu_budget.SETTLE_SECONDS-(time.monotonic()-r['started'])))
                 r['memory']['reserved_gib']=max(r['resource_estimate']['reserved_gib'],history.history.estimate(r['resource_estimate']['key'])['reserved_gib'],r['peak']*1.25+.05)
                 rc=r['proc'].poll()
                 if rc is None:continue
@@ -165,7 +178,7 @@ def run(root,idle_exit=False):
                     if job:
                         # Keep engine paths below legacy Windows MAX_PATH, including outputs.
                         try:
-                            folder=output_storage.attempt_folder(root,job['attempt'],probe=True)
+                            folder=output_storage.attempt_folder(root,job['attempt'])
                             folder.mkdir(parents=True,exist_ok=False)
                             if len(str(folder))+35>=260:raise ValueError('工作区路径过长，请将工作区放在更短的目录后运行。')
                             plan=load_review(root,job['plan']['id'],job['checksum']);cached=q.cached(job['identity'])
@@ -181,7 +194,7 @@ def run(root,idle_exit=False):
                                         stdout=log,stderr=subprocess.STDOUT,stdin=subprocess.DEVNULL,creationflags=flags,env=dict(os.environ,OMP_NUM_THREADS='1'))
                                     group.add(proc)
                                 except Exception:log.close();raise
-                                active[job['attempt']]=dict(proc=proc,log=log,folder=folder,job=job,started=time.monotonic(),memory={'working_gib':0,'commit_gib':0,'reserved_gib':estimate},peak=0,policy=policy,resource_estimate=resource_estimate)
+                                active[job['attempt']]=dict(proc=proc,log=log,folder=folder,job=job,started=time.monotonic(),memory={'working_gib':0,'commit_gib':0,'reserved_gib':estimate},peak=0,policy=policy,resource_estimate=resource_estimate,cpu=cpu_budget.ProcessSamples())
                                 q.set_pid(job,proc.pid);output_storage.write_run(folder/'launch.json',dict(pid=proc.pid,started=now(),batch=job['batch'],case=c,resources=policy,resource_estimate=resource_estimate,execution_revision=execution_revision(plan['code_hashes'],root)),root)
                         except Exception as error:
                             run=active.pop(job['attempt'],None)
@@ -190,11 +203,11 @@ def run(root,idle_exit=False):
                             fail_attempt(q,job,'launch',error)
             except Exception as error:reason='暂停派发：'+str(error);print(traceback.format_exc(),flush=True)
             if time.monotonic()-last_status>2:
-                publish_status(root,dict(pid=os.getpid(),root=str(root),heartbeat=now(),active=len(active),resources=policy,machine=machine,foreign_engine_pids=foreign,reason=reason,per_job_reserved_gib=estimate,budget=budget));last_status=time.monotonic()
+                publish_status(root,dict(pid=os.getpid(),root=str(root),heartbeat=now(),active=len(active),resources=policy,machine=machine,foreign_engine_pids=foreign,reason=reason,per_job_reserved_gib=estimate,budget=budget,cpu_jobs=[dict(pid=r['proc'].pid,percent=r['cpu'].percent,peak_percent=r['cpu'].peak) for r in active.values()]));last_status=time.monotonic()
             if idle_exit and not active and not any(b['counts']['pending'] and b['mode']=='run' for b in q.state()['batches']):break
             time.sleep(1)
     finally:
-        group.close()
+        if group is not None:group.close()
         for r in active.values():
             r['proc'].wait(timeout=30);r['log'].close()
         lock.seek(0);msvcrt.locking(lock.fileno(),msvcrt.LK_UNLCK,1);lock.close()

@@ -1,0 +1,93 @@
+{
+  "version": "0.73.13",
+  "date": "2026-11-18",
+  "environment": "Windows, Python 3.12 x64; isolated fixtures",
+  "application_unittests": {
+    "passed": 265,
+    "failed": 0
+  },
+  "upgrade_unittests": {
+    "passed": 23,
+    "failed": 0
+  },
+  "javascript_syntax_files": 74,
+  "worker": {
+    "passed": true,
+    "real_start_and_heartbeat": true,
+    "repeated_ensure_single_process": true,
+    "lock_contention_diagnosed": true,
+    "dead_pid_not_online": true,
+    "restart_after_exit": true,
+    "simulations": 0
+  },
+  "upgrades": {
+    "passed": true,
+    "versions": [
+      {
+        "from_version": "0.72.2",
+        "upgrade": true,
+        "restore_exact": true,
+        "new_data_retained": true,
+        "old_result_review": true,
+        "old_submission_blocked": true,
+        "modified_plan_rejected": true,
+        "original_drafts_and_outputs_unchanged": true
+      },
+      {
+        "from_version": "0.73.11",
+        "upgrade": true,
+        "restore_exact": true,
+        "new_data_retained": true,
+        "old_result_review": true,
+        "old_submission_blocked": true,
+        "modified_plan_rejected": true,
+        "original_drafts_and_outputs_unchanged": true
+      },
+      {
+        "from_version": "0.73.12",
+        "upgrade": true,
+        "restore_exact": true,
+        "new_data_retained": true,
+        "old_result_review": true,
+        "old_submission_blocked": true,
+        "modified_plan_rejected": true,
+        "original_drafts_and_outputs_unchanged": true
+      }
+    ],
+    "simulations_started": 0,
+    "actual_research_changed": false
+  },
+  "batch_write_probe": {
+    "batches": 2,
+    "cases_per_batch": 34,
+    "probe_calls": 2,
+    "actual_case_writes": 68,
+    "engine_runs": 0
+  },
+  "browser": {
+    "diagnostic_alert": true,
+    "expanded_log_survives_poll": true,
+    "public_version_badge": true
+  },
+  "prior_localfix_validation": {
+    "output_frequency_runs": [
+      "monthly",
+      "daily",
+      "hourly",
+      "timestep"
+    ],
+    "identical_sensible_loads": true,
+    "short_runs_only": true
+  },
+  "unchanged": [
+    "existing research workspaces",
+    "existing user results",
+    "running localfix service"
+  ],
+  "limits": [
+    "Same-machine validation; independent Windows device installation remains a user trial.",
+    "Long workloads and optional CPU admission benefit on older hardware remain unmeasured.",
+    "No attempt to reproduce or bypass a third-party AI environment protection threshold.",
+    "Upgrade test process-stop detection was mocked for offline fixtures; real worker lifecycle was tested separately."
+  ]
+}

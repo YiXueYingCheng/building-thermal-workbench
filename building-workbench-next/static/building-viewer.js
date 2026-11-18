@@ -11,6 +11,7 @@ function buildingViewerDialog(){
   if(b?.dataset.viewer==='close'){closeBuildingViewer();return;}
   if(v.pending||b?.disabled)return;
   try{
+   if(typeof wallOpticsAction==='function'&&wallOpticsAction(b))return;
    if(typeof roomViewerAction==='function'&&await roomViewerAction(b,node))return;
    if(node){viewerSelect(node.dataset.geometryNode,node.dataset.geometryId);return;}
    const op=b.dataset.viewer||b.dataset.geometry;
@@ -29,6 +30,7 @@ function buildingViewerDialog(){
  });
  d.addEventListener('change',e=>{
   const v=buildingViewerCurrent();if(!v)return;if(typeof roomViewerActive==='function'&&roomViewerActive()){roomViewerChange(e);return;}e.stopPropagation();if(v.pending)return;
+  if(typeof wallOpticsChange==='function'&&wallOpticsChange(e.target))return;
   const m=geometryState(),id=e.target.id;
   if(id==='geometry-floor'){rememberViewerPlan();m.floor=Number(e.target.value);m.room=null;m.wall=null;v.planScroll={top:0,left:0};renderBuildingViewer();}
   if(id==='geometry-room')viewerSelect('room',e.target.value);
@@ -96,7 +98,7 @@ function viewerUndo(){
 }
 function renderBuildingViewer(){
  const v=buildingViewerCurrent();if(!v)return;const d=buildingViewerDialog(),m=geometryState(),focusId=d.contains(document.activeElement)?document.activeElement.id:null;
- d.innerHTML=`<header class="viewer-head"><div><p class="muted">${esc(S.record.name)} · ${esc(planVersionLabel(S.saved))}${readonly()?' · 只读':''}</p><h2 id="building-viewer-title">${v.view==='plan'?'建筑平面与材料位置':v.view==='edit'?'编辑墙体基础构造':'墙体构造详情'}</h2></div><div class="actions">${v.view!=='plan'?'<button data-viewer="back">← 返回原平面</button>':''}<button data-viewer="refresh"${v.pending?' disabled':''}>重新核对</button><button data-viewer="close">关闭</button></div></header><div class="viewer-body">${v.message?`<p role="status" class="viewer-message">${esc(v.message)}</p>`:''}${v.pending?'<p>正在读取建筑与构造…</p>':v.view==='plan'?geometryContents(true):viewerWallMarkup()}</div><footer class="viewer-foot"><span data-viewer-draft>${S.dirty?'当前方案草稿有未保存修改；关闭后保留，请回主页面保存版本。':'查看与切换不修改方案。'}${S.usageDirty?' 房间配置另有未保存编辑，继续保留。':''}</span><button data-viewer="close">关闭并返回方案</button></footer>`;
+ d.innerHTML=`<header class="viewer-head"><div><p class="muted">${esc(S.record.name)} · ${esc(planVersionLabel(S.saved))}${readonly()?' · 只读':''}</p><h2 id="building-viewer-title">${v.view==='plan'?'建筑平面与材料位置':v.view==='edit'?'编辑墙体基础构造':v.view==='optics-batch'?'推广外表面光学参数':'墙体构造详情'}</h2></div><div class="actions">${v.view!=='plan'?'<button data-viewer="back">← 返回原平面</button>':''}<button data-viewer="refresh"${v.pending?' disabled':''}>重新核对</button><button data-viewer="close">关闭</button></div></header><div class="viewer-body">${v.message?`<p role="status" class="viewer-message">${esc(v.message)}</p>`:''}${v.pending?'<p>正在读取建筑与构造…</p>':v.view==='plan'?geometryContents(true):viewerWallMarkup()}</div><footer class="viewer-foot"><span data-viewer-draft>${S.dirty?'当前方案草稿有未保存修改；关闭后保留，请回主页面保存版本。':'查看与切换不修改方案。'}${S.usageDirty?' 房间配置另有未保存编辑，继续保留。':''}</span><button data-viewer="close">关闭并返回方案</button></footer>`;
  if(!d.open)d.showModal();
  const focus=focusId&&d.querySelector('#'+CSS.escape(focusId));if(focus)focus.focus({preventScroll:true});else{const title=d.querySelector('#building-viewer-title');title.tabIndex=-1;title.focus({preventScroll:true});}
  if(v.view==='plan'){d.querySelector('.viewer-body').scrollTop=v.planScroll?.top||0;const canvas=d.querySelector('.geometry-canvas');if(canvas)canvas.scrollLeft=v.planScroll?.left||0;}

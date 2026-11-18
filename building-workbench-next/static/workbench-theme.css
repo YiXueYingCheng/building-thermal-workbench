@@ -545,6 +545,14 @@ dialog.calendar-preview-dialog[open] {display:flex;flex-direction:column;}
 .room-edit-heading{margin:18px 0}.room-hour-details{padding:14px;border:1px solid #d5e3d9;border-radius:10px}.room-hour-details .schedule-hours{max-height:370px;overflow:auto}
 .room-viewer-tools .field{margin-top:16px}.room-viewer-tools .actions{margin:12px 0}.room-viewer-foot>div{min-width:0}.room-viewer-foot .actions{flex-wrap:wrap}.room-viewer-foot p{margin:.4rem 0 0}
 #building-viewer.room-viewer [data-room-save-status]{color:#315c46}.room-viewer .schedule-preview{min-width:0}
+/* Keep pending room edits visible after leaving the room editor or scrolling. */
+#room-unsaved-banner{position:sticky;top:var(--main-nav-height,70px);z-index:39;display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 auto 16px;width:calc(100% - 56px);max-width:1484px;padding:14px 20px;background:#fff4da;border:1px solid #d4a14d;border-left:5px solid #a55b08;border-radius:10px;box-shadow:0 3px 10px #65420c12;color:#653d0a}
+#room-unsaved-banner[hidden]{display:none}#room-unsaved-banner strong{font-weight:700}#room-unsaved-banner p{margin:4px 0 0;font-size:.9rem;overflow-wrap:anywhere}#room-unsaved-banner button{flex-shrink:0}
+.room-viewer-launcher.room-has-unsaved,#building-viewer .room-viewer-foot.room-has-unsaved{background:#fff4da;border-color:#d4a14d;border-left:5px solid #a55b08}
+.room-viewer-launcher [data-room-save-status].room-unsaved-status,#building-viewer.room-viewer [data-room-save-status].room-unsaved-status{display:block;color:#793f00;font-weight:700;font-size:1rem}
+#room-unsaved-dialog{width:min(620px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;padding:28px;border:1px solid #d4a14d;border-top:5px solid #a55b08;border-radius:14px;background:#fff;color:#29433b}
+#room-unsaved-dialog h2{font-size:1.3rem;font-weight:700;color:#793f00}#room-unsaved-description{margin:16px 0 22px}#room-unsaved-description p{margin:10px 0;overflow-wrap:anywhere}#room-unsaved-description li{margin:8px 0}#room-unsaved-dialog .actions{gap:12px}
+@media(max-width:760px){#room-unsaved-banner{position:static;width:calc(100% - 28px);padding:12px;flex-wrap:wrap;gap:10px}#room-unsaved-banner button{width:100%;text-align:center}#room-unsaved-dialog{padding:20px}#room-unsaved-dialog .actions button{flex:1;text-align:center}}
 @media(max-width:760px){.room-viewer-launcher{align-items:stretch;flex-direction:column}.room-context{gap:8px}.room-context .tag{display:none}.room-channel-tabs{gap:5px}.room-channel-tabs button{min-width:0;flex:1;padding:10px 7px}.room-periods{grid-template-columns:1fr;gap:12px}.room-viewer-foot .actions{width:100%}.room-viewer-foot .actions button{width:auto;flex:1;font-size:.8rem;padding:9px}.room-viewer-foot{max-height:34vh;overflow:auto}#building-viewer.room-viewer .grid3,#building-viewer.room-viewer .grid2{grid-template-columns:1fr}#building-viewer.room-viewer .viewer-body>details{padding:12px}}
 @media(max-width:600px){.room-viewer-selector{top:-14px;margin:-14px -14px 12px;padding:12px 14px 0}}
 
@@ -696,3 +704,5 @@ dialog.library-adoption{width:min(1100px,94vw);max-height:90dvh;padding:0;border
 @media(max-width:700px){#daily-manager-detail{max-height:none;overflow:visible;padding-right:0}.workspace-recent{grid-template-columns:1fr}#daily-manager .daily-values{grid-template-columns:repeat(3,minmax(0,1fr))}}
 
 .daily-provenance{font-size:12px;max-height:190px;overflow:auto}.daily-provenance dt{font-weight:600}.daily-provenance dd{margin:2px 0 10px;overflow-wrap:anywhere}
+
+.worker-warning{border:2px solid #ad6a16;background:#fff5dc;color:#503508}.worker-warning strong{font-size:1.15rem}.worker-diagnostic{white-space:pre-wrap;overflow-wrap:anywhere;max-height:20rem;overflow:auto}.worker-batch-note:empty{display:none}.worker-batch-note{font-weight:650;color:#805000}

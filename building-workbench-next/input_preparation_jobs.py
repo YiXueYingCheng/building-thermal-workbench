@@ -52,7 +52,7 @@ class Jobs:
   with self.lock:
    if ident not in self.jobs:raise ValueError('输入准备记录不存在，请重新打开计算安排。')
    return self.public(self.jobs[ident])
- def start(self,record,catalog,kind='generate',bundle_id=None,expected_record_sha256=None):
+ def start(self,record,catalog,kind='generate',bundle_id=None,expected_record_sha256=None,output_contract='monthly_period_v1'):
   if kind not in ('generate','prepare','daily'):raise ValueError('输入准备类型无效。')
   if kind=='daily':
    from daily_reference import require_baseline,record_key
@@ -62,14 +62,17 @@ class Jobs:
    from preparation_recovery import saved_input
    from record_store import Store
    saved_input(self.root,bundle_id,Store(catalog,self.root),dict(id=record['id'],revision=record['revision']))
-  key=digest([kind,digest(record),bundle_id,pipeline.code_identity()])
+  if kind=='prepare':
+   from execution_inputs import validate_output
+   validate_output(record,output_contract)
+  key=digest([kind,digest(record),bundle_id,pipeline.code_identity(),output_contract])
   with self.lock:
    for j in self.jobs.values():
     if j['key']==key and j['state'] in ('queued','running'):return self.public(j)
    if any(j['state'] in ('queued','running') for j in self.jobs.values()):raise ValueError('已有输入准备正在进行；完成后再开始下一份，避免叠加内存。')
    total=len(record['factors']['scope']['site_ids'])*(2 if record['factors']['condition']['operation']['mode']=='both' else 1)
    j=dict(id='job_'+uuid.uuid4().hex,key=key,kind=kind,record_id=record['id'],revision=record['revision'],record_name=record['name'],bundle_id=bundle_id,
-       state='queued',phase='prepare' if kind=='prepare' else 'generate',stage='等待开始',completed=0,total=total,started_epoch=time.time(),created=now(),case_seconds=[],new_simulations=0)
+       output_contract=output_contract,state='queued',phase='prepare' if kind=='prepare' else 'generate',stage='等待开始',completed=0,total=total,started_epoch=time.time(),created=now(),case_seconds=[],new_simulations=0)
    self.jobs[j['id']]=j;self.update(j);self.pool.submit(self.run,j,record,catalog);return self.public(j)
  def run(self,j,record,catalog):
   self.update(j,state='running');token=pipeline.EVENTS.set(lambda **v:self.update(j,**v))
@@ -84,7 +87,7 @@ class Jobs:
     else:
      from record_store import Store
      from preparation_recovery import prepare
-     result=prepare(self.root,j['bundle_id'],Store(catalog,self.root),dict(id=record['id'],revision=record['revision']))
+     result=prepare(self.root,j['bundle_id'],Store(catalog,self.root),dict(id=record['id'],revision=record['revision']),output_contract=j.get('output_contract','monthly_period_v1'))
    self.update(j,state='ready',stage='准备完成，尚未提交计算',completed=j['total'],result=result,finished_epoch=time.time())
   except Exception as error:self.update(j,state='failed',error=str(error),stage='准备未完成，完成项保留' if j['kind'] in ('generate','daily') else '清单准备未完成，原输入保留',finished_epoch=time.time())
   finally:pipeline.EVENTS.reset(token)

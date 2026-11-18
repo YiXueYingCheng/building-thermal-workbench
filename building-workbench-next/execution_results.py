@@ -2,6 +2,7 @@
 import calendar
 import datetime as dt
 import math
+import output_resolution
 from pathlib import Path
 import re
 import sqlite3
@@ -20,7 +21,7 @@ def close(a,b):
 def verify(folder,case,returncode,elapsed):
     folder=Path(folder);out=folder/'run';model=read_json(folder/'model.epJSON')
     contract=case.get('output_contract','monthly_period_v1')
-    require(contract in ('monthly_period_v1','daily_sensible_reference_v1'),'结果输出类型未知。')
+    require(contract in ('monthly_period_v1','daily_sensible_reference_v1',*output_resolution.CONTRACTS),'结果输出类型未知。')
     daily=None
     if contract=='daily_sensible_reference_v1':
         require(case['mode']=='controlled' and case['period']==[1,1,12,31] and not case.get('validation_trace'),'逐日参考仅支持全年温控精简输出。')
@@ -50,10 +51,14 @@ def verify(folder,case,returncode,elapsed):
             cumulative+=expected[t['Month']]//1440
             require(t['SimulationDays']==cumulative and t['Interval']==calendar.monthrange(2025,t['Month'])[1]*1440,'分月累计模拟天数不符。')
         trace=[t for t in ts if t['IntervalType'] not in ((2,3,4) if contract=='daily_sensible_reference_v1' else (3,4))]
-        if case.get('validation_trace'):
+        if contract in output_resolution.CONTRACTS:
+            it=output_resolution.CONTRACTS[contract][1]
+            require(all(t['IntervalType'] in (3,4,it) for t in ts),'明细包含非预期频率。')
+            time_detail=output_resolution.verify(db,case,model)
+        elif case.get('validation_trace'):
             require(len(trace)==days*24*60//case['step_minutes'] and all(t['Interval']==case['step_minutes'] for t in trace),'验证轨迹的求解步数不符。')
         else:require(not trace,'存在非预期的详细时序输出。')
-        data=rows('select d.*,r.Value,t.Month,t.Interval,e.MinValue,e.MaxValue from ReportData r join ReportDataDictionary d using(ReportDataDictionaryIndex) join Time t using(TimeIndex) left join ReportExtendedData e using(ReportDataIndex)')
+        data=rows("select d.*,r.Value,t.Month,t.Interval,e.MinValue,e.MaxValue from ReportData r join ReportDataDictionary d using(ReportDataDictionaryIndex) join Time t using(TimeIndex) left join ReportExtendedData e using(ReportDataIndex) WHERE d.ReportingFrequency IN ('Monthly','Run Period')")
         require(all(math.isfinite(x['Value']) for x in data),'结果包含非有限数值。')
         def variable(name,freq):return [x for x in data if x['Name']==name and x['ReportingFrequency']==freq]
         def unique(rr,keys,label):require(len(rr)==len(keys) and {x['KeyValue'].upper() for x in rr}==keys,label+'缺失或重复。')
@@ -101,6 +106,7 @@ def verify(folder,case,returncode,elapsed):
         checks=dict(process_exit_zero=True,err_end_success=True,sqlite_quick_check='ok',full_period=True,monthly_reconciliation=True,sqlite_completion_flags=flags,
             completion_basis='Process + end/err + independent full-period coverage + monthly reconciliation; SQL flags retained unmodified.'),artifacts=artifacts)
     if daily:result.update(output_contract=contract,daily_reference=daily)
+    if contract in output_resolution.CONTRACTS:result.update(output_contract=contract,time_detail=time_detail)
     return result
 
 def verify_artifacts(result):

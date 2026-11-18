@@ -18,7 +18,7 @@ def summary(data):
     notes=[]
     for review in reviews(data):
         d=review['user_decision']
-        notes.append('用户审阅后采用；审阅人：'+d['reviewer']+'；理由：'+d['reason']+'；用途：'+d['scope']+'；未自动证明警告无害')
+        notes.append(('用户强制采用' if d.get('acceptance_mode')=='bulk_force' else '用户审阅后采用')+'；审阅人：'+d['reviewer']+'；理由：'+d['reason']+'；用途：'+d['scope']+'；未自动证明警告无害')
     return ' | '.join(notes)
 
 def annotate(rows,data):

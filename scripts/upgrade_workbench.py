@@ -24,9 +24,19 @@ def fail(message): raise UpgradeError(message)
 def sha(path):
     with Path(path).open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
 def read(path):return json.loads(Path(path).read_text('utf-8-sig'))
+def replace_with_retry(source,target):
+    # Standard-library-only equivalent of the application's Windows atomic write.
+    for attempt in range(6):
+        try:os.replace(source,target);return
+        except PermissionError as error:
+            if os.name!='nt' or getattr(error,'winerror',None) not in (5,32,33) or attempt==5:raise
+            time.sleep(.05*2**attempt)
+
 def dump(path,value):
     path=Path(path);tmp=path.with_name(path.name+'.tmp-'+uuid.uuid4().hex)
-    tmp.write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n',encoding='utf8');os.replace(tmp,path)
+    with tmp.open('x',encoding='utf8') as f:
+        f.write(json.dumps(value,ensure_ascii=False,indent=2)+'\n');f.flush();os.fsync(f.fileno())
+    replace_with_retry(tmp,path)
 def stamp():return datetime.datetime.now().strftime('%Y%m%d-%H%M%S')+'-'+uuid.uuid4().hex[:8]
 
 @contextmanager
@@ -172,8 +182,35 @@ def stop(target):
 
 def compatibility_plan(source,target,oldversion,incoming):
     # This is an explicit, hash-bound metadata update; no plan/result is rewritten.
+    contract_path=child(source,'EXECUTOR_COMPATIBILITY.json')
+    contract=read(contract_path) if contract_path.exists() else {}
+    if contract.get('schema')==2:
+        version=oldversion.removeprefix('v')
+        baselines=contract['historical_baselines'];after=contract['to_code_hashes']
+        if version not in baselines:fail('没有此旧版的结果读取兼容记录：'+oldversion)
+        before=baselines[version]
+        if not before or not after:fail('升级兼容清单不完整。')
+        for name,checksum in before.items():
+            if sha(child(target,'building-workbench-next/'+name))!=checksum:
+                fail('计算程序与已核对的 '+oldversion+' 升级基线不一致：'+name)
+        for name,checksum in after.items():
+            if incoming.get('building-workbench-next/'+name)!=checksum:
+                fail('新程序与结果读取兼容清单不一致：'+name)
+        path=child(target,COMPATIBILITY)
+        metadata=read(path) if path.exists() else {'upgrades':[]}
+        if not isinstance(metadata.get('upgrades'),list):fail('旧计算兼容记录格式异常，请先保留并核对。')
+        app=target/'building-workbench-next'
+        # Reading older frozen results is distinct from submitting their old plans.
+        # Include earlier official baselines for workspaces upgraded more than once.
+        for prior,hashes in baselines.items():
+            entry=dict(id='public-'+prior+'-to-'+contract['to_version']+'-results',
+                kind='audited_historical_result_read',historical_only=True,
+                from_code_hashes={str(app/n):h for n,h in hashes.items()},
+                to_code_hashes={str(app/n):h for n,h in after.items()})
+            if entry not in metadata['upgrades']:metadata['upgrades'].append(entry)
+        return dict(path=COMPATIBILITY,before=sha(path) if path.exists() else None,value=metadata)
     if oldversion.removeprefix('v')!='0.73.11':return None
-    contract=read(child(source,'EXECUTOR_COMPATIBILITY.json'))
+    contract=read(contract_path)
     before=contract['from_code_hashes'];after=contract['to_code_hashes']
     if set(before)!=set(EXECUTORS) or set(after)!=set(EXECUTORS):fail('升级兼容清单不完整。')
     for name in EXECUTORS:
@@ -195,7 +232,7 @@ def plan(source,target):
     if source==target or source.is_relative_to(target) or target.is_relative_to(source):fail('新包必须解压在旧平台之外的独立文件夹。')
     incoming=manifest(source);old=manifest(target,False)
     oldversion=(target/'building-workbench-next/VERSION').read_text('utf8').strip()
-    if oldversion.removeprefix('v') not in ('0.72.2','0.73.11'):fail('本工具支持 v0.72.2 或 v0.73.11 原路径升级；检测到 '+oldversion)
+    if oldversion.removeprefix('v') not in ('0.72.2','0.73.11','0.73.12'):fail('本工具支持 v0.72.2、v0.73.11 或 v0.73.12 原路径升级；检测到 '+oldversion)
     if not (target/'building-workbench-next/config.json').is_file():fail('请选择含旧配置的完整平台包根目录。')
     if sha(source/'requirements-lock.txt')!=sha(target/'requirements-lock.txt'):fail('锁定依赖已变化，本版工具不自动升级 Python 环境。')
     writes=[];conflicts=[]
@@ -216,7 +253,7 @@ def plan(source,target):
     return dict(schema=1,source=str(source),target=str(target),old_version=oldversion,new_version=(source/'building-workbench-next/VERSION').read_text('utf8').strip(),
         source_manifest_sha256=sha(source/'MANIFEST.sha256'),writes=writes,compatibility=compatibility_plan(source,target,oldversion,incoming),external_roots=[str(p) for p in external_roots(target)],
         preserved=['旧 config.json','data / runs / assets 及所有未列入更新的文件','已有 .venv','外置结果位置与内容'],
-        note='更新列出的发行文件；v0.73.11 另增加经文件校验的旧结果兼容记录。不会删除旧文件、自动改造物性或重算。')
+        note='更新发行文件并登记已核验旧版结果的读取兼容；旧计算清单需重新准备才能提交。不会删除旧文件、自动采用结果或重算。')
 
 def room_for(path,needed):
     while not path.exists():path=path.parent
@@ -263,8 +300,9 @@ def _apply(source,target,folder):
     # Recheck both the approved file plan and full backup after the copy.
     if plan(source,target)!=p:fail('升级计划已变化，未开始覆盖；备份已保留。')
     stopped(target)
-    receipt=dict(schema=1,state='updating',backup=str(folder),plan=p,updated=[])
+    receipt=dict(schema=1,state='updating',backup=str(folder),plan=p,updated=[],phase='program_files')
     dump(folder/'UPGRADE.json',receipt)
+    files_verified=False;last_journal=time.monotonic()
     try:
         for row in p['writes']:
             n=row['path'];dest=child(target,n)
@@ -276,7 +314,9 @@ def _apply(source,target,folder):
             temp=dest.with_name(dest.name+'.upgrade-'+uuid.uuid4().hex)
             shutil.copy2(src,temp)
             if sha(temp)!=row['after']:fail('复制校验失败：'+n)
-            os.replace(temp,dest);receipt['updated'].append(n);dump(folder/'UPGRADE.json',receipt)
+            replace_with_retry(temp,dest);receipt['updated'].append(n)
+            if len(receipt['updated'])%10==0 or time.monotonic()-last_journal>=1:
+                dump(folder/'UPGRADE.json',receipt);last_journal=time.monotonic()
         replaced={r['path'] for r in p['writes']}
         compat=p['compatibility']
         if compat:
@@ -285,15 +325,21 @@ def _apply(source,target,folder):
             dest.parent.mkdir(parents=True,exist_ok=True);dump(dest,compat['value'])
             if read(dest)!=compat['value']:fail('升级后计算兼容记录校验失败。')
             replaced.add(compat['path']);receipt['updated'].append(compat['path']);dump(folder/'UPGRADE.json',receipt)
+        receipt['phase']='verification';dump(folder/'UPGRADE.json',receipt)
         for item in info['sets']:
             unchanged={n:v for n,v in item['files'].items() if item['folder']!='workspace' or n not in replaced}
             verify_copy(Path(item['original']),unchanged)
         for row in p['writes']:
             if sha(child(target,row['path']))!=row['after']:fail('更新后程序校验失败：'+row['path'])
-        receipt['state']='complete';dump(folder/'UPGRADE.json',receipt);dump(target/'UPGRADE_RECEIPT.json',receipt)
+        files_verified=True;receipt['phase']='receipt';receipt['state']='complete'
+        dump(target/'UPGRADE_RECEIPT.json',receipt);dump(folder/'UPGRADE.json',receipt)
     except Exception as error:
-        receipt['state']='incomplete';receipt['error']=str(error);dump(folder/'UPGRADE.json',receipt)
-        raise UpgradeError('更新未完成，请勿启动平台。完整备份和已写入清单在 '+str(folder)+'；请用“从备份恢复”保留现场后还原。') from error
+        receipt['state']='status_pending' if files_verified else 'incomplete';receipt['error']=str(error)
+        secondary=''
+        try:dump(folder/'UPGRADE.json',receipt)
+        except OSError as state_error:secondary='\n更新状态也未能写入：'+str(state_error)
+        stage='程序文件及保留资料已校验通过，但升级回执未完整保存' if files_verified else '更新未完成'
+        raise UpgradeError(stage+'，请勿直接启动平台。\n原始错误：'+str(error)+secondary+'\n完整备份在 '+str(folder)+'；请用“从备份恢复”保留现场后还原。') from error
     return receipt
 
 def load_backup(folder):

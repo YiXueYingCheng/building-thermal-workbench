@@ -185,6 +185,7 @@ def build(root, ident, checksum):
     lanes = min(policy['max_parallel'],needed) if needed else 0
     ideal = {k:v/lanes if lanes else 0 for k,v in serial.items()} if serial is not None else None
     machine = resources.snapshot(root)
+    cpu = resources.cpu_budget.admission(policy,machine,[])
     existing = [b for b in state['batches'] if b['review']==ident]
     known=known_input_space(root,plan,cases)
     known['available_after_reserve_bytes']=max(0,int((machine['disk_free_gib']-policy['disk_reserve_gib'])*2**30))
@@ -205,7 +206,7 @@ def build(root, ident, checksum):
     return dict(created=now(),id=ident,plan_sha256=checksum,case_count=len(cases),reusable=len(cases)-needed,
         needs_compute=needed,invalid_cache=sum(c['cache_invalid'] for c in cases),cases=cases,groups=estimates,
         unknown_estimate_cases=unknown,excluded_history=excluded,serial_seconds=serial,
-        ideal_parallel_seconds=ideal,assumed_parallel=lanes,additional_retained_bytes=retained,
+        ideal_parallel_seconds=ideal,assumed_parallel=lanes,additional_retained_bytes=retained,cpu=cpu,
         peak_extra_bytes=None if needed else 0,storage=known,policy=policy,machine=machine,existing_counts=counts,
         queue_running=sum(j['status']=='running' for j in state['jobs']),
         queue_pending=sum(j['status']=='pending' for j in state['jobs']),

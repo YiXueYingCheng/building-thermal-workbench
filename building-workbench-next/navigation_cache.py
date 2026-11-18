@@ -85,5 +85,5 @@ def queue_state(queue,root):
     rows,jobs,storage=live_queue(root)
     value=cached(root,'queue',queue_identity(rows,storage),lambda:[],build)
     value=refresh_batches(value,rows,jobs)
-    worker=root/'data/execution/worker.json'
-    return dict(value,resources=queue.policy(),worker=read_json(worker) if worker.exists() else None)
+    from worker_runtime import status
+    return dict(value,resources=queue.policy(),worker=status(root))

@@ -68,10 +68,10 @@ def category(rel,public=False,external=False):
  if p[0]=='data' and len(p)>1:
   if p[1]=='navigation-cache':return 'cache','data/navigation-cache'
   if p[1]=='model-inputs':return 'inputs','/'.join(p[:3])
-  if p[1] in ('input-preparations','research-set-preparations','calendar-inspections','result-reviews'):return 'preparations','/'.join(p[:3])
+  if p[1] in ('input-preparations','research-set-preparations','calendar-inspections','result-reviews','checks'):return 'preparations','/'.join(p[:3])
   if p[1]=='execution' and len(p)>2 and p[2] in ('reviews','artifacts'):return 'preparations','/'.join(p[:4])
   if 'export' in p[1] or p[1] in ('analysis','comparison-results'):return 'exports','/'.join(p[:3])
-  if p[1] in ('weather-files','weather-registry','imports','imported-buildings','building-imports','examples'):return 'public','/'.join(p[:2])
+  if p[1] in ('weather-files','weather-registry','imports','imported-buildings','building-imports','import-checks','examples'):return 'public','/'.join(p[:2])
   return 'records','data/登记与其他记录'
  return 'program','程序与其他文件'
 

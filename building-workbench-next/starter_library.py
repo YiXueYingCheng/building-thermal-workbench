@@ -26,6 +26,7 @@ def describe_choice(ident, label, donor, kind='building'):
                              weekday=copy.deepcopy(rule['weekday']), weekend=copy.deepcopy(rule['weekend'])))
     summary = '；'.join(f"{c['name']} {c['minimum']:g}–{c['maximum']:g} {c['unit']}" for c in channels)
     return dict(id=ident, label=label, kind=kind, summary=summary, channels=channels,
+                room_type=donor.get('room_type', ''),
                 gains=copy.deepcopy(donor['gains']), source=copy.deepcopy(donor.get('reference_source')),
                 note=donor.get('note', '已核对建筑的原房间配置；逐小时实际值按每间保留，密度值按目标面积换算。'))
 

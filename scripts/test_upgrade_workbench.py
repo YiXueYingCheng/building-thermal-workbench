@@ -133,4 +133,35 @@ class UpgradeTests(unittest.TestCase):
                 u.dump(marker,state)
                 with self.assertRaisesRegex(u.UpgradeError,'空闲状态'):u.stop(self.old)
 
+    def test_transient_windows_status_lock_retries(self):
+        real=u.os.replace;attempts=[]
+        error=PermissionError('temporary sharing violation');error.winerror=32
+        def flaky(a,b):
+            if Path(b).name=='UPGRADE.json' and len(attempts)<2:
+                attempts.append(str(b));raise error
+            return real(a,b)
+        with patch.object(u.os,'replace',side_effect=flaky),patch.object(u.time,'sleep'):
+            result=u.apply(self.new,self.old,self.saved)
+        self.assertEqual(result['state'],'complete');self.assertEqual(len(attempts),2)
+
+    def test_receipt_failure_is_distinguished_and_original_error_visible(self):
+        real=u.dump
+        def fail_receipt(p,v):
+            if Path(p).name=='UPGRADE_RECEIPT.json':raise PermissionError('persistent permission denial at receipt')
+            return real(p,v)
+        with patch.object(u,'dump',side_effect=fail_receipt):
+            with self.assertRaisesRegex(u.UpgradeError,'persistent permission denial') as caught:u.apply(self.new,self.old,self.saved)
+        self.assertIn('程序文件及保留资料已校验通过',str(caught.exception))
+        self.assertEqual(u.read(self.saved/'UPGRADE.json')['state'],'status_pending')
+        self.assertEqual(u.restore(self.saved)['state'],'complete')
+
+    def test_persistent_status_failure_keeps_original_error(self):
+        real=u.dump
+        def fail_status(p,v):
+            if Path(p).name=='UPGRADE.json' and v.get('updated'):raise PermissionError('status-file-denied')
+            return real(p,v)
+        with patch.object(u,'dump',side_effect=fail_status):
+            with self.assertRaisesRegex(u.UpgradeError,'status-file-denied'):u.apply(self.new,self.old,self.saved)
+        self.assertEqual(u.read(self.saved/'BACKUP.json')['state'],'verified')
+
 if __name__=='__main__':unittest.main()

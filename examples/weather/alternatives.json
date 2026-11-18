@@ -1,0 +1,2344 @@
+{
+  "schema_version": 1,
+  "notice": "仅提供来源清单；EPW 从 JRC 下载，不随包分发。备用不能视为原数据集复现，历史气候标签未重新验证。",
+  "weather": [
+    {
+      "id": "pvgis_Af",
+      "original_id": "global_BRA_AM_Sao.Gabriel.da.Cachoeira.AP.821070",
+      "name": "São Gabriel da Cachoeira · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=-0.148&lon=-66.986&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Af_2011-2023.epw",
+      "epw_sha256": "a9e795f07875ad25feea3d17a19f823e8f0038b7f79671cdb7783a129d7a156c",
+      "bytes": 1875110,
+      "climate_label_from_historical_table": "Af",
+      "latitude": -0.148,
+      "longitude": -66.986,
+      "timezone": -4.0,
+      "original_timezone": -4.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "5ee905ffe6ada7cfca7d448d40069e1d529f9bf0f6129abb79dc2faa41950e70",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": -0.148,
+            "longitude": -66.986,
+            "elevation": 71.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2013
+          },
+          {
+            "month": 2,
+            "year": 2017
+          },
+          {
+            "month": 3,
+            "year": 2016
+          },
+          {
+            "month": 4,
+            "year": 2020
+          },
+          {
+            "month": 5,
+            "year": 2018
+          },
+          {
+            "month": 6,
+            "year": 2012
+          },
+          {
+            "month": 7,
+            "year": 2019
+          },
+          {
+            "month": 8,
+            "year": 2020
+          },
+          {
+            "month": 9,
+            "year": 2020
+          },
+          {
+            "month": 10,
+            "year": 2018
+          },
+          {
+            "month": 11,
+            "year": 2015
+          },
+          {
+            "month": 12,
+            "year": 2017
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Am",
+      "original_id": "global_BRA_PA_Santerem-Fonseca.Intl.AP.822440",
+      "name": "Santarém · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=-2.422&lon=-54.793&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Am_2011-2023.epw",
+      "epw_sha256": "b661aab5222cec556700dfe7f7423755d89af0139f0836c5be527bc832811244",
+      "bytes": 1871549,
+      "climate_label_from_historical_table": "Am",
+      "latitude": -2.422,
+      "longitude": -54.793,
+      "timezone": -3.0,
+      "original_timezone": -4.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。 原文件时区 UTC-4，备用文件 UTC-3；未平移逐时数据，使用前需核对作息对应时间。",
+      "original_epw_sha256": "6af15019bc0a6860a41acdd8d82b10488c913606193788facc908f757af77763",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": -2.422,
+            "longitude": -54.793,
+            "elevation": 60.0,
+            "irradiance_time_offset": 0.0956
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-SARAH3",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2022
+          },
+          {
+            "month": 2,
+            "year": 2021
+          },
+          {
+            "month": 3,
+            "year": 2020
+          },
+          {
+            "month": 4,
+            "year": 2021
+          },
+          {
+            "month": 5,
+            "year": 2023
+          },
+          {
+            "month": 6,
+            "year": 2016
+          },
+          {
+            "month": 7,
+            "year": 2022
+          },
+          {
+            "month": 8,
+            "year": 2016
+          },
+          {
+            "month": 9,
+            "year": 2020
+          },
+          {
+            "month": 10,
+            "year": 2018
+          },
+          {
+            "month": 11,
+            "year": 2017
+          },
+          {
+            "month": 12,
+            "year": 2016
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Aw",
+      "original_id": "global_CAF_BG_Bangui.M-Poko.Intl.AP.646500",
+      "name": "Bangui · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=4.398&lon=18.519&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Aw_2011-2023.epw",
+      "epw_sha256": "5a0f9fb1e527b38a025f75aa6f02ea3474cdc2603ef0452e494bfd8e75bf70c3",
+      "bytes": 1869970,
+      "climate_label_from_historical_table": "Aw",
+      "latitude": 4.398,
+      "longitude": 18.519,
+      "timezone": 1.0,
+      "original_timezone": 1.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "967698e20da3a77435d0b3b6c25330565c60bd15ecc8d6d85876fd1fa3b3bdd8",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 4.398,
+            "longitude": 18.519,
+            "elevation": 366.0,
+            "irradiance_time_offset": 0.1086
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-SARAH3",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2011
+          },
+          {
+            "month": 2,
+            "year": 2023
+          },
+          {
+            "month": 3,
+            "year": 2012
+          },
+          {
+            "month": 4,
+            "year": 2015
+          },
+          {
+            "month": 5,
+            "year": 2023
+          },
+          {
+            "month": 6,
+            "year": 2017
+          },
+          {
+            "month": 7,
+            "year": 2018
+          },
+          {
+            "month": 8,
+            "year": 2021
+          },
+          {
+            "month": 9,
+            "year": 2021
+          },
+          {
+            "month": 10,
+            "year": 2015
+          },
+          {
+            "month": 11,
+            "year": 2021
+          },
+          {
+            "month": 12,
+            "year": 2022
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_BSh",
+      "original_id": "global_AGO_LUA_Luanda-Quatro.de.Fevereiro.Intl.AP.661600",
+      "name": "Luanda · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=-8.858&lon=13.231&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_BSh_2011-2023.epw",
+      "epw_sha256": "5863facc918b76970f53e7df8535bc6c127811132677d12adb32293b6e360369",
+      "bytes": 1877465,
+      "climate_label_from_historical_table": "BSh",
+      "latitude": -8.858,
+      "longitude": 13.231,
+      "timezone": 1.0,
+      "original_timezone": 1.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "d51f861101f602731a399d158a18d9005e512957f6d113f6a2167d2d5786ce56",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": -8.858,
+            "longitude": 13.231,
+            "elevation": 73.0,
+            "irradiance_time_offset": 0.0826
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-SARAH3",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2013
+          },
+          {
+            "month": 2,
+            "year": 2023
+          },
+          {
+            "month": 3,
+            "year": 2017
+          },
+          {
+            "month": 4,
+            "year": 2014
+          },
+          {
+            "month": 5,
+            "year": 2012
+          },
+          {
+            "month": 6,
+            "year": 2015
+          },
+          {
+            "month": 7,
+            "year": 2011
+          },
+          {
+            "month": 8,
+            "year": 2022
+          },
+          {
+            "month": 9,
+            "year": 2016
+          },
+          {
+            "month": 10,
+            "year": 2015
+          },
+          {
+            "month": 11,
+            "year": 2019
+          },
+          {
+            "month": 12,
+            "year": 2018
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_BSk",
+      "original_id": "global_CHN_XZ_Urumqi-Diwopu.AP.514635",
+      "name": "乌鲁木齐 Ürümqi · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=43.907&lon=87.474&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_BSk_2011-2023.epw",
+      "epw_sha256": "474a3cd098e0daa50062e9c80445ce0f45dd6a254669ca51017d9ae838673b4d",
+      "bytes": 1868200,
+      "climate_label_from_historical_table": "BSk",
+      "latitude": 43.907,
+      "longitude": 87.474,
+      "timezone": 8.0,
+      "original_timezone": 8.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "2ffa7cd4d16a433f72dbe77c25b57d3c3a00405ee7eee270155a4bd22821bc6a",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 43.907,
+            "longitude": 87.474,
+            "elevation": 641.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2023
+          },
+          {
+            "month": 2,
+            "year": 2021
+          },
+          {
+            "month": 3,
+            "year": 2016
+          },
+          {
+            "month": 4,
+            "year": 2013
+          },
+          {
+            "month": 5,
+            "year": 2014
+          },
+          {
+            "month": 6,
+            "year": 2014
+          },
+          {
+            "month": 7,
+            "year": 2018
+          },
+          {
+            "month": 8,
+            "year": 2020
+          },
+          {
+            "month": 9,
+            "year": 2014
+          },
+          {
+            "month": 10,
+            "year": 2013
+          },
+          {
+            "month": 11,
+            "year": 2022
+          },
+          {
+            "month": 12,
+            "year": 2012
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_BWh",
+      "original_id": "global_NER_AG_Bilma.610170",
+      "name": "Bilma · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=18.683&lon=12.917&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_BWh_2011-2023.epw",
+      "epw_sha256": "e2c52986736369e8430d0ae07c810667308905f90696345387975a383338b16a",
+      "bytes": 1864725,
+      "climate_label_from_historical_table": "BWh",
+      "latitude": 18.683,
+      "longitude": 12.917,
+      "timezone": 1.0,
+      "original_timezone": 1.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "eb0c8202ee0502b0340964337422229aab4aba8b34346a0c872d63cbfe0c33df",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 18.683,
+            "longitude": 12.917,
+            "elevation": 359.0,
+            "irradiance_time_offset": 0.1359
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-SARAH3",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2011
+          },
+          {
+            "month": 2,
+            "year": 2013
+          },
+          {
+            "month": 3,
+            "year": 2014
+          },
+          {
+            "month": 4,
+            "year": 2022
+          },
+          {
+            "month": 5,
+            "year": 2021
+          },
+          {
+            "month": 6,
+            "year": 2021
+          },
+          {
+            "month": 7,
+            "year": 2011
+          },
+          {
+            "month": 8,
+            "year": 2011
+          },
+          {
+            "month": 9,
+            "year": 2021
+          },
+          {
+            "month": 10,
+            "year": 2011
+          },
+          {
+            "month": 11,
+            "year": 2017
+          },
+          {
+            "month": 12,
+            "year": 2011
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_BWk",
+      "original_id": "global_CHN_XZ_Kuqa.516440",
+      "name": "库车 Kuqa · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=41.7167&lon=82.95&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_BWk_2011-2023.epw",
+      "epw_sha256": "5c1306f5d6ca2303e38df2c4ad7f4c7423b155f33ccee3ea385a095ba10574bb",
+      "bytes": 1866983,
+      "climate_label_from_historical_table": "BWk",
+      "latitude": 41.7167,
+      "longitude": 82.95,
+      "timezone": 8.0,
+      "original_timezone": 8.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "6982d91b7ce24ff38601c44a7e082f2add868582086add6ec159a6c5839d32d5",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 41.7167,
+            "longitude": 82.95,
+            "elevation": 1064.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2023
+          },
+          {
+            "month": 2,
+            "year": 2011
+          },
+          {
+            "month": 3,
+            "year": 2013
+          },
+          {
+            "month": 4,
+            "year": 2017
+          },
+          {
+            "month": 5,
+            "year": 2018
+          },
+          {
+            "month": 6,
+            "year": 2014
+          },
+          {
+            "month": 7,
+            "year": 2020
+          },
+          {
+            "month": 8,
+            "year": 2018
+          },
+          {
+            "month": 9,
+            "year": 2014
+          },
+          {
+            "month": 10,
+            "year": 2015
+          },
+          {
+            "month": 11,
+            "year": 2020
+          },
+          {
+            "month": 12,
+            "year": 2011
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Cfa",
+      "original_id": "global_USA_MS_Olive.Branch.AP.722165",
+      "name": "Memphis / Olive Branch · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=34.979&lon=-89.787&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Cfa_2011-2023.epw",
+      "epw_sha256": "df55d12ad3477a5fcb2e14f02d092e2b5778bd1d00704ff00037341738ade958",
+      "bytes": 1871772,
+      "climate_label_from_historical_table": "Cfa",
+      "latitude": 34.979,
+      "longitude": -89.787,
+      "timezone": -6.0,
+      "original_timezone": -6.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "f1df3abef3146ca805ccbfc189abcba2747cc25eb96fab080e1c4327749abea8",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 34.979,
+            "longitude": -89.787,
+            "elevation": 120.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2013
+          },
+          {
+            "month": 2,
+            "year": 2015
+          },
+          {
+            "month": 3,
+            "year": 2023
+          },
+          {
+            "month": 4,
+            "year": 2013
+          },
+          {
+            "month": 5,
+            "year": 2016
+          },
+          {
+            "month": 6,
+            "year": 2019
+          },
+          {
+            "month": 7,
+            "year": 2019
+          },
+          {
+            "month": 8,
+            "year": 2018
+          },
+          {
+            "month": 9,
+            "year": 2013
+          },
+          {
+            "month": 10,
+            "year": 2022
+          },
+          {
+            "month": 11,
+            "year": 2016
+          },
+          {
+            "month": 12,
+            "year": 2016
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Cfb",
+      "original_id": "global_BEL_VLG_Uccle.064470",
+      "name": "Brussels / Uccle · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=50.7969&lon=4.3581&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Cfb_2011-2023.epw",
+      "epw_sha256": "f96a536659153c6c95498ef45f3294b0d5d1f6d29a9b3aaa73736e656b816e95",
+      "bytes": 1862944,
+      "climate_label_from_historical_table": "Cfb",
+      "latitude": 50.7969,
+      "longitude": 4.3581,
+      "timezone": 1.0,
+      "original_timezone": 1.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "7d5665527a052eca67a996cb5e887eaeb421158b470818624ba2b78438cc849c",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 50.7969,
+            "longitude": 4.3581,
+            "elevation": 101.0,
+            "irradiance_time_offset": 0.1824
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-SARAH3",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2023
+          },
+          {
+            "month": 2,
+            "year": 2023
+          },
+          {
+            "month": 3,
+            "year": 2020
+          },
+          {
+            "month": 4,
+            "year": 2019
+          },
+          {
+            "month": 5,
+            "year": 2013
+          },
+          {
+            "month": 6,
+            "year": 2019
+          },
+          {
+            "month": 7,
+            "year": 2021
+          },
+          {
+            "month": 8,
+            "year": 2014
+          },
+          {
+            "month": 9,
+            "year": 2013
+          },
+          {
+            "month": 10,
+            "year": 2011
+          },
+          {
+            "month": 11,
+            "year": 2020
+          },
+          {
+            "month": 12,
+            "year": 2011
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Cfc",
+      "original_id": "global_ARG_TF_Rio.Grande-Quijada.Intl.AP.879340",
+      "name": "Río Grande · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=-53.7803&lon=-67.7586&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Cfc_2011-2023.epw",
+      "epw_sha256": "3422d05e03ffbb26ec18d58c9f85344343c2beed5d987b08748aab90b6f7e382",
+      "bytes": 1862081,
+      "climate_label_from_historical_table": "Cfc",
+      "latitude": -53.7803,
+      "longitude": -67.7586,
+      "timezone": -3.0,
+      "original_timezone": -3.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "5fe4fae762f6413050966420d09ab6f5122b09af20591c453a9605e3ff17f0ab",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": -53.7803,
+            "longitude": -67.7586,
+            "elevation": 20.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2022
+          },
+          {
+            "month": 2,
+            "year": 2013
+          },
+          {
+            "month": 3,
+            "year": 2014
+          },
+          {
+            "month": 4,
+            "year": 2012
+          },
+          {
+            "month": 5,
+            "year": 2012
+          },
+          {
+            "month": 6,
+            "year": 2016
+          },
+          {
+            "month": 7,
+            "year": 2021
+          },
+          {
+            "month": 8,
+            "year": 2017
+          },
+          {
+            "month": 9,
+            "year": 2012
+          },
+          {
+            "month": 10,
+            "year": 2015
+          },
+          {
+            "month": 11,
+            "year": 2013
+          },
+          {
+            "month": 12,
+            "year": 2020
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Csa",
+      "original_id": "global_TUR_BM_Batman.AP.172820",
+      "name": "Batman · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=37.933&lon=41.117&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Csa_2011-2023.epw",
+      "epw_sha256": "74cf3e07ca7acb4eb30c4eb12da3ead295eb2493d6317bbf77ca1cf9866954ba",
+      "bytes": 1860503,
+      "climate_label_from_historical_table": "Csa",
+      "latitude": 37.933,
+      "longitude": 41.117,
+      "timezone": 2.0,
+      "original_timezone": 3.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。 原文件时区 UTC+3，备用文件 UTC+2；未平移逐时数据，使用前需核对作息对应时间。",
+      "original_epw_sha256": "6bc9ad333008b01c55661381873d29ac128ce12465662fff2dad18c5c0af2f63",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 37.933,
+            "longitude": 41.117,
+            "elevation": 556.0,
+            "irradiance_time_offset": 0.1649
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-SARAH3",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2015
+          },
+          {
+            "month": 2,
+            "year": 2011
+          },
+          {
+            "month": 3,
+            "year": 2013
+          },
+          {
+            "month": 4,
+            "year": 2012
+          },
+          {
+            "month": 5,
+            "year": 2012
+          },
+          {
+            "month": 6,
+            "year": 2017
+          },
+          {
+            "month": 7,
+            "year": 2016
+          },
+          {
+            "month": 8,
+            "year": 2017
+          },
+          {
+            "month": 9,
+            "year": 2020
+          },
+          {
+            "month": 10,
+            "year": 2015
+          },
+          {
+            "month": 11,
+            "year": 2011
+          },
+          {
+            "month": 12,
+            "year": 2021
+          }
+        ]
+      },
+      "quality_notes": [
+        "风速超出文档数值范围",
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Csb",
+      "original_id": "global_USA_CA_Redwood.City.994041",
+      "name": "Redwood City · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=37.5068&lon=-122.2119&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Csb_2011-2023.epw",
+      "epw_sha256": "0d773603b38103f342894177c7e515dbdca054002278fecb4c70528b26ad5bb1",
+      "bytes": 1869037,
+      "climate_label_from_historical_table": "Csb",
+      "latitude": 37.5068,
+      "longitude": -122.2119,
+      "timezone": -8.0,
+      "original_timezone": -8.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "e4edcdf842c4b5d78c030cd17826b909d56f4eb94fcd8af13ecae98bdc9092a5",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 37.5068,
+            "longitude": -122.2119,
+            "elevation": -1.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2023
+          },
+          {
+            "month": 2,
+            "year": 2012
+          },
+          {
+            "month": 3,
+            "year": 2016
+          },
+          {
+            "month": 4,
+            "year": 2016
+          },
+          {
+            "month": 5,
+            "year": 2014
+          },
+          {
+            "month": 6,
+            "year": 2013
+          },
+          {
+            "month": 7,
+            "year": 2012
+          },
+          {
+            "month": 8,
+            "year": 2021
+          },
+          {
+            "month": 9,
+            "year": 2016
+          },
+          {
+            "month": 10,
+            "year": 2019
+          },
+          {
+            "month": 11,
+            "year": 2011
+          },
+          {
+            "month": 12,
+            "year": 2021
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Cwa",
+      "original_id": "global_IND_AS_Dibrugarh.AP.423140",
+      "name": "Dibrugarh · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=27.484&lon=95.017&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Cwa_2011-2023.epw",
+      "epw_sha256": "e5a67d9bc90baab244217ba6e7a600b73a215ac71abd9f32d290ceb84c42aaa0",
+      "bytes": 1868126,
+      "climate_label_from_historical_table": "Cwa",
+      "latitude": 27.484,
+      "longitude": 95.017,
+      "timezone": 5.0,
+      "original_timezone": 5.5,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。 原文件时区 UTC+5.5，备用文件 UTC+5；未平移逐时数据，使用前需核对作息对应时间。",
+      "original_epw_sha256": "2fb238a212eeeedcc0eb088e04382560a5ae9be72f803823af5cb910befe860a",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 27.484,
+            "longitude": 95.017,
+            "elevation": 112.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2018
+          },
+          {
+            "month": 2,
+            "year": 2018
+          },
+          {
+            "month": 3,
+            "year": 2016
+          },
+          {
+            "month": 4,
+            "year": 2014
+          },
+          {
+            "month": 5,
+            "year": 2023
+          },
+          {
+            "month": 6,
+            "year": 2016
+          },
+          {
+            "month": 7,
+            "year": 2015
+          },
+          {
+            "month": 8,
+            "year": 2012
+          },
+          {
+            "month": 9,
+            "year": 2017
+          },
+          {
+            "month": 10,
+            "year": 2021
+          },
+          {
+            "month": 11,
+            "year": 2020
+          },
+          {
+            "month": 12,
+            "year": 2011
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Cwb",
+      "original_id": "global_ZAF_GT_Springs.AP.682674",
+      "name": "Springs · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=-26.248&lon=28.398&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Cwb_2011-2023.epw",
+      "epw_sha256": "fb0bb39154ca80727b0dc51e6e8bb0c4dd2e0f62f2a87ebd4755c71f3441e28c",
+      "bytes": 1862996,
+      "climate_label_from_historical_table": "Cwb",
+      "latitude": -26.248,
+      "longitude": 28.398,
+      "timezone": 2.0,
+      "original_timezone": 2.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "617cd45350e2d911a0e6c41ba0b34d89ab1b8a97e559ac2a52148e37803ee63f",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": -26.248,
+            "longitude": 28.398,
+            "elevation": 1630.0,
+            "irradiance_time_offset": 0.0517
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-SARAH3",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2018
+          },
+          {
+            "month": 2,
+            "year": 2023
+          },
+          {
+            "month": 3,
+            "year": 2015
+          },
+          {
+            "month": 4,
+            "year": 2011
+          },
+          {
+            "month": 5,
+            "year": 2015
+          },
+          {
+            "month": 6,
+            "year": 2022
+          },
+          {
+            "month": 7,
+            "year": 2023
+          },
+          {
+            "month": 8,
+            "year": 2021
+          },
+          {
+            "month": 9,
+            "year": 2016
+          },
+          {
+            "month": 10,
+            "year": 2018
+          },
+          {
+            "month": 11,
+            "year": 2016
+          },
+          {
+            "month": 12,
+            "year": 2017
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Dfa",
+      "original_id": "global_USA_IA_Cedar.Rapids-Eastern.Iowa.AP.725450",
+      "name": "Cedar Rapids · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=41.883&lon=-91.717&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Dfa_2011-2023.epw",
+      "epw_sha256": "ab7d39ab6188ce86b1d253b7a01c30a9fe11e90a708cdbe4acca8065565bc68c",
+      "bytes": 1866283,
+      "climate_label_from_historical_table": "Dfa",
+      "latitude": 41.883,
+      "longitude": -91.717,
+      "timezone": -6.0,
+      "original_timezone": -6.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "4f1f5b78c8e21062df6330e28a54549da57f4c5748f2ffc02f4b81a217127713",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 41.883,
+            "longitude": -91.717,
+            "elevation": 255.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2013
+          },
+          {
+            "month": 2,
+            "year": 2011
+          },
+          {
+            "month": 3,
+            "year": 2015
+          },
+          {
+            "month": 4,
+            "year": 2021
+          },
+          {
+            "month": 5,
+            "year": 2013
+          },
+          {
+            "month": 6,
+            "year": 2020
+          },
+          {
+            "month": 7,
+            "year": 2022
+          },
+          {
+            "month": 8,
+            "year": 2018
+          },
+          {
+            "month": 9,
+            "year": 2022
+          },
+          {
+            "month": 10,
+            "year": 2013
+          },
+          {
+            "month": 11,
+            "year": 2021
+          },
+          {
+            "month": 12,
+            "year": 2015
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Dfb",
+      "original_id": "global_CAN_ON_Thunder.Bay.Intl.AP.716670",
+      "name": "Thunder Bay · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=48.3694&lon=-89.3272&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Dfb_2011-2023.epw",
+      "epw_sha256": "29c3eb8a034a528730dcbf68270054ad7a8a2cb83a59874287a45f60b459ae0a",
+      "bytes": 1864670,
+      "climate_label_from_historical_table": "Dfb",
+      "latitude": 48.3694,
+      "longitude": -89.3272,
+      "timezone": -5.0,
+      "original_timezone": -5.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "aa42ceae585128a29d04a9e47fc034ccda2ceb6cd904dd90a96a8a8625f79fd0",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 48.3694,
+            "longitude": -89.3272,
+            "elevation": 196.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2023
+          },
+          {
+            "month": 2,
+            "year": 2023
+          },
+          {
+            "month": 3,
+            "year": 2018
+          },
+          {
+            "month": 4,
+            "year": 2014
+          },
+          {
+            "month": 5,
+            "year": 2013
+          },
+          {
+            "month": 6,
+            "year": 2011
+          },
+          {
+            "month": 7,
+            "year": 2017
+          },
+          {
+            "month": 8,
+            "year": 2020
+          },
+          {
+            "month": 9,
+            "year": 2018
+          },
+          {
+            "month": 10,
+            "year": 2020
+          },
+          {
+            "month": 11,
+            "year": 2011
+          },
+          {
+            "month": 12,
+            "year": 2021
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Dfc",
+      "original_id": "global_RUS_SA_Udachny.AP.243220",
+      "name": "Udachny · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=66.4&lon=112.03&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Dfc_2011-2023.epw",
+      "epw_sha256": "87cb5995b8350ede21afa05b903d7807f61c6a2521d1bc437059036bbd46400d",
+      "bytes": 1870062,
+      "climate_label_from_historical_table": "Dfc",
+      "latitude": 66.4,
+      "longitude": 112.03,
+      "timezone": 10.0,
+      "original_timezone": 9.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。 原文件时区 UTC+9，备用文件 UTC+10；未平移逐时数据，使用前需核对作息对应时间。",
+      "original_epw_sha256": "de2dfca01d3c36f36485a544496be1d2cad6b474093fa33a3a8f3e0d8b47267b",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 66.4,
+            "longitude": 112.03,
+            "elevation": 512.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2021
+          },
+          {
+            "month": 2,
+            "year": 2019
+          },
+          {
+            "month": 3,
+            "year": 2014
+          },
+          {
+            "month": 4,
+            "year": 2017
+          },
+          {
+            "month": 5,
+            "year": 2011
+          },
+          {
+            "month": 6,
+            "year": 2020
+          },
+          {
+            "month": 7,
+            "year": 2018
+          },
+          {
+            "month": 8,
+            "year": 2011
+          },
+          {
+            "month": 9,
+            "year": 2017
+          },
+          {
+            "month": 10,
+            "year": 2018
+          },
+          {
+            "month": 11,
+            "year": 2012
+          },
+          {
+            "month": 12,
+            "year": 2022
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Dfd",
+      "original_id": "global_RUS_SA_Namtsy.247530",
+      "name": "Namtsy · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=62.733&lon=129.667&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Dfd_2011-2023.epw",
+      "epw_sha256": "bb6ee51f3ac1797ea1c1c5fa5a7d5e6ad088b120d28a0838774977308ef3648a",
+      "bytes": 1877382,
+      "climate_label_from_historical_table": "Dfd",
+      "latitude": 62.733,
+      "longitude": 129.667,
+      "timezone": 10.0,
+      "original_timezone": 9.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。 原文件时区 UTC+9，备用文件 UTC+10；未平移逐时数据，使用前需核对作息对应时间。",
+      "original_epw_sha256": "0fa057c732ee6859c92d1fa2dcd80ffc4c3ea4249495a8e1d87c6188f84ae99b",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 62.733,
+            "longitude": 129.667,
+            "elevation": 79.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2011
+          },
+          {
+            "month": 2,
+            "year": 2014
+          },
+          {
+            "month": 3,
+            "year": 2017
+          },
+          {
+            "month": 4,
+            "year": 2021
+          },
+          {
+            "month": 5,
+            "year": 2019
+          },
+          {
+            "month": 6,
+            "year": 2018
+          },
+          {
+            "month": 7,
+            "year": 2018
+          },
+          {
+            "month": 8,
+            "year": 2013
+          },
+          {
+            "month": 9,
+            "year": 2016
+          },
+          {
+            "month": 10,
+            "year": 2017
+          },
+          {
+            "month": 11,
+            "year": 2017
+          },
+          {
+            "month": 12,
+            "year": 2023
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Dsa",
+      "original_id": "global_IRN_KD_Saqqez.407270",
+      "name": "Saqqez · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=36.25&lon=46.267&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Dsa_2011-2023.epw",
+      "epw_sha256": "12f40cc0ffad38b15e539c0c450041d0f400aa87425825266aff59e1224c85cc",
+      "bytes": 1863508,
+      "climate_label_from_historical_table": "Dsa",
+      "latitude": 36.25,
+      "longitude": 46.267,
+      "timezone": 3.0,
+      "original_timezone": 3.5,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。 原文件时区 UTC+3.5，备用文件 UTC+3；未平移逐时数据，使用前需核对作息对应时间。",
+      "original_epw_sha256": "dfc5ebe1c3fa296ce7e3742a00eb85792016898f1b029b4d7c04c74875a54445",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 36.25,
+            "longitude": 46.267,
+            "elevation": 1519.0,
+            "irradiance_time_offset": 0.162
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-SARAH3",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2023
+          },
+          {
+            "month": 2,
+            "year": 2013
+          },
+          {
+            "month": 3,
+            "year": 2015
+          },
+          {
+            "month": 4,
+            "year": 2015
+          },
+          {
+            "month": 5,
+            "year": 2015
+          },
+          {
+            "month": 6,
+            "year": 2015
+          },
+          {
+            "month": 7,
+            "year": 2013
+          },
+          {
+            "month": 8,
+            "year": 2017
+          },
+          {
+            "month": 9,
+            "year": 2017
+          },
+          {
+            "month": 10,
+            "year": 2011
+          },
+          {
+            "month": 11,
+            "year": 2023
+          },
+          {
+            "month": 12,
+            "year": 2011
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Dsb",
+      "original_id": "global_TUR_SV_Sivas.170900",
+      "name": "Sivas（锡瓦斯站） · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=39.7438&lon=37.002&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Dsb_2011-2023.epw",
+      "epw_sha256": "852c8bfdfcee354660c9e093584cb0cf8c43e012daa198100f27616d7ab4a4a0",
+      "bytes": 1861938,
+      "climate_label_from_historical_table": "Dsb",
+      "latitude": 39.7438,
+      "longitude": 37.002,
+      "timezone": 2.0,
+      "original_timezone": 3.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。 原文件时区 UTC+3，备用文件 UTC+2；未平移逐时数据，使用前需核对作息对应时间。",
+      "original_epw_sha256": "96db512a150c8c44aaaa744af7fb4fe4ea959d1ad5fde539f8d9a34a97cd309b",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 39.7438,
+            "longitude": 37.002,
+            "elevation": 1289.0,
+            "irradiance_time_offset": 0.1677
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-SARAH3",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2013
+          },
+          {
+            "month": 2,
+            "year": 2015
+          },
+          {
+            "month": 3,
+            "year": 2014
+          },
+          {
+            "month": 4,
+            "year": 2015
+          },
+          {
+            "month": 5,
+            "year": 2022
+          },
+          {
+            "month": 6,
+            "year": 2015
+          },
+          {
+            "month": 7,
+            "year": 2017
+          },
+          {
+            "month": 8,
+            "year": 2014
+          },
+          {
+            "month": 9,
+            "year": 2022
+          },
+          {
+            "month": 10,
+            "year": 2013
+          },
+          {
+            "month": 11,
+            "year": 2016
+          },
+          {
+            "month": 12,
+            "year": 2016
+          }
+        ]
+      },
+      "quality_notes": [
+        "风速超出文档数值范围",
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Dsc",
+      "original_id": "global_CAN_YT_Whitehorse.Intl.AP.719640",
+      "name": "Whitehorse · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=60.7095&lon=-135.0689&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Dsc_2011-2023.epw",
+      "epw_sha256": "bfa7d34df889fc7cc19c5dec1d9ac450093a06b6bd669e670199fe5ac11a682c",
+      "bytes": 1870297,
+      "climate_label_from_historical_table": "Dsc",
+      "latitude": 60.7095,
+      "longitude": -135.0689,
+      "timezone": 0.0,
+      "original_timezone": -8.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。 原文件时区 UTC-8，备用文件 UTC+0；未平移逐时数据，使用前需核对作息对应时间。",
+      "original_epw_sha256": "11debbe360388d9c03747c771b28e031d4e61a2a9d29ed6edd3e8bf6738feee3",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 60.7095,
+            "longitude": -135.0689,
+            "elevation": 630.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2013
+          },
+          {
+            "month": 2,
+            "year": 2023
+          },
+          {
+            "month": 3,
+            "year": 2020
+          },
+          {
+            "month": 4,
+            "year": 2018
+          },
+          {
+            "month": 5,
+            "year": 2018
+          },
+          {
+            "month": 6,
+            "year": 2012
+          },
+          {
+            "month": 7,
+            "year": 2011
+          },
+          {
+            "month": 8,
+            "year": 2014
+          },
+          {
+            "month": 9,
+            "year": 2012
+          },
+          {
+            "month": 10,
+            "year": 2016
+          },
+          {
+            "month": 11,
+            "year": 2017
+          },
+          {
+            "month": 12,
+            "year": 2021
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Dwa",
+      "original_id": "global_CHN_LN_Jinzhou.543370",
+      "name": "锦州 Jinzhou · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=41.1402&lon=121.1224&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Dwa_2011-2023.epw",
+      "epw_sha256": "f965cfceed4d877c9d7df6dba8b1cc65f4c717d655533b21d6beff194a839483",
+      "bytes": 1875257,
+      "climate_label_from_historical_table": "Dwa",
+      "latitude": 41.1402,
+      "longitude": 121.1224,
+      "timezone": 8.0,
+      "original_timezone": 8.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "b5de9fd94f50c9624add0c75b75fb021084aed00984c6fc73cd7597c59291fb8",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 41.1402,
+            "longitude": 121.1224,
+            "elevation": 61.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2021
+          },
+          {
+            "month": 2,
+            "year": 2012
+          },
+          {
+            "month": 3,
+            "year": 2017
+          },
+          {
+            "month": 4,
+            "year": 2015
+          },
+          {
+            "month": 5,
+            "year": 2013
+          },
+          {
+            "month": 6,
+            "year": 2013
+          },
+          {
+            "month": 7,
+            "year": 2011
+          },
+          {
+            "month": 8,
+            "year": 2023
+          },
+          {
+            "month": 9,
+            "year": 2011
+          },
+          {
+            "month": 10,
+            "year": 2016
+          },
+          {
+            "month": 11,
+            "year": 2017
+          },
+          {
+            "month": 12,
+            "year": 2013
+          }
+        ]
+      },
+      "quality_notes": [
+        "风速超出文档数值范围",
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Dwb",
+      "original_id": "global_CHN_NM_Hailar.505270",
+      "name": "海拉尔 Hailar · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=49.25&lon=119.7&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Dwb_2011-2023.epw",
+      "epw_sha256": "5874ddd8643e4bba54a0d1303f12318cbc602f4d937c2349b03f3b1f256e0599",
+      "bytes": 1873544,
+      "climate_label_from_historical_table": "Dwb",
+      "latitude": 49.25,
+      "longitude": 119.7,
+      "timezone": 8.0,
+      "original_timezone": 8.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。",
+      "original_epw_sha256": "428e77e4a23bd4519b6d880b610849efb1f9000c2174f888dba0e8c1d8ae8eb9",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 49.25,
+            "longitude": 119.7,
+            "elevation": 650.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2016
+          },
+          {
+            "month": 2,
+            "year": 2013
+          },
+          {
+            "month": 3,
+            "year": 2021
+          },
+          {
+            "month": 4,
+            "year": 2016
+          },
+          {
+            "month": 5,
+            "year": 2015
+          },
+          {
+            "month": 6,
+            "year": 2021
+          },
+          {
+            "month": 7,
+            "year": 2018
+          },
+          {
+            "month": 8,
+            "year": 2022
+          },
+          {
+            "month": 9,
+            "year": 2013
+          },
+          {
+            "month": 10,
+            "year": 2019
+          },
+          {
+            "month": 11,
+            "year": 2016
+          },
+          {
+            "month": 12,
+            "year": 2017
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Dwc",
+      "original_id": "global_RUS_BU_Sosnovo-Ozerskoye.307450",
+      "name": "Sosnovo-Ozërskoye · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=52.533&lon=111.55&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Dwc_2011-2023.epw",
+      "epw_sha256": "4d645f90963e6c2c83c66acd732a27d978a2189914e3f8f4067a93044d1c9adf",
+      "bytes": 1872730,
+      "climate_label_from_historical_table": "Dwc",
+      "latitude": 52.533,
+      "longitude": 111.55,
+      "timezone": 9.0,
+      "original_timezone": 8.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。 原文件时区 UTC+8，备用文件 UTC+9；未平移逐时数据，使用前需核对作息对应时间。",
+      "original_epw_sha256": "a18651c424b5fa08dc48020379beae8486e608a7efb02c8fdf3f932546c4c38f",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 52.533,
+            "longitude": 111.55,
+            "elevation": 951.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2018
+          },
+          {
+            "month": 2,
+            "year": 2016
+          },
+          {
+            "month": 3,
+            "year": 2019
+          },
+          {
+            "month": 4,
+            "year": 2012
+          },
+          {
+            "month": 5,
+            "year": 2013
+          },
+          {
+            "month": 6,
+            "year": 2016
+          },
+          {
+            "month": 7,
+            "year": 2022
+          },
+          {
+            "month": 8,
+            "year": 2018
+          },
+          {
+            "month": 9,
+            "year": 2019
+          },
+          {
+            "month": 10,
+            "year": 2012
+          },
+          {
+            "month": 11,
+            "year": 2020
+          },
+          {
+            "month": 12,
+            "year": 2022
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    },
+    {
+      "id": "pvgis_Dwd",
+      "original_id": "global_RUS_SA_Tompo.246710",
+      "name": "Tompo · JRC 备用（2011–2023）",
+      "source_url": "https://re.jrc.ec.europa.eu/api/v5_3/tmy?lat=63.95&lon=135.8667&startyear=2011&endyear=2023&outputformat=epw&usehorizon=1",
+      "source_group": "confirmed_alternative",
+      "dataset": "JRC PVGIS 5.3 TMY",
+      "period": "2011–2023",
+      "retrieval_method": "epw",
+      "epw_filename": "JRC_Dwd_2011-2023.epw",
+      "epw_sha256": "4eef4496b8f487f602335b8fee47f66f6b7ec8e0b357dd7db32d4ff5a27404b1",
+      "bytes": 1870218,
+      "climate_label_from_historical_table": "Dwd",
+      "latitude": 63.95,
+      "longitude": 135.8667,
+      "timezone": 11.0,
+      "original_timezone": 9.0,
+      "note": "同坐标的另一套典型年数据，不是 TMYx 原文件的镜像；保留提供方原始 EPW。 原文件时区 UTC+9，备用文件 UTC+11；未平移逐时数据，使用前需核对作息对应时间。",
+      "original_epw_sha256": "7f179ee50cc92405ad931686d320e3d0dde7155ca47a73d5df8c67ee0b81616c",
+      "provider_metadata": {
+        "inputs": {
+          "location": {
+            "latitude": 63.95,
+            "longitude": 135.8667,
+            "elevation": 448.0,
+            "irradiance_time_offset": 0.5
+          },
+          "meteo_data": {
+            "radiation_db": "PVGIS-ERA5",
+            "meteo_db": "ERA5",
+            "year_min": 2011,
+            "year_max": 2023,
+            "use_horizon": true,
+            "horizon_db": "DEM-calculated"
+          }
+        },
+        "months_selected": [
+          {
+            "month": 1,
+            "year": 2021
+          },
+          {
+            "month": 2,
+            "year": 2023
+          },
+          {
+            "month": 3,
+            "year": 2017
+          },
+          {
+            "month": 4,
+            "year": 2014
+          },
+          {
+            "month": 5,
+            "year": 2023
+          },
+          {
+            "month": 6,
+            "year": 2016
+          },
+          {
+            "month": 7,
+            "year": 2016
+          },
+          {
+            "month": 8,
+            "year": 2017
+          },
+          {
+            "month": 9,
+            "year": 2019
+          },
+          {
+            "month": 10,
+            "year": 2020
+          },
+          {
+            "month": 11,
+            "year": 2017
+          },
+          {
+            "month": 12,
+            "year": 2012
+          }
+        ]
+      },
+      "quality_notes": [
+        "存在分钟标记 0，保留原有 CSWD/TMY 兼容解释；不据此平移数据",
+        "部分不透明云量不可用；长波补算依赖另行逐条检查"
+      ],
+      "verified_date": "2026-11-17"
+    }
+  ],
+  "unavailable": [
+    {
+      "original_id": "global_ATA_USA_U-Wisc.Baldrick.AWS-High.Polar.Plateau.890130",
+      "reason": "JRC 未提供此坐标的数据（返回 Location over the sea）；未移动坐标替代。"
+    },
+    {
+      "original_id": "global_RUS_SA_Bykov.Cape.218210",
+      "reason": "JRC 文件的长波辐射存在异常，未通过主要逐时检查；未修补数值。"
+    }
+  ]
+}

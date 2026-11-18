@@ -1,13 +1,66 @@
 """Explicit local EPW registration. Immutable copies and metadata, never an in-place replacement."""
 from pathlib import Path
 import copy
+import os
+import stat
 import shutil
 import threading
 from foundation import ROOT, owned, read_json, write_json, digest, now, sha
 import weather_quality
 
-LOCK = threading.Lock()
+LOCK = threading.RLock()
 KIND = 'imported_epw_v1'
+
+def scan_folder(path, recursive=False):
+    """List bounded local candidates; inspecting/registering remains explicit per file."""
+    if not isinstance(path,str) or not path.strip() or not Path(path).is_absolute():
+        raise ValueError('请选择气象文件夹的完整路径。')
+    if not isinstance(recursive,bool):raise ValueError('是否包含子文件夹应为勾选值。')
+    base=Path(path).resolve(strict=True)
+    if not base.is_dir():raise ValueError('所选路径不是文件夹。')
+    files=[];notes=[];todo=[base];visited=0;entries_seen=0;limited=False
+    while todo:
+        folder=todo.pop();visited+=1
+        if visited>1000:limited=True;break
+        try:
+            with os.scandir(folder) as entries:
+                for entry in entries:
+                    entries_seen+=1
+                    if entries_seen>20000:limited=True;break
+                    # Never follow links, junctions or other reparse points into unrelated trees.
+                    info=entry.stat(follow_symlinks=False)
+                    if entry.is_symlink() or getattr(info,'st_file_attributes',0)&getattr(stat,'FILE_ATTRIBUTE_REPARSE_POINT',1024):
+                        notes.append('跳过链接或重解析项：'+str(Path(entry.path).relative_to(base)))
+                        continue
+                    if entry.is_dir(follow_symlinks=False):
+                        if recursive:todo.append(Path(entry.path))
+                    elif entry.is_file(follow_symlinks=False) and Path(entry.name).suffix.lower()=='.epw':
+                        if len(files)>=500:limited=True;break
+                        files.append(dict(path=entry.path,name=entry.name,relative=str(Path(entry.path).relative_to(base)),bytes=info.st_size))
+        except OSError:
+            notes.append('无法读取文件夹：'+str(folder.relative_to(base) or '.'))
+        if limited:break
+    files.sort(key=lambda r:r['relative'].casefold())
+    if limited:notes.append('单次最多列出 500 份 EPW、遍历 1000 个文件夹或 20000 个文件项；请分文件夹继续导入。')
+    return dict(path=str(base),recursive=recursive,files=files,notes=notes,limited=limited)
+
+def register_folder_item(root,path,expected_sha256,metadata,catalog):
+    """Skip verified identical content, including another item registered concurrently."""
+    if not isinstance(metadata,dict) or metadata.get('reviewed') is not True:
+        raise ValueError('请先核对所选地点与质量说明。')
+    with LOCK:
+        checked,_=inspect(path)
+        if checked['sha256']!=expected_sha256:raise ValueError('检查后的气象文件已改变，请重新检查再登记。')
+        if not checked['can_register']:raise ValueError('逐时气象存在需修复项，不能登记。')
+        sites=list(catalog.get('sites',{}).values())+[r['site'] for r in listing(root)]
+        for site in sites:
+            weather=site.get('weather') or {}
+            if weather.get('sha256')==expected_sha256 and weather.get('path'):
+                existing=Path(weather['path'])
+                if existing.is_file() and sha(existing)==expected_sha256:
+                    return dict(reused=True,existing_id=site['id'],name=site['name'])
+        # Folder imports add locations, never change a previous source or assign a climate class.
+        return register(root,path,expected_sha256,dict(reviewed=True,name=metadata.get('name',''),note='由用户选定文件夹导入；已核对地点与逐时质量说明，气候分类暂未指定。'),catalog)
 
 def inspect(path):
     if not isinstance(path,str) or not path.strip() or len(path)>32768:raise ValueError('请选择本机 EPW 文件。')

@@ -14,3 +14,5 @@
 #result-timeline .rt-cool{fill:#467a9f}
 #result-timeline .rt-selected{background:#e1eee7}
 @media(max-width:680px){#result-timeline .rt-fields{grid-template-columns:1fr}#result-timeline .focused-body{padding:12px}#result-timeline .viewer-head,#result-timeline .viewer-foot{padding:12px}}
+
+#bulk-review-dialog,#failure-diagnostic-dialog{width:min(1000px,94vw);max-height:90vh;border:1px solid #9ab5a7;border-radius:14px;padding:24px;overflow:auto}#failure-diagnostic-dialog pre{white-space:pre-wrap;overflow-wrap:anywhere}#rs-content .viewer-table{max-height:400px;overflow:auto}

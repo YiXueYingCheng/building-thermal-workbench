@@ -62,4 +62,4 @@ async function reviewButton(b){
 // Capture inside the existing result dialog, which stops normal bubbling.
 document.addEventListener('click',e=>{const b=e.target.closest('[data-open-result-review]');if(!b)return;e.preventDefault();e.stopPropagation();void openReview(b.dataset.openResultReview,Number(b.dataset.reviewIndex),b.dataset.reviewName||'本批结果');},true);
 
-function reviewUserDecisionMarkup(review){const d=review?.user_decision;if(!d)return '';return `<section class="well"><strong>用户审阅后采用</strong><p>审阅人：${esc(d.reviewer)}</p><p>采用理由：${esc(d.reason)}</p><p>用途范围：${esc(d.scope)}</p><p class="muted">平台核对输出完整性，未自动证明警告无害。</p></section>`;}
+function reviewUserDecisionMarkup(review){const d=review?.user_decision;if(!d)return '';return `<section class="well"><strong>${d.acceptance_mode==='bulk_force'?'用户强制采用':'用户审阅后采用'}</strong><p>审阅人：${esc(d.reviewer)}</p><p>采用理由：${esc(d.reason)}</p><p>用途范围：${esc(d.scope)}</p><p class="muted">平台核对输出完整性，未自动证明警告无害。</p></section>`;}

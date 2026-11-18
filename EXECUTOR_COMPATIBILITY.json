@@ -1,26 +1,50 @@
 {
-  "schema": 1,
-  "from_version": "0.73.11",
-  "to_version": "0.73.12",
-  "from_code_hashes": {
-    "execution_inputs.py": "77f119f78f15e7151e5776a9edb246a08a76b638856896fa3917eafa0c6e83b6",
-    "execution_results.py": "17aa805f5e438dea4606587ed46e0e1aac0f53399f770339180af3dc21c1e86d",
-    "execution_queue.py": "a1a797023f68fe63a0047f83aacd938317db11ef3c937fbd758a83d5998362eb",
-    "execution_worker.py": "6835c7a480b4f9137ee5872220aaccb31cb3313fd7a2e8e1137bd8376a294eeb",
-    "resources.py": "c9c330914ab84b5dd3a2619782280ea73b0b1c83a75cc140698ed5e54676b040",
-    "daily_reference.py": "2ed98a53fffd48ec53f557c47663c020ef33e9a6fa0d3f8284cfbc6a55765ea8",
-    "resource_history.py": "dd0c168e0f381d20dcd393d800b5c2b970db2e76cb131fc7200a81ebdf8ec0d8",
-    "output_storage.py": "047d70ba06c17d1a6a5607e5d3c695887f79ffb9c677d469b05f36783f7b37ee"
+  "schema": 2,
+  "to_version": "0.73.13",
+  "historical_baselines": {
+    "0.72.2": {
+      "execution_inputs.py": "77f119f78f15e7151e5776a9edb246a08a76b638856896fa3917eafa0c6e83b6",
+      "execution_results.py": "17aa805f5e438dea4606587ed46e0e1aac0f53399f770339180af3dc21c1e86d",
+      "execution_queue.py": "a1a797023f68fe63a0047f83aacd938317db11ef3c937fbd758a83d5998362eb",
+      "execution_worker.py": "6835c7a480b4f9137ee5872220aaccb31cb3313fd7a2e8e1137bd8376a294eeb",
+      "resources.py": "c9c330914ab84b5dd3a2619782280ea73b0b1c83a75cc140698ed5e54676b040",
+      "daily_reference.py": "2ed98a53fffd48ec53f557c47663c020ef33e9a6fa0d3f8284cfbc6a55765ea8",
+      "resource_history.py": "dd0c168e0f381d20dcd393d800b5c2b970db2e76cb131fc7200a81ebdf8ec0d8",
+      "output_storage.py": "047d70ba06c17d1a6a5607e5d3c695887f79ffb9c677d469b05f36783f7b37ee"
+    },
+    "0.73.11": {
+      "execution_inputs.py": "77f119f78f15e7151e5776a9edb246a08a76b638856896fa3917eafa0c6e83b6",
+      "execution_results.py": "17aa805f5e438dea4606587ed46e0e1aac0f53399f770339180af3dc21c1e86d",
+      "execution_queue.py": "a1a797023f68fe63a0047f83aacd938317db11ef3c937fbd758a83d5998362eb",
+      "execution_worker.py": "6835c7a480b4f9137ee5872220aaccb31cb3313fd7a2e8e1137bd8376a294eeb",
+      "resources.py": "c9c330914ab84b5dd3a2619782280ea73b0b1c83a75cc140698ed5e54676b040",
+      "daily_reference.py": "2ed98a53fffd48ec53f557c47663c020ef33e9a6fa0d3f8284cfbc6a55765ea8",
+      "resource_history.py": "dd0c168e0f381d20dcd393d800b5c2b970db2e76cb131fc7200a81ebdf8ec0d8",
+      "output_storage.py": "047d70ba06c17d1a6a5607e5d3c695887f79ffb9c677d469b05f36783f7b37ee"
+    },
+    "0.73.12": {
+      "execution_inputs.py": "16814366a9f4cd5a12ad89fdae64b25eb0dfbc14f3d489a8025f7d743e0aada1",
+      "execution_results.py": "17aa805f5e438dea4606587ed46e0e1aac0f53399f770339180af3dc21c1e86d",
+      "execution_queue.py": "a1a797023f68fe63a0047f83aacd938317db11ef3c937fbd758a83d5998362eb",
+      "execution_worker.py": "6835c7a480b4f9137ee5872220aaccb31cb3313fd7a2e8e1137bd8376a294eeb",
+      "resources.py": "c9c330914ab84b5dd3a2619782280ea73b0b1c83a75cc140698ed5e54676b040",
+      "daily_reference.py": "2ed98a53fffd48ec53f557c47663c020ef33e9a6fa0d3f8284cfbc6a55765ea8",
+      "resource_history.py": "dd0c168e0f381d20dcd393d800b5c2b970db2e76cb131fc7200a81ebdf8ec0d8",
+      "output_storage.py": "047d70ba06c17d1a6a5607e5d3c695887f79ffb9c677d469b05f36783f7b37ee"
+    }
   },
   "to_code_hashes": {
-    "execution_inputs.py": "16814366a9f4cd5a12ad89fdae64b25eb0dfbc14f3d489a8025f7d743e0aada1",
-    "execution_results.py": "17aa805f5e438dea4606587ed46e0e1aac0f53399f770339180af3dc21c1e86d",
-    "execution_queue.py": "a1a797023f68fe63a0047f83aacd938317db11ef3c937fbd758a83d5998362eb",
-    "execution_worker.py": "6835c7a480b4f9137ee5872220aaccb31cb3313fd7a2e8e1137bd8376a294eeb",
-    "resources.py": "c9c330914ab84b5dd3a2619782280ea73b0b1c83a75cc140698ed5e54676b040",
+    "execution_inputs.py": "fe5d21401943695712d6b5ae10bea4cf07d6af63fcbc8fb7be693cb0ee22928d",
+    "execution_results.py": "74e17e43c691d284a040ad38a130778e5ac868bd4f122f95400e51891347b0d8",
+    "execution_queue.py": "af9e3db08d14b81ec310c776d03392b82f99e581e8e40f239bf984779a97a580",
+    "execution_worker.py": "31216f0e74c7f450d9e67643948e63f64aeca7f2a0210885c25ef255fe0570f3",
+    "resources.py": "749a6dfd5b1b8aa7f1df04fd4c7fa351bcdb1605c5f922dffa004206b983e823",
+    "cpu_budget.py": "e32970afa295ed022baa01fe9b53078f77da273ccc6743ffee96f7d6ff447af5",
+    "worker_runtime.py": "4fdd74f55fad68054aa8d038d424567671ef160aa252f982f9686e8019963c74",
     "daily_reference.py": "2ed98a53fffd48ec53f557c47663c020ef33e9a6fa0d3f8284cfbc6a55765ea8",
     "resource_history.py": "dd0c168e0f381d20dcd393d800b5c2b970db2e76cb131fc7200a81ebdf8ec0d8",
-    "output_storage.py": "047d70ba06c17d1a6a5607e5d3c695887f79ffb9c677d469b05f36783f7b37ee"
+    "output_storage.py": "d11aab650c3be3c25973f76ac0d4c62ec9e360d4ea6c954ffcdd89f89cb6a8e9",
+    "output_resolution.py": "4a820525d2a98ca300524f17085802102658c0d761e85a20b8a46b549871b806"
   },
-  "scope": "Reference cache path fallback only; model, solver, output contract and numeric validation unchanged. Original plans and results retain their hashes."
+  "scope": "Read and review exact official historical results only. No execution of historical plans; reprepare before submitting. Frozen plans, models, warnings and result files remain unchanged."
 }

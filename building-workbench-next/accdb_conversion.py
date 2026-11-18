@@ -1,8 +1,35 @@
 """Convert inspected snapshots, normalize bindings and publish no implicit calculation."""
-import copy,csv,math,shutil,zipfile
+import copy,csv,math,os,shutil,tempfile,uuid,zipfile
 from pathlib import Path
-from foundation import read_json,write_json,sha,digest,now,config
-from accdb_import import ref,verify_inspection,validate_request,backend,table_data,index,schedules,pair,source_rule,run_command,check_cancel,CHANNELS,TEMPS
+from foundation import read_json,write_json,sha,digest,now,config,owned
+from accdb_import import ref,verify_inspection,validate_request,backend,table_data,index,schedules,pair,source_rule,run_command,check_cancel,inspect_doors,door_mapper,folder,CHANNELS,TEMPS
+
+
+def validation_workspace(root,p):
+ """Keep unpublished import checks isolated without repeating deep directory trees."""
+ root=Path(root).resolve();p=Path(p).resolve()
+ if folder(root,p.name)!=p:raise ValueError('导入核对目录不属于当前工作区。')
+ for attempt in range(32):
+  target=owned(root/'data/checks'/('c_'+uuid.uuid4().hex[:12]),root)
+  if not target.exists():break
+ else:raise ValueError('无法分配独立的核对目录，请稍后重试。')
+ # Include both the staging and published names, plus a small random-name
+ # margin. Names are aliases; origin.json/manifest.json retain full bindings.
+ longest=target/'data/model-inputs'/('i_'+'0'*12)/('t-'+'0'*16+'.tmp')
+ length=len(str(longest).encode('utf-16-le'))//2
+ if os.name=='nt' and length>=260:
+  # Do not reject an existing installation which already supports long paths.
+  # Probe this process without changing any Windows policy or source file.
+  try:
+   with tempfile.TemporaryDirectory(prefix='.import-path-',dir=root/'data') as temporary:
+    probe=owned(temporary,root)
+    name='p'*max(1,length-len(str(probe).encode('utf-16-le'))//2-1)
+    with (probe/name).open('xb') as stream:stream.write(b'')
+  except OSError as error:
+   if isinstance(error,FileNotFoundError) or getattr(error,'winerror',None)==206 or error.errno==36:
+    raise ValueError('工作区路径过长，当前 Windows 无法保存导入核对临时文件。请在较短目录（例如 D:\\WB）使用独立工作区重新导入；保留原工作区和已有资料。当前工作区：'+str(root)) from error
+   raise
+ return target
 
 def normalise(models,d,request,donors,out,checkpoint=lambda:None):
  from usage_schedules import expanded,actual_pair,apply_gains
@@ -25,7 +52,7 @@ def normalise(models,d,request,donors,out,checkpoint=lambda:None):
   profile=dict(id=rid,zone=r['NAME'],area_m2=r['AREA'],conditioned=bool(g['IS_AC_ROOM']),loads=rules,hvac=hvac)
   if selected:profile['gain_settings']=copy.deepcopy(selected['gains'])
   profiles.append(profile)
-  sources[rid]=dict(use=types[r['TYPE']]['NAME'],basis='保留数据库配置' if choice=='source' else '明确选用配置：'+selected.get('source_label','既有建筑房间原配置'),channels={ch:dict(rule=rules[ch],verified=True,weekday_name='源工作日',weekend_name='源周末') for ch in CHANNELS},selection=choice)
+  sources[rid]=dict(use=types[r['TYPE']]['NAME'],room_type_id=str(r['TYPE']),basis='保留数据库配置' if choice=='source' else '明确选用配置：'+selected.get('source_label','既有建筑房间原配置'),channels={ch:dict(rule=rules[ch],verified=True,weekday_name='源工作日',weekend_name='源周末') for ch in CHANNELS},selection=choice)
   for mode,m in models.items():
    def put(name,values,old=None,check=False):
     nonlocal verified
@@ -58,9 +85,15 @@ def convert(p,request,catalog,root):
  from workspace_setup import import_numerics
  import_numerics(catalog)
  review=verify_inspection(p);donors,site=validate_request(request,review,catalog,root);code=backend(root);py=config(root)['python']
+ validation_root=validation_workspace(root,p)
  if (p/'model').exists():raise ValueError('本次导入已有转换目录，请新建导入记录，避免覆盖证据。')
  if shutil.disk_usage(root).free<2*2**30:raise ValueError('转换前需至少保留 2 GiB 磁盘。')
- write_json(p/'choices.json',dict(request=request,donor_snapshots=donors,weather=site['weather']),root)
+ door_models,door_errors=inspect_doors(table_data(p),root)
+ if door_errors:raise ValueError('；'.join(door_errors))
+ door_mapper(root).validate_confirmation(request,door_models)
+ door_choices=dict(door_confirmations={m['type_id']:m['confirmation_sha256'] for m in door_models},models=door_models)
+ write_json(p/'door-mappings.json',door_choices,root)
+ write_json(p/'choices.json',dict(request=request,door_models=door_models,donor_snapshots=donors,weather=site['weather']),root)
  # Preserve the scripts used without copying or mutating their external source tree.
  tool_files=[x for x in code.glob('*.py') if x.is_file()]
  tool_refs=[ref(x) for x in tool_files]
@@ -70,7 +103,7 @@ def convert(p,request,catalog,root):
  weather=model/'weather'/Path(site['weather']['path']).name;shutil.copy2(site['weather']['path'],weather)
  if sha(weather)!=site['weather']['sha256']:raise ValueError('复制期间气象已变化。')
  ident='accdb_'+p.name.removeprefix('import_')
- args=[py,code/'convert_drawing26.py','--tables',p/'tables','--source',source,'--source-original',source,'--output',model/'source-mapped','--project-id',ident,'--confirmed-door-thickness-mm','25.3','--align-world-north']
+ args=[py,code/'convert_drawing26.py','--tables',p/'tables','--source',source,'--source-original',source,'--output',model/'source-mapped','--project-id',ident,'--confirmed-door-mappings',p/'door-mappings.json','--align-world-north']
  if config(root)['converter_interface']=='portable':args += ['--reference-tables',config(root)['import_reference_tables'],'--destep-source',code/'destep-source.zip']
  if request['shading']=='ignore':args.append('--ignore-shading')
  run_command(args,p/'convert.log',p)
@@ -101,7 +134,7 @@ def convert(p,request,catalog,root):
  numerics=import_numerics(catalog)
  building=dict(id=ident,name=request['name'].strip(),zones=review['rooms'],floors=review['storeys'],area_m2=review['area_m2'],conditioned_area_m2=sum(r['area_m2'] for r in usage['rooms'] if r['conditioned']),definition_status='checked_accdb_import',source_project_id=ident,model_snapshot=model_refs['controlled'],input_snapshot=ref(p/'choices.json'))
  registered_site=dict(id=ident+'_weather',name=site['name'],eligible=True,climate=site.get('climate'),weather=ref(weather),source_kind='checked_accdb_import')
- audits=[p/'inspection.json',p/'choices.json',p/'extraction.json',p/'converter-source.zip',model/'conversion/physical-opening-check.json',model/'conversion/model-audit.json',model/'source-mapped/conversion-audit.json',model/'source-mapped/orientation-verification.json']
+ audits=[p/'inspection.json',p/'door-mappings.json',p/'choices.json',p/'extraction.json',p/'converter-source.zip',model/'conversion/physical-opening-check.json',model/'conversion/model-audit.json',model/'source-mapped/conversion-audit.json',model/'source-mapped/orientation-verification.json']
  refs=[review['snapshot'],*review['table_refs'],*[ref(x) for x in audits]]
  audit=read_json(model/'conversion/model-audit.json')
  notes=['ACCDB 来源快照和转换输入已核对；尚未进行本建筑的 EnergyPlus 试算。',f"保留源 {review['conditioned']} 间空调房、{review['rooms']-review['conditioned']} 间非空调房。",
@@ -118,14 +151,17 @@ def convert(p,request,catalog,root):
  # Exercise the same model-input route used by future saved schemes, in an isolated staging root.
  probe=copy.deepcopy(catalog);probe.setdefault('ordinary_buildings',{})[ident]=payload;probe['records'][record['id']]=record;probe['sites'][registered_site['id']]=registered_site
  test=copy.deepcopy(record);test['factors']['condition']['operation']['mode']='both'
- validation_root=p/'input-validation';validation_root.mkdir()
+ validation_root.mkdir(parents=True,exist_ok=False)
  write_json(validation_root/'config.json',config(root),validation_root)
- bundle=build_bundle(test,probe,validation_root)
+ write_json(validation_root/'origin.json',dict(kind='building_import_input_check_v1',import_id=p.name,import_path=str(p.resolve()),created=now()),validation_root)
+ bundle=build_bundle(test,probe,validation_root,compact_check=True)
  check_cancel(p)
  if bundle['case_count']!=2:raise ValueError('自然/温控输入核对未完成。')
+ validation=dict(root=str(validation_root),manifest=ref(validation_root/'data/model-inputs'/bundle['id']/'manifest.json'),case_count=bundle['case_count'])
+ write_json(p/'input-validation.json',validation,root)
  write_json(p/'source-record.json',payload,root)
  acceptance=dict(passed=True,created=now(),sha256=digest(payload),building=building,source_sha256=review['source']['sha256'],
   rooms=review['rooms'],conditioned=review['conditioned'],area_m2=review['area_m2'],surfaces=len(envelope),source_annual_values_checked=verified,
   geometry=dict(openings_outside=0,orientation=read_json(model/'source-mapped/orientation-verification.json')),bundle_id=bundle['id'],input_cases=2,
-  choices=request,notes=notes,engine_run=False,new_simulations=0)
+  choices=request,door_models=door_models,input_validation=validation,notes=notes,engine_run=False,new_simulations=0)
  write_json(p/'acceptance.json',acceptance,root);return acceptance

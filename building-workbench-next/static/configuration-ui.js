@@ -1,4 +1,8 @@
 /* Local editing, explicit component saves, then explicit scheme-version saves. */
+function usageRoomType(room){
+ const source=S.configuration?.data?.usage_sources?.[room.id]||{},name=String(source.use||'').trim();
+ return {name:name||'用途未标注',key:name?(source.room_type_id!=null?'id:'+source.room_type_id:'name:'+name):'',legacy:name&&source.room_type_id==null};
+}
 S.configuration=null;S.usageDraft=null;S.usageDirty=false;S.usageRoom=0;S.usageChannel='people';S.componentLists={usage:[],material:[]};S.materialLibraryOpen=false;
 function configurationSupported(){return ['global_frozen_v011','ordinary_building_v1'].includes(S.record?.provenance.adapter);}
 function usageMembershipText(){const r=S.usageDraft?.rooms||[];const n=r.filter(x=>x.conditioned).length;return `保持原 ${n} 间空调房、${r.length-n} 间非空调房`; }
@@ -14,6 +18,10 @@ async function loadConfiguration(){
  S.configuration={key,data};resetUsageDraft();
 }
 function resetUsageDraft(){const p=S.record.factors.building.usage_profile;S.usageDraft=copy(p?.content||S.configuration.data.base);S.usageName=p?.name||S.record.factors.building.name+' 房间使用';S.usageDirty=false;}
+function usagePendingError(intent='切换方案'){
+ if(typeof showRoomUnsavedWarning==='function')showRoomUnsavedWarning(intent);
+ return new Error(`房间配置与作息尚未保存，暂不能${intent}。请打开“房间配置与作息”，保存全部房间配置并保存方案版本，或明确撤销房间修改。当前编辑仍保留。`);
+}
 const roomChannels={people:'人员 / 人',lighting:'照明输入 / W 每间',equipment:'设备输入 / W 每间',available:'空调可用 / 0 或 1'};
 const temperatureLabels={low:'供暖启动',heat:'供暖停止',cool:'制冷停止',high:'制冷启动'};
 function displayUsageNumber(v){return typeof v==='number'?Number(v.toPrecision(12)):v;}
@@ -27,7 +35,7 @@ buildingPanel=function(){
  if(!d||!S.usageDraft)return html;
  const room=S.usageDraft.rooms[S.usageRoom],channel=room.hvac?S.usageChannel:S.usageChannel==='available'?'people':S.usageChannel;
  const value=channel==='available'?room.hvac.available:room.loads[channel];
- html+=`<section class="well usage-editor"><div class="row"><h3>房间与建筑默认运行</h3><span id="usage-edit-status">${S.usageDirty?'配置有未保存修改':'配置已读取'}</span></div><p class="muted">${usageMembershipText()}。作息输入为该小时的实际人数或功率，空调可用计划独立设置。</p><label class="field">配置名称<input id="usage-name" value="${esc(S.usageName)}"${disabled()}></label><div class="grid2"><label class="field">房间<select id="usage-room">${S.usageDraft.rooms.map((r,i)=>`<option value="${i}"${i===S.usageRoom?' selected':''}>${esc(r.zone)} · ${format(r.area_m2,2)} m² · ${r.conditioned?'空调房':'非空调房'}</option>`).join('')}</select></label><label class="field">使用计划<select id="usage-channel">${Object.entries(roomChannels).filter(([k])=>k!=='available'||room.hvac).map(([k,v])=>`<option value="${k}"${k===channel?' selected':''}>${v}</option>`).join('')}</select></label></div>${dayTable(value,'data-usage-hour="'+channel+'"')}${room.hvac?`<details><summary>此房间的默认启停温度</summary><div class="grid2">${Object.entries(temperatureLabels).map(([k,v])=>`<label class="field">${v} / °C<input type="number" step="any" data-usage-temperature="${k}" value="${room.hvac[k]}"${disabled()}></label>`).join('')}</div><p class="muted">本模型保留四个启停温度及原回差控制；工况可显式覆盖这些值。</p></details>`:''}<div class="actions"><button data-configuration="usage-save" class="primary"${disabled()}>保存配置版本并用于当前草稿</button><button data-configuration="usage-discard">撤销配置编辑</button></div><p class="muted">这里只保存建筑配置版本；当前方案还需“保存版本”。其他方案不会自动更新。</p></section>`;
+ html+=`<section class="well usage-editor"><div class="row"><h3>房间与建筑默认运行</h3><span id="usage-edit-status">${S.usageDirty?'配置有未保存修改':'配置已读取'}</span></div><p class="muted">${usageMembershipText()}。作息输入为该小时的实际人数或功率，空调可用计划独立设置。</p><label class="field">配置名称<input id="usage-name" value="${esc(S.usageName)}"${disabled()}></label><div class="grid2"><label class="field">房间<select id="usage-room">${S.usageDraft.rooms.map((r,i)=>`<option value="${i}"${i===S.usageRoom?' selected':''}>${esc(r.zone)} · ${esc(usageRoomType(r).name)} · ${format(r.area_m2,2)} m² · ${r.conditioned?'空调房':'非空调房'}</option>`).join('')}</select></label><label class="field">使用计划<select id="usage-channel">${Object.entries(roomChannels).filter(([k])=>k!=='available'||room.hvac).map(([k,v])=>`<option value="${k}"${k===channel?' selected':''}>${v}</option>`).join('')}</select></label></div>${dayTable(value,'data-usage-hour="'+channel+'"')}${room.hvac?`<details><summary>此房间的默认启停温度</summary><div class="grid2">${Object.entries(temperatureLabels).map(([k,v])=>`<label class="field">${v} / °C<input type="number" step="any" data-usage-temperature="${k}" value="${room.hvac[k]}"${disabled()}></label>`).join('')}</div><p class="muted">本模型保留四个启停温度及原回差控制；工况可显式覆盖这些值。</p></details>`:''}<div class="actions"><button data-configuration="usage-save" class="primary"${disabled()}>保存配置版本并用于当前草稿</button><button data-configuration="usage-discard">撤销配置编辑</button></div><p class="muted">这里只保存建筑配置版本；当前方案还需“保存版本”。其他方案不会自动更新。</p></section>`;
  return html;
 };
 function controlPresetToolbar(){return S.record.factors.materials.definitions.length?`<div class="actions control-presets">${[['fixed','固定'],['calendar','季节翻面'],['feedback','热阻反馈'],['combined','反馈加翻面']].map(([k,label])=>`<button data-control-preset="${k}"${disabled()}>${label}</button>`).join('')}</div><p class="muted">预设只组织工况；缺少本地日历或对应物性时会提示。热学与朝向仍可在工况中分别调整。</p>`:'';}
@@ -56,7 +64,7 @@ function applyMaterial(definition,reference=null){
 }
 async function configurationAction(button){
  const a=button.dataset.configuration,kind=button.dataset.componentUse;
- if(S.usageDirty&&(['save','copy','preview','generate','prepare-execution'].includes(button.dataset.action)||button.dataset.record||button.dataset.revision))throw Error('建筑配置还有未保存编辑，请先保存配置版本或撤销配置编辑。');
+ if(S.usageDirty&&(['save','copy','discard','preview','generate','prepare-execution'].includes(button.dataset.action)||button.dataset.record||button.dataset.revision))throw usagePendingError(button.dataset.record?'切换方案':button.dataset.revision?'切换版本':({save:'保存方案版本',copy:'另存方案',discard:'撤销方案编辑',preview:'核对计算安排',generate:'生成模型输入','prepare-execution':'准备计算'})[button.dataset.action]);
  if(button.dataset.overrideOperation){await loadConfiguration();const id=button.dataset.overrideOperation,c=S.record.factors.building.usage_profile?.content||S.configuration.data.base;const o=copy(S.record.factors.condition.operation.overrides||{});o[id]=copy(c.rooms.find(r=>r.id===id).hvac);setPath('factors.condition.operation.overrides',o);return true;}
  if(button.dataset.clearOperation){const o=copy(S.record.factors.condition.operation.overrides);delete o[button.dataset.clearOperation];setPath('factors.condition.operation.overrides',o);return true;}
  if(button.dataset.controlPreset){
@@ -91,7 +99,7 @@ document.addEventListener('change',async event=>{
   if(t.id==='usage-room'){S.usageRoom=Number(t.value);render();}
   if(t.id==='usage-channel'){S.usageChannel=t.value;render();}
   if(t.dataset.componentUse&&t.value!==''){
-   if(S.usageDirty)throw Error('请先保存或撤销建筑配置编辑。');
+   if(S.usageDirty)throw usagePendingError('替换房间配置');
    const kind=t.dataset.componentUse,row=S.componentLists[kind][Number(t.value)];
    const current=kind==='usage'?S.record.factors.building.usage_profile:S.record.factors.materials.definition_reference;
    if(current?.id===row.id&&current.revision===row.revision&&current.sha256===row.sha256)return;

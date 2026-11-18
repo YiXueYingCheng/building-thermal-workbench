@@ -60,7 +60,9 @@ def write_json(path, value, root=ROOT):
     path = owned(path, root)
     path.parent.mkdir(parents=True, exist_ok=True)
     data = json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False).encode('utf-8')
-    handle, temporary = tempfile.mkstemp(prefix='.' + path.name, suffix='.tmp', dir=path.parent)
+    # A long destination name must not be repeated in its atomic temporary name.
+    # mkstemp reserves the short random name exclusively in the same directory.
+    handle, temporary = tempfile.mkstemp(prefix='t-', suffix='.tmp', dir=path.parent)
     try:
         with os.fdopen(handle, 'wb') as stream:
             stream.write(data)

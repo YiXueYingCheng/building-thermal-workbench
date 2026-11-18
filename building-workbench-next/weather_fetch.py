@@ -5,6 +5,10 @@ import hashlib
 import io
 import json
 import os
+import re
+import socket
+import ssl
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -16,11 +20,39 @@ HOSTS = {'energyplus-weather.s3.amazonaws.com', 'climate.onebuilding.org', 're.j
 MAX_ARCHIVE = 25 * 1024 * 1024
 MAX_EPW = 12 * 1024 * 1024
 
+class WeatherNetworkError(ValueError):
+    def __init__(self,code,host,message,retryable=None):
+        self.code=code;self.host=host
+        self.retryable=code in ('timeout','connection') if retryable is None else retryable
+        super().__init__(message)
+
+def network_error(error,host):
+    """Expose a useful diagnosis without echoing proxy URLs, credentials or OS details."""
+    if isinstance(error,urllib.error.HTTPError):
+        return WeatherNetworkError('http',host,f'气象来源 {host} 返回 HTTP {error.code}；请稍后重试或打开“提供方原文件”核对来源。',error.code in (408,429,500,502,503,504))
+    reason=getattr(error,'reason',error)
+    if 'Tunnel connection failed' in str(reason):
+        match=re.search(r'Tunnel connection failed:\s*(\d{3})',str(reason))
+        status='（HTTP '+match[1]+'）' if match else ''
+        return WeatherNetworkError('proxy_tunnel',host,f'当前网络代理未能连接气象来源 {host}{status}。尚未取得文件；请在这台电脑的浏览器中打开“提供方原文件”，并核对所用网络或代理能否访问该站点。连接恢复后可继续未完成项，或将自行取得的 EPW 通过文件夹导入。')
+    if isinstance(reason,(ssl.SSLError,ssl.CertificateError)):
+        return WeatherNetworkError('tls',host,f'无法验证气象来源 {host} 的安全连接；请核对系统时间、证书与网络设置，程序未关闭证书校验。')
+    if isinstance(reason,(TimeoutError,socket.timeout)):
+        return WeatherNetworkError('timeout',host,f'连接气象来源 {host} 超时；已完成的文件保留，可稍后重试未完成项。')
+    return WeatherNetworkError('connection',host,f'暂时无法连接气象来源 {host}；请在这台电脑的浏览器中打开“提供方原文件”核对网络，之后重试未完成项。')
+
 def sha(data):
     return hashlib.sha256(data).hexdigest()
 
+def alternatives():
+    file=ROOT/'alternatives.json'
+    return json.loads(file.read_text(encoding='utf-8')) if file.is_file() else {'weather':[],'unavailable':[]}
+
+def sources():
+    return json.loads((ROOT/'sources.json').read_text(encoding='utf-8'))['weather']+alternatives()['weather']
+
 def fetch(ident, output):
-    entries = json.loads((ROOT/'sources.json').read_text(encoding='utf-8'))['weather']
+    entries = sources()
     row = next((r for r in entries if r['id'] == ident), None)
     if row is None:
         raise ValueError('气象编号未登记，请用 --list 查看。')
@@ -36,11 +68,14 @@ def fetch(ident, output):
         if sha(target.read_bytes()) != row['epw_sha256']:
             raise ValueError('目标目录已有同名但内容不同的文件，已保留；请另选目录。')
         return dict(id=ident, path=str(target), sha256=row['epw_sha256'], reused=True)
-    with urllib.request.urlopen(row['source_url'], timeout=45) as response:
-        final = urllib.parse.urlsplit(response.url)
-        if final.scheme != 'https' or final.hostname not in HOSTS:
-            raise ValueError('来源重定向到了未登记站点。')
-        archive = response.read(MAX_ARCHIVE+1)
+    try:
+        with urllib.request.urlopen(row['source_url'], timeout=45) as response:
+            final = urllib.parse.urlsplit(response.url)
+            if final.scheme != 'https' or final.hostname not in HOSTS:
+                raise ValueError('来源重定向到了未登记站点。')
+            archive = response.read(MAX_ARCHIVE+1)
+    except (urllib.error.URLError,TimeoutError,ssl.SSLError) as error:
+        raise network_error(error,parsed.hostname) from None
     if len(archive) > MAX_ARCHIVE:
         raise ValueError('下载包超过本示例大小限制。')
     if row.get('archive_sha256') and sha(archive) != row['archive_sha256']:

@@ -43,7 +43,22 @@ function roomChangeMarkup(change){
 }
 function roomDifferencesMarkup(result){
  const d=result.differences;
- return `<div class="room-diff-summary"><strong>${d.room_count} 间房 · ${d.changed_groups} 项配置变化</strong><p>${d.actual_changed_groups} 项涉及实际值；${d.expression_only_groups} 项仅输入表达或引用变化。</p><p class="muted">全年累计为原模拟年历的 261 个工作日、104 个周末日，不是建筑冷热负荷。此处核对建筑默认配置；工况覆盖另行保留。</p></div>${result.notes.map(n=>`<p class="warning">${esc(n)}</p>`).join('')}${d.rooms.map(r=>`<section class="well room-diff-room"><h3>${esc(r.zone)} · ${format(r.area_m2,2)} m² · ${r.conditioned?'空调房':'非空调房'}</h3>${r.changes.map(roomChangeMarkup).join('')}</section>`).join('')||'<p>两份配置在核查内容中没有差异。</p>'}<details class="muted"><summary>核对范围</summary><p>逐房间比较人员、照明、设备的工作日/周末实际值、人员显热、照明得热、四个启停温度及空调可用时段；几何、面积和空调归属保持。实际值比较使用 1e-9 绝对和 1e-12 相对容差，只用于差异显示，不替代输入身份或结果可比性核验。</p></details>`;
+ return `<div class="room-diff-summary"><strong>${d.room_count} 间房 · ${d.changed_groups} 项配置变化</strong><p>${d.actual_changed_groups} 项涉及实际值；${d.expression_only_groups} 项仅输入表达或引用变化。</p><p class="muted">全年累计为原模拟年历的 261 个工作日、104 个周末日，不是建筑冷热负荷。此处核对建筑默认配置；工况覆盖另行保留。</p></div>${result.notes.map(n=>`<p class="warning">${esc(n)}</p>`).join('')}${d.rooms.map(r=>`<section class="well room-diff-room"><h3>${esc(r.zone)} · ${esc(usageRoomType(r).name)} · ${format(r.area_m2,2)} m² · ${r.conditioned?'空调房':'非空调房'}</h3>${r.changes.map(roomChangeMarkup).join('')}</section>`).join('')||'<p>两份配置在核查内容中没有差异。</p>'}<details class="muted"><summary>核对范围</summary><p>逐房间比较人员、照明、设备的工作日/周末实际值、人员显热、照明得热、四个启停温度及空调可用时段；几何、面积和空调归属保持。实际值比较使用 1e-9 绝对和 1e-12 相对容差，只用于差异显示，不替代输入身份或结果可比性核验。</p></details>`;
+}
+function roomTargetEligible(r){const m=S.roomTool;return !(m.source==='draft'&&r.id===m.sourceRoom);}
+function roomTargetRows(){const m=S.roomTool;return S.usageDraft.rooms.filter(r=>!m.targetType||(m.targetType==='unknown'?!usageRoomType(r).key:usageRoomType(r).key===m.targetType));}
+function roomTargetsMarkup(){
+ const m=S.roomTool,types=new Map(),origin=roomSource(m.source).content.rooms.find(r=>r.id===m.sourceRoom),originType=usageRoomType(origin);
+ for(const r of S.usageDraft.rooms){const t=usageRoomType(r),key=t.key||'unknown';if(!types.has(key))types.set(key,{...t,count:0});types.get(key).count++;}
+ const rows=roomTargetRows(),hidden=m.targets.filter(id=>!rows.some(r=>r.id===id)).length;
+ return `<label class="field">按目标房间类型筛选<select data-room-type><option value="">全部房间</option>${[...types].map(([key,t])=>`<option value="${esc(key)}"${m.targetType===key?' selected':''}>${esc(t.name)}${t.legacy?'（按用途名称）':''} · ${t.count} 间</option>`).join('')}</select></label><div class="actions"><button data-room-action="select-type">勾选当前筛选房间</button><button data-room-action="clear-type">取消当前筛选勾选</button><button data-room-action="same-type"${originType.key?'':' disabled'}>勾选与来源同类型</button></div><p class="muted">已选 ${m.targets.length} 间${hidden?'（其中 '+hidden+' 间在其他筛选范围）':''}。筛选不清空已选房间；用途未标注的房间需手动核对。勾选只准备目标，仍需预览后应用。</p><div class="room-choice-grid">${rows.map(r=>`<label><input type="checkbox" data-room-target="${esc(r.id)}"${m.targets.includes(r.id)?' checked':''}${roomTargetEligible(r)?'':' disabled'}> ${esc(r.zone)} · ${esc(usageRoomType(r).name)} · ${format(r.area_m2,2)} m² · ${r.conditioned?'空调房':'非空调房'}</label>`).join('')}</div>`;
+}
+function selectRoomTargets(kind){
+ const m=S.roomTool;
+ if(kind==='same-type'){const t=usageRoomType(roomSource(m.source).content.rooms.find(r=>r.id===m.sourceRoom));if(!t.key)return;m.targetType=t.key;}
+ const ids=roomTargetRows().filter(roomTargetEligible).map(r=>r.id);
+ m.targets=kind==='clear-type'?m.targets.filter(id=>!ids.includes(id)):[...new Set([...m.targets,...ids])];
+ invalidateRoomPreview();renderRoomTool();
 }
 function renderRoomTool(){
  const m=S.roomTool;if(!m)return;const el=roomToolElement();
@@ -51,7 +66,7 @@ function renderRoomTool(){
  if(m.mode==='compare')controls=`<div class="grid2"><label class="field">核对前<select data-room-before>${roomSourceOptions(m.before)}</select></label><label class="field">核对后<select data-room-after>${roomSourceOptions(m.after)}</select></label></div>`;
  else{
   const source=roomSource(m.source),origin=source.content.rooms.find(r=>r.id===m.sourceRoom);
-  controls=`<div class="grid2"><label class="field">来源配置<select data-room-source>${roomSourceOptions(m.source)}</select></label><label class="field">来源房间<select data-room-origin>${source.content.rooms.map(r=>`<option value="${esc(r.id)}"${r.id===m.sourceRoom?' selected':''}>${esc(r.zone)} · ${format(r.area_m2,2)} m² · ${r.conditioned?'空调房':'非空调房'}</option>`).join('')}</select></label></div><fieldset><legend>选择复用内容</legend><div class="room-choice-grid">${Object.entries(roomGroupLabels).map(([key,label])=>`<label><input type="checkbox" data-room-group="${key}"${m.groups.includes(key)?' checked':''}${['available','temperatures'].includes(key)&&!origin.hvac?' disabled':''}> ${label}</label>`).join('')}</div></fieldset><label class="field">不同面积房间的复用方式<select data-room-basis><option value="source_units"${m.basis==='source_units'?' selected':''}>保留原单位：密度按目标面积换算，每间值保持每间值</option><option value="room_totals"${m.basis==='room_totals'?' selected':''}>保留来源房间的每间实际人数/功率</option></select></label><p class="muted">复用整个所选通道，包括上下限与工作日/周末两天作息。每平方米输入在不同面积下可能得到不同实际值。人员潜热保留目标房间原值。</p><fieldset><legend>目标房间（可多选）</legend><div class="room-choice-grid">${S.usageDraft.rooms.map(r=>`<label><input type="checkbox" data-room-target="${esc(r.id)}"${m.targets.includes(r.id)?' checked':''}${m.source==='draft'&&r.id===m.sourceRoom?' disabled':''}> ${esc(r.zone)} · ${format(r.area_m2,2)} m² · ${r.conditioned?'空调房':'非空调房'}</label>`).join('')}</div></fieldset>`;
+  controls=`<div class="grid2"><label class="field">来源配置<select data-room-source>${roomSourceOptions(m.source)}</select></label><label class="field">来源房间<select data-room-origin>${source.content.rooms.map(r=>`<option value="${esc(r.id)}"${r.id===m.sourceRoom?' selected':''}>${esc(r.zone)} · ${esc(usageRoomType(r).name)} · ${format(r.area_m2,2)} m² · ${r.conditioned?'空调房':'非空调房'}</option>`).join('')}</select></label></div><fieldset><legend>选择复用内容</legend><div class="room-choice-grid">${Object.entries(roomGroupLabels).map(([key,label])=>`<label><input type="checkbox" data-room-group="${key}"${m.groups.includes(key)?' checked':''}${['available','temperatures'].includes(key)&&!origin.hvac?' disabled':''}> ${label}</label>`).join('')}</div></fieldset><label class="field">不同面积房间的复用方式<select data-room-basis><option value="source_units"${m.basis==='source_units'?' selected':''}>保留原单位：密度按目标面积换算，每间值保持每间值</option><option value="room_totals"${m.basis==='room_totals'?' selected':''}>保留来源房间的每间实际人数/功率</option></select></label><p class="muted">复用整个所选通道，包括上下限与工作日/周末两天作息。每平方米输入在不同面积下可能得到不同实际值。人员潜热保留目标房间原值。</p><fieldset><legend>目标房间（可多选）</legend>${roomTargetsMarkup()}</fieldset>`;
  }
  el.innerHTML=`<div class="room-tool-head"><h2 id="room-tool-title">${m.mode==='reuse'?'复用房间配置':'核对配置差异'}</h2><button data-room-action="close">关闭</button></div><p class="muted">${m.mode==='reuse'?'只在当前建筑的已核实房间之间复用使用配置，预览不修改草稿。':'比较当前编辑、原配置或已保存建筑配置版本；仅查看不修改方案。'}</p>${controls}<div class="actions"><button data-room-action="preview" class="primary">${m.mode==='reuse'?'预览目标房间变化':'读取配置差异'}</button></div><p class="room-tool-message" role="status">${esc(m.message||'')}</p>${m.result?`<div class="room-tool-result">${roomDifferencesMarkup(m.result)}</div>`:''}${m.mode==='reuse'?`<div class="room-tool-apply"><button data-room-action="apply" class="primary"${!m.result?.differences.changed_groups||readonly()?' disabled':''}>应用到当前房间配置编辑</button><p class="muted">之后仍需保存建筑配置版本和方案版本，其他方案保持原快照。</p></div>`:''}`;
  if(!el.open)el.showModal();
@@ -62,7 +77,7 @@ async function openRoomTool(mode){
  if(p)sources.push({key:'selected',name:'当前选用：'+p.name+' · v'+p.revision,content:copy(p.content)});
  for(const row of rows){if(row.content.building_id!==S.configuration.data.base.building_id||(row.id===p?.id&&row.revision===p.revision))continue;sources.push({key:row.id+':'+row.revision,name:row.name+' · v'+row.revision,content:copy(row.content)});}
  const room=S.usageDraft.rooms[S.usageRoom],channel=selectedUsage().channel;
- S.roomTool={mode,sources,source:'draft',sourceRoom:room.id,targets:[],groups:[channel],basis:'source_units',before:p?'selected':'original',after:'draft',context:roomContext(),result:null,sequence:0,message:''};renderRoomTool();
+ S.roomTool={mode,sources,source:'draft',sourceRoom:room.id,targets:[],targetType:'',groups:[channel],basis:'source_units',before:p?'selected':'original',after:'draft',context:roomContext(),result:null,sequence:0,message:''};renderRoomTool();
  if(mode==='compare')await previewRoomTool();
 }
 async function previewRoomTool(){
@@ -83,6 +98,7 @@ configurationAction=async function(button){
  if(action==='preview'){await previewRoomTool();return true;}
  if(readonly())throw Error('来源或历史版本只读，请从可编辑研究方案复用房间配置。');
  if(action==='open-reuse'){await openRoomTool('reuse');return true;}
+ if(['select-type','clear-type','same-type'].includes(action)){selectRoomTargets(action);return true;}
  if(action==='apply'){
   const m=S.roomTool;if(!m.result||!m.result.differences.changed_groups||m.requestKey!==JSON.stringify(roomToolRequest())||roomContext()!==m.context)throw Error('预览已失效，请重新核对。');
   S.usageDraft=copy(m.result.content);S.roomUndo={record:S.id,receipt:copy(m.result.undo),source:roomSource(m.source).name,sourceRoom:m.result.source_room.zone,targets:copy(m.targets),groups:copy(m.groups),basis:m.basis};
@@ -98,6 +114,7 @@ configurationAction=async function(button){
 };
 document.addEventListener('change',event=>{
  const t=event.target,m=S.roomTool;if(!m||!t.closest('#room-configuration-dialog'))return;
+ if(t.hasAttribute('data-room-type')){m.targetType=t.value;renderRoomTool();return;}
  if(t.hasAttribute('data-room-source')){m.source=t.value;m.targets=[];}
  else if(t.hasAttribute('data-room-origin')){m.sourceRoom=t.value;m.targets=m.targets.filter(id=>!(m.source==='draft'&&id===m.sourceRoom));}
  else if(t.hasAttribute('data-room-group'))m.groups=t.checked?[...m.groups,t.dataset.roomGroup]:m.groups.filter(k=>k!==t.dataset.roomGroup);

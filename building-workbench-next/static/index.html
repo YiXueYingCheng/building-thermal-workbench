@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>建筑热环境工作台 · v0.73.12 公开预览版</title>
+  <title>建筑热环境工作台 · v0.73.13 公开预览版</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/workbench-theme.css">
   <script src="/app.js" defer></script>
@@ -31,6 +31,7 @@
 <script src="/ordinary-building-ui.js" defer></script>
 <script src="/accdb-import.js" defer></script>
 <script src="/weather-import.js" defer></script>
+<script src="/weather-folder.js" defer></script>
 <script src="/china-scope.js" defer></script>
 <script src="/solar-timing.js" defer></script>
 <script src="/component-updates.js" defer></script>
@@ -57,8 +58,10 @@
 <script src="/condition-viewer.js" defer></script>
 <script src="/material-catalog.js" defer></script>
 <script src="/scope-results-viewer.js" defer></script>
+<script src="/output-resolution.js" defer></script>
 <script src="/input-workflow.js" defer></script>
 <script src="/result-review.js" defer></script>
+<script src="/bulk-result-review.js" defer></script>
 <script src="/research-sets.js" defer></script>
 <script src="/output-storage.js" defer></script>
 <script src="/navigation-experience.js" defer></script>
@@ -70,16 +73,18 @@
   <script defer src="/reference-library.js"></script>
   <script defer src="/weather-downloads.js"></script>
   <script defer src="/construction-library.js"></script>
+  <script defer src="/wall-optics-reuse.js"></script>
   <script defer src="/storage-management.js"></script>
   <script defer src="/result-availability.js"></script>
   <script defer src="/summary-retention.js"></script>
   <script defer src="/plan-deletion.js"></script>
   <link rel="stylesheet" href="/result-timeline.css">
   <script defer src="/result-timeline.js"></script>
+  <script defer src="/result-series.js"></script>
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 26V9l11-4v21M16 12l10-4v18M3 26h25M9 12v2m0 4v2m4-10v2m0 4v2m8-4v2m0 4v2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div class="brand-copy"><strong>建筑热环境工作台</strong><span>建筑 · 材料 · 工况 · 范围</span></div><span class="tag">v0.73.12 · 公开预览版</span></div>
+    <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 26V9l11-4v21M16 12l10-4v18M3 26h25M9 12v2m0 4v2m4-10v2m0 4v2m8-4v2m0 4v2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div class="brand-copy"><strong>建筑热环境工作台</strong><span>建筑 · 材料 · 工况 · 范围</span></div><span class="tag">v0.73.13 · 公开预览版</span></div>
     <a class="legacy-link" href="http://127.0.0.1:8765" target="_blank" rel="noopener noreferrer">打开原平台 ↗</a>
   </header>
   <div class="phase-line">研究工作区 · 按四因素编辑方案，核对计算安排，比较结果与导出论文数据。</div>

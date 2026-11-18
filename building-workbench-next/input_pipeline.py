@@ -4,7 +4,7 @@ This changes packaging, not model compilation, output selection or the executor.
 Completed checkpoints are only reused after all source and artifact hashes pass.
 """
 from pathlib import Path
-import gc,json,os,shutil,time,uuid,sqlite3
+import gc,json,os,shutil,time,uuid,sqlite3,tempfile
 from contextvars import ContextVar
 from contextlib import closing
 from foundation import ROOT,owned,read_json,write_json,digest,sha,now
@@ -40,12 +40,16 @@ SUMMARY=('adapter','site_id','city','mode','period','step_minutes','source_model
 
 def compact_write(path,value,root):
     path=owned(path,root);path.parent.mkdir(parents=True,exist_ok=True)
-    temp=owned(path.with_name('.'+path.name+'.'+uuid.uuid4().hex),root)
-    with temp.open('w',encoding='utf-8',newline='') as stream:
-        json.dump(value,stream,ensure_ascii=False,sort_keys=True,separators=(',',':'),allow_nan=False)
-        stream.flush();os.fsync(stream.fileno())
-    if temp.stat().st_size>32*1024**2:raise ValueError('单算例文件超过 32 MiB，需要进一步拆分详情；已完成算例保留。')
-    os.replace(temp,path)
+    handle,name=tempfile.mkstemp(prefix='t-',suffix='.tmp',dir=path.parent)
+    temp=owned(name,root)
+    try:
+        with os.fdopen(handle,'w',encoding='utf-8',newline='') as stream:
+            json.dump(value,stream,ensure_ascii=False,sort_keys=True,separators=(',',':'),allow_nan=False)
+            stream.flush();os.fsync(stream.fileno())
+        if temp.stat().st_size>32*1024**2:raise ValueError('单算例文件超过 32 MiB，需要进一步拆分详情；已完成算例保留。')
+        os.replace(temp,path)
+    finally:
+        if temp.exists():temp.unlink()
 
 def read_audit(folder,row):
     ref=row.get('audit')
@@ -176,6 +180,8 @@ def prepare(root,ident,output_contract='monthly_period_v1'):
         if output_contract==ex.DAILY_CONTRACT:
             from daily_reference import prepare_model
             model=prepare_model(original)
+        elif output_contract in ex.output_resolution.CONTRACTS:
+            model=ex.output_resolution.prepare(original,output_contract)
         else:model=ex.compact_model(original)
         del original
         weather=row['weather']['path'] if isinstance(row['weather'],dict) else row['weather']
@@ -194,7 +200,7 @@ def prepare(root,ident,output_contract='monthly_period_v1'):
         case=dict(site_id=row['site_id'],city=row['city'],mode=mode,period=row['period'],step_minutes=row['step_minutes'],
             weather=weather,dependencies=required,physical_digest=digest({k:v for k,v in model.items() if not k.startswith('Output')}),
             identity=digest(dict(inputs=identity,executor=codes)),index=index,model_file=name,model_sha256=sha(staging/name))
-        if output_contract==ex.DAILY_CONTRACT:case['output_contract']=output_contract
+        if output_contract!=ex.OUTPUT_CONTRACT:case['output_contract']=output_contract
         cases.append(case);del model;gc.collect()
         emit(stage='算例清单已保存',completed=index+1,total=len(manifest['cases']),city=row['city'])
     reader.unchanged()

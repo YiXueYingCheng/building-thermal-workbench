@@ -39,7 +39,9 @@ class Queue:
     def event(self,c,batch,action,details):c.execute('INSERT INTO events(created,batch,action,details) VALUES(?,?,?,?)',(now(),batch,action,canonical(details)))
 
     def policy(self):
-        with self.db() as c:return json.loads(c.execute("SELECT value FROM settings WHERE key='resources'").fetchone()[0])
+        with self.db() as c:value=json.loads(c.execute("SELECT value FROM settings WHERE key='resources'").fetchone()[0])
+        # Old workspaces retain their policy; the new optional control is off.
+        return dict(value,cpu_limit_enabled=value.get('cpu_limit_enabled',False),cpu_limit_percent=value.get('cpu_limit_percent',80))
 
     def set_policy(self,value):
         value=resources.settings(value)
@@ -134,7 +136,8 @@ class Queue:
                 if row['batch']!=b['id']:continue
                 case=plan['cases'][row['idx']];b['jobs'].append({k:row[k] for k in ('idx','status','pid','attempt','error','updated')}|{k:case[k] for k in ('city','mode','site_id','period','step_minutes')})
             b['counts']={s:sum(j['status']==s for j in b['jobs']) for s in ('pending','running','passed','reused','review','failed','interrupted','cancelled')}
-        path=self.folder/'worker.json';worker=read_json(path) if path.exists() else None
+        from worker_runtime import status
+        worker=status(self.root)
         return dict(resources=self.policy(),batches=batches,worker=worker)
 
     def results(self,ident):
@@ -153,8 +156,5 @@ class Queue:
         return dict(id=ident,record_name=plan['record_name'],record_id=plan['record_id'],revision=plan['revision'],bundle_id=plan['bundle_id'],conditioned_area_m2=plan['conditioned_area_m2'],results=results)
 
 def ensure_worker(root=ROOT):
-    root=Path(root).resolve();q=Queue(root)
-    import sys
-    with (q.folder/'worker.log').open('ab') as log:
-        subprocess.Popen([sys.executable,'-X','utf8',str(ROOT/'execution_worker.py'),'--root',str(root)],cwd=ROOT,
-            stdin=subprocess.DEVNULL,stdout=log,stderr=subprocess.STDOUT,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+    from worker_runtime import ensure
+    return ensure(root)

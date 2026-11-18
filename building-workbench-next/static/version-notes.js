@@ -30,7 +30,7 @@ async function versionNoteAction(button){
 }
 let copyDialogState=null;
 function openCopyDialog(){
- if(S.usageDirty)throw Error('请先保存或撤销房间配置编辑，再另存方案。');
+ if(S.usageDirty)throw usagePendingError('另存方案');
  let d=document.getElementById('copy-plan-dialog');if(!d){d=document.createElement('dialog');d.id='copy-plan-dialog';document.body.append(d);d.addEventListener('cancel',e=>{if(copyDialogState?.pending)e.preventDefault();});}
  const c=changes();if(c.name===S.saved.name)c.name=(c.name+' · 新方案').slice(0,100);
  copyDialogState={source_id:S.id,base_revision:S.saved.revision,changes:copy(c),pending:false};

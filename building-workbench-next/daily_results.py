@@ -44,7 +44,7 @@ def registered(root,batch_id,index):
     require(type(index) is int and index>=0,'算例编号无效。')
     root=Path(root).resolve();batches,jobs=queue_snapshot(root)
     matches=[b for b in batches if b['id']==batch_id];require(len(matches)==1,'批次不存在。')
-    b=matches[0];p,r,folder=frozen_batch(b,root);load_review(root,b['review'],b['checksum'])
+    b=matches[0];p,r,folder=frozen_batch(b,root);load_review(root,b['review'],b['checksum'],historical=True)
     require(p['output_contract']==CONTRACT and index<len(p['cases']),'不是有效的逐日参考算例。')
     c=p['cases'][index];evidence=result_evidence(jobs.get((batch_id,index)),c,root)
     model=read_json(owned(folder/c['model_file'],folder))

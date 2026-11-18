@@ -4,23 +4,26 @@ from pathlib import Path
 import re
 import uuid
 import os
+import output_resolution
 from foundation import ROOT, read_json, write_json, sha, digest, owned, now
 from model_adapter import VerifiedReader
 
 OUTPUT_CONTRACT = 'monthly_period_v1'
 DAILY_CONTRACT = 'daily_sensible_reference_v1'
-CODE_FILES = ('execution_inputs.py','execution_results.py','execution_queue.py','execution_worker.py','resources.py','daily_reference.py','resource_history.py','output_storage.py')
+CODE_FILES = ('execution_inputs.py','execution_results.py','execution_queue.py','execution_worker.py','resources.py','cpu_budget.py','worker_runtime.py','daily_reference.py','resource_history.py','output_storage.py','output_resolution.py')
 
 def code_hashes():
     return {str(ROOT/n):sha(ROOT/n) for n in CODE_FILES}
 
-def execution_revision(frozen,root):
+def execution_revision(frozen,root,*,historical=False):
     actual=code_hashes()
     if frozen==actual:return dict(kind='frozen',code_hashes=actual)
     path=Path(root)/'data/execution/runtime-compatibility.json'
     if path.exists():
         for upgrade in read_json(path).get('upgrades',[]):
             if upgrade['from_code_hashes']==frozen and upgrade['to_code_hashes']==actual:
+                if upgrade.get('historical_only') and not historical:
+                    continue
                 return dict(kind=upgrade.get('kind','audited_scheduling_update'),id=upgrade['id'],code_hashes=actual)
     raise ValueError('计算程序已更新，请重新准备计算。')
 
@@ -87,7 +90,7 @@ def compact_model(original):
     return model
 
 def validate_output(record, output_contract):
-    if output_contract not in (OUTPUT_CONTRACT,DAILY_CONTRACT):raise ValueError('不支持的结果输出类型。')
+    if output_contract not in (OUTPUT_CONTRACT,DAILY_CONTRACT):output_resolution.validate(record,output_contract)
     if output_contract==DAILY_CONTRACT:
         from daily_reference import require_baseline
         require_baseline(record)
@@ -115,6 +118,7 @@ def bundle(root,ident,expected=None,output_contract=OUTPUT_CONTRACT):
         if output_contract==DAILY_CONTRACT:
             from daily_reference import prepare_model
             prepared=prepare_model(model)
+        elif output_contract in output_resolution.CONTRACTS:prepared=output_resolution.prepare(model,output_contract)
         else:prepared=compact_model(model)
         # Verify every external schedule is already registered, never implicit cwd search.
         refs={str(Path(r['path']).resolve()):r['sha256'] for r in manifest['verified_sources']}
@@ -134,7 +138,7 @@ def bundle(root,ident,expected=None,output_contract=OUTPUT_CONTRACT):
         identity=dict(model=digest(prepared),dependencies=required,engine_files=engine_files,output_contract=output_contract)
         cases.append(dict(site_id=row['site_id'],city=row['city'],mode=mode,period=row['period'],step_minutes=row['step_minutes'],
             weather=weather,dependencies=required,model=prepared,physical_digest=digest(physical),identity=digest(identity)))
-        if output_contract==DAILY_CONTRACT:cases[-1]['output_contract']=output_contract
+        if output_contract!=OUTPUT_CONTRACT:cases[-1]['output_contract']=output_contract
     reader.unchanged()
     return manifest,record,engines[0],engine_files,cases
 
@@ -156,14 +160,15 @@ def prepare(root,ident,output_contract=OUTPUT_CONTRACT):
 def public(plan,root):
     return {k:plan[k] for k in ('id','created','bundle_id','record_name','record_id','revision','case_count','output_contract')} | dict(
         cases=[{k:c[k] for k in ('index','site_id','city','mode','period','step_minutes')} for c in plan['cases']],
+        output_detail=output_resolution.description(plan['output_contract'],plan['cases'][0]['period'],plan['cases'][0]['step_minutes']) if plan['cases'] else None,
         plan_sha256=sha(Path(root)/'data/execution/reviews'/plan['id']/'plan.json'))
 
-def load_review(root,ident,checksum):
+def load_review(root,ident,checksum,*,historical=False):
     if not re.fullmatch(r'review_[a-f0-9]{32}',str(ident)):raise ValueError('计算预览编号不正确。')
     folder=owned(Path(root)/'data/execution/reviews'/ident,root)
     if sha(folder/'plan.json')!=checksum:raise ValueError('待提交的计算清单变化，请重新预览。')
     plan=read_json(folder/'plan.json')
-    execution_revision(plan['code_hashes'],root)
+    execution_revision(plan['code_hashes'],root,historical=historical)
     record=read_json(folder/'record.json')
     if digest(record)!=plan['record_sha256']:raise ValueError('方案快照变化。')
     validate_output(record,plan['output_contract'])

@@ -10,6 +10,7 @@ import threading
 import shutil
 import datetime as dt
 import os
+import tempfile
 from contracts import normalize, validate, recipe_digest
 from foundation import ROOT, read_json, write_json, digest, sha, now, owned, canonical
 
@@ -182,10 +183,10 @@ def compile_fixed_case(record,site_id,catalog,reader=None):
     if adaptation:report['weather_adaptation']={**adaptation,**job['weather_adaptation']}
     return model,report
 
-def build_bundle(record,catalog,root=ROOT,site_ids=None):
-    with BUILD_LOCK:return _build_bundle(record,catalog,root,site_ids)
+def build_bundle(record,catalog,root=ROOT,site_ids=None,*,compact_check=False):
+    with BUILD_LOCK:return _build_bundle(record,catalog,root,site_ids,compact_check=compact_check)
 
-def _build_bundle(record,catalog,root,site_ids=None):
+def _build_bundle(record,catalog,root,site_ids=None,*,compact_check=False):
     """Unique bundle, all supported cases; only small epJSON files and receipts are written."""
     root=Path(root).resolve();reader=VerifiedReader(catalog);compiled=[]
     scope_sites=record['factors']['scope']['site_ids']
@@ -206,7 +207,10 @@ def _build_bundle(record,catalog,root,site_ids=None):
     identity=dict(recipe=recipe_digest(normalize(record)),record=digest(record),adapter_sha256=digest({p.name:sha(p) for p in [Path(__file__),Path(__file__).with_name('construction_library.py'),Path(__file__).with_name('material_types.py'),Path(__file__).with_name('surface_materials.py'),Path(__file__).with_name('dynamic_adapter.py'),Path(__file__).with_name('calendar_library.py'),Path(__file__).with_name('calendar_preview.py'),Path(__file__).with_name('weather_import.py'),Path(__file__).with_name('source_locations.py')]+([Path(__file__).with_name('building_configuration.py'),Path(__file__).with_name('component_library.py'),Path(__file__).with_name('usage_schedules.py')] if __import__('building_configuration').has_configuration(record) else [])+([Path(__file__).with_name(n) for n in ('ordinary_building.py','ordinary_envelope.py','ordinary_materials.py','ordinary_orientation.py','queue_calendar.py','transition_confirmation.py','building_configuration.py','component_library.py','usage_schedules.py')] if record['provenance']['adapter']=='ordinary_building_v1' else [])}))
     if reader.location_uses:identity['source_locations']=digest(reader.location_uses)
     if selected!=scope_sites:identity['selected_site_ids']=selected
-    ident='inputs_'+digest(identity)[:32];folder=owned(root/'data/model-inputs'/ident,root)
+    # Only private import checks use a short alias. Formal input IDs stay stable;
+    # the complete identity and SHA-256 checks remain in either manifest.
+    ident=('i_'+digest(identity)[:12]) if compact_check else ('inputs_'+digest(identity)[:32])
+    folder=owned(root/'data/model-inputs'/ident,root)
     if folder.exists():
         saved=read_json(folder/'manifest.json')
         if saved.get('identity')!=identity or saved['case_count']!=len(compiled):raise ValueError('已有输入包清单不一致。')
@@ -219,8 +223,8 @@ def _build_bundle(record,catalog,root,site_ids=None):
     estimated=sum(len(str(model).encode('utf-8')) for model,_ in compiled)*3
     if shutil.disk_usage(root).free<estimated+100*1024*1024:raise ValueError('可用空间不足以保存本批输入并保留 100 MB 余量。')
     final_folder=folder
-    folder=owned(final_folder.parent/('.preparing_'+uuid.uuid4().hex),root)
-    folder.mkdir(parents=True,exist_ok=False)
+    final_folder.parent.mkdir(parents=True,exist_ok=True)
+    folder=owned(tempfile.mkdtemp(prefix='.p-',dir=final_folder.parent),root)
     rows=[]
     for index,(model,report) in enumerate(compiled,1):
         name=f'{index:03d}.epJSON';write_json(folder/name,model,root)

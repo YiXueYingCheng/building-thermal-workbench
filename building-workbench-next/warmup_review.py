@@ -54,7 +54,7 @@ def validate_assessment(root,b,j,expected_failure=None):
     for ref in refs:require(sha(ref['path'])==ref['sha256'],'诊断引用资料发生变化，请重新分析。')
     for file,h in raw['artifacts'].items():
         require(any(v['path']==file and v['sha256']==h for v in refs),'原始计算文件没有绑定到分析依据。')
-    plan=load_review(root,b['review'],b['checksum']);case=plan['cases'][j['idx']]
+    plan=load_review(root,b['review'],b['checksum'],historical=True);case=plan['cases'][j['idx']]
     require(case['identity']==j['identity'] and case['site_id']==raw['site_id'] and case['model_sha256']==a['model_sha256'],'冻结输入与诊断对象不一致。')
     model_path=next((path for path in raw['artifacts'] if Path(path).name=='model.epJSON'),None)
     require(model_path is not None and sha(model_path)==case['model_sha256'],'实际模型与冻结输入不一致。')

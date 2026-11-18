@@ -18,6 +18,7 @@ import sqlite3
 import struct
 import subprocess
 from energyplus_runtime import ENGINE, MODEL_VERSION
+from door_mapping import inspect_doors, validate_confirmation, material_properties
 
 PROJECT=pathlib.Path(__file__).resolve().parents[1]
 WORKSPACE=PROJECT.parents[1]
@@ -28,6 +29,7 @@ parser.add_argument('--destep-source',type=pathlib.Path,default=WORKSPACE/'work/
 parser.add_argument('--source',type=pathlib.Path,default=WORKSPACE/'outputs/01a0805a-fcec-7b73-9ee0-021b342ea2a4/drawing26-model-data/source')
 parser.add_argument('--output',type=pathlib.Path,default=PROJECT/'projects/Drawing26/source-mapped')
 parser.add_argument('--confirmed-door-thickness-mm',type=float,default=25.3,help='Explicit Drawing26 door thickness assumption, based on the identical previously UI-checked standard door library record; not inferred from wall thickness.')
+parser.add_argument('--confirmed-door-mappings',type=pathlib.Path,help='Explicit per-type confirmation from source inspection; revalidated against these tables.')
 parser.add_argument('--model-only',action='store_true',default=True,help='Generate the EnergyPlus model without reading DeST result or shadow-calculation tables.')
 parser.add_argument('--source-original',type=pathlib.Path,default=WORKSPACE/'work/drawing26-extraction-20260917/source',help='Reference folder for source-copy hash verification; may be an immutable earlier snapshot.')
 parser.add_argument('--project-id',default='Drawing26')
@@ -92,7 +94,7 @@ issues=[
  'ROOM_RELATION is empty; no ventilation or infiltration is introduced.',
  'Source furniture coefficients are all 1; no added furniture capacity is introduced.',
  'Window.TYPE is resolved through WINDOW_TYPE_DATA as in the inspected destep mapper; SHGC=0.87*SC is approximate. The detailed construction reference is retained for review.',
- 'Door thickness 25.3 mm is an explicit mapping assumption. Its SYS_DOOR record and wood properties match the previously UI-confirmed standard door. GAP_LENGTH is not treated as a generic thickness field for other door types.',
+ 'Opaque doors use individually confirmed thickness and source conductivity/density/specific heat; see the doors audit. Surface absorptances (thermal 0.85, solar/visible 0.55) and MediumSmooth roughness are conversion assumptions, not measured aluminium surface properties.',
  'Door 2892 exceeds physical room-side wall boundaries by 71.56 mm; source middle-plane location is retained, with a separate boundary report.',
  'Visible absorptance, roughness and aggregate radiant distribution are approximations.',
  'The intermediate monthly ground and lighting objects are replaced by the final project assembler; use the final model files for computation.',
@@ -109,12 +111,16 @@ else:
 reference=args.reference_tables.resolve()
 reference_doors=json.loads((reference/'SYS_DOOR.json').read_text(encoding='utf-8-sig'))
 reference_materials=json.loads((reference/'SYS_MATERIAL.json').read_text(encoding='utf-8-sig'))
-for door in D['DOOR']:
-    record=next(r for r in D['SYS_DOOR'] if r['DOOR_ID']==door['DOOR_CONSTRUCTION'])
-    old=next(r for r in reference_doors if r['DOOR_ID']==record['DOOR_ID'])
-    assert record==old, 'Door differs from previously checked standard library record'
-    material=MATERIAL[record['MATERIAL_ID']]
-    assert material==next(r for r in reference_materials if r['MATERIAL_ID']==record['MATERIAL_ID'])
+door_models, door_errors = inspect_doors(D, reference_doors, reference_materials)
+if door_errors:raise ValueError('; '.join(door_errors))
+if args.confirmed_door_mappings:
+    confirmation=json.loads(args.confirmed_door_mappings.read_text(encoding='utf-8-sig'))
+    if confirmation.get('models') != door_models:raise ValueError('Door mapping changed since inspection; inspect and confirm again.')
+else:
+    confirmation={'door_mm': args.confirmed_door_thickness_mm}
+validate_confirmation(confirmation, door_models)
+confirmed_doors={m['type_id']:m for m in door_models}
+
 def add(kind,name,**fields):
     assert name not in model.setdefault(kind,{}),(kind,name)
     model[kind][name]=fields
@@ -197,15 +203,14 @@ for table,kind in [('WINDOW','Window'),('DOOR','Door')]:
             window_map.append({'id':obj['ID'],'type_id':obj['TYPE'],'type_name':t['NAME'],'u_factor':t['K'],'SC':t['SC'],'SHGC_approximation':shgc,'visible_transmittance':t['LIGHT_TRANS_RATIO'],'detailed_construction_id':obj['WINDOW_CONSTRUCTION'],'area_m2':area(v)})
         else:
             t=door_types[obj['DOOR_CONSTRUCTION']]
-            assert t['CONDUCT_CO']>0 and t['GLASS_RAT']==0 and t['APP_ID']==0
-            if args.confirmed_door_thickness_mm is None:
-                add('Material:NoMass',con,roughness='MediumSmooth',thermal_resistance=t['CONDUCT_CO'],thermal_absorptance=.85,solar_absorptance=.55,visible_absorptance=.55)
-            else:
-                assert args.confirmed_door_thickness_mm==25.3 and t['GAP_LENGTH']==25.3 and t['MATERIAL_ID']==62,'Explicit thickness mapping is limited to the identical standard wood-door record'
-                wood=MATERIAL[t['MATERIAL_ID']]
-                add('Material',con,roughness='MediumSmooth',thickness=args.confirmed_door_thickness_mm/1000,conductivity=wood['CONDUCTIVITY'],density=wood['DENSITY'],specific_heat=wood['SPECIFIC_HEAT'],thermal_absorptance=.85,solar_absorptance=.55,visible_absorptance=.55)
+            mapped=confirmed_doors[str(obj['DOOR_CONSTRUCTION'])]
+            add('Material',con,**material_properties(mapped))
             add('Construction',con,outside_layer=con)
-            door_map.append({'id':obj['ID'],'type_name':t['CNAME'],'thermal_resistance_used':t['CONDUCT_CO'] if args.confirmed_door_thickness_mm is None else args.confirmed_door_thickness_mm/1000/wood['CONDUCTIVITY'],'area_m2':area(v),'thermal_mass':'not converted' if args.confirmed_door_thickness_mm is None else 'confirmed wood thickness, density and heat capacity','source_CONDUCT_CO':t['CONDUCT_CO'],'confirmed_thickness_mm':args.confirmed_door_thickness_mm})
+            door_map.append(dict(id=obj['ID'],type_name=t['CNAME'],type_id=t['DOOR_ID'],
+                thermal_resistance_used=mapped['thermal_resistance_m2K_W'],area_m2=area(v),
+                thermal_mass='confirmed thickness, source density and specific heat',
+                source_CONDUCT_CO=t['CONDUCT_CO'],confirmed_thickness_mm=mapped['thickness_mm'],
+                confirmed_mapping=mapped))
         for side in (1,2):
             s=SURF[obj[f'SIDE{side}']];peer=SURF[obj[f'SIDE{3-side}']]
             if s['OF_ROOM'] not in ROOM:continue

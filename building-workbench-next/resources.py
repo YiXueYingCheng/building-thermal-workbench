@@ -7,6 +7,7 @@ import ctypes
 import math
 import os
 import shutil
+import cpu_budget
 from ctypes import wintypes as w
 
 GiB = 2**30
@@ -38,6 +39,13 @@ def settings(value=None):
             raise ValueError('内存保留至少1 GiB，磁盘保留至少2 GiB；请输入范围内有限数值。')
     if out['priority'] not in ('below_normal', 'normal'):
         raise ValueError('进程优先级只支持较低或普通。')
+    out['cpu_limit_enabled'] = value.get('cpu_limit_enabled', False)
+    out['cpu_limit_percent'] = value.get('cpu_limit_percent', 80)
+    if type(out['cpu_limit_enabled']) is not bool:
+        raise ValueError('CPU 控制开关须为开启或关闭。')
+    v = out['cpu_limit_percent']
+    if type(v) not in (int, float) or not math.isfinite(v) or not 10 <= v <= 100:
+        raise ValueError('CPU 目标占用应为 10–100% 的有限数值。')
     return out
 
 
@@ -50,7 +58,7 @@ def snapshot(path):
         raise OSError('无法读取本机内存状态，暂不派发新任务。')
     return dict(total_gib=m.total/GiB, available_gib=m.available/GiB,
                 commit_available_gib=m.commit_available/GiB,
-                disk_free_gib=shutil.disk_usage(path).free/GiB, logical_cpus=os.cpu_count())
+                disk_free_gib=shutil.disk_usage(path).free/GiB, logical_cpus=os.cpu_count(),cpu=cpu_budget.snapshot())
 
 
 def process_memory(handle):
@@ -83,9 +91,11 @@ def dispatch_budget(policy,machine,running,per_job_gib=.75,per_job_disk_gib=.1):
     elif machine['available_gib']<needed:reason=f'等待内存：新增一路前需可用 {needed:.2f} GiB，当前 {machine["available_gib"]:.2f} GiB'
     elif machine['commit_available_gib']<commit_needed:reason=f'等待系统可提交内存：需 {commit_needed:.2f} GiB，当前 {machine["commit_available_gib"]:.2f} GiB'
     elif machine['disk_free_gib']<disk_needed:reason='等待磁盘：剩余空间低于保留线'
+    cpu = cpu_budget.admission(policy, machine, running)
+    if reason is None and cpu['reason']:reason=cpu['reason']
     return dict(reason=reason,allowed=reason is None,reserve_gib=policy['reserve_gib'],next_job_gib=per_job_gib,
         running_growth_gib=growing,required_available_gib=needed,available_gib=machine['available_gib'],
-        required_commit_gib=commit_needed,available_commit_gib=machine['commit_available_gib'])
+        required_commit_gib=commit_needed,available_commit_gib=machine['commit_available_gib'],cpu=cpu)
 
 def dispatch_reason(policy,machine,running,per_job_gib=.75,per_job_disk_gib=.1):
     return dispatch_budget(policy,machine,running,per_job_gib,per_job_disk_gib)['reason']

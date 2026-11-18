@@ -10,10 +10,12 @@ import json, math, sqlite3, time
 from foundation import now
 from execution_results import HEAT, COOL
 from result_availability import jobs, check_file, path_checked, stamp
+from review_evidence import reviewed
+from review_annotations import summary as review_summary
 
 MAX_DAYS = 31
 MAX_DICTIONARY = 10000
-FREQUENCIES = {-1:'HVAC 系统步', 0:'区域步', 1:'逐小时', 2:'逐日', 3:'月度', 4:'整个计算时段'}
+FREQUENCIES = {-1:'区域步', 0:'HVAC 系统步', 1:'逐小时', 2:'逐日', 3:'月度', 4:'整个计算时段'}
 
 
 def require(ok, message):
@@ -31,6 +33,7 @@ def source(root, batch, index, budget=30):
     require(summary['status']=='verified', '汇总未通过核对：'+summary.get('reason',''))
     require(summary['bytes']<=8*1024**2, '汇总超过本次读取范围。')
     raw=json.loads(sw[0].read_text('utf8'))
+    review_info=reviewed(raw,root)
     require(raw.get('identity')==job['identity'], '结果身份与任务登记不一致。')
     require((job['status'] in ('passed','reused') and raw.get('status')=='passed') or
             (job['status']=='review' and raw.get('status')=='review'), '结果接受状态需要核对。')
@@ -56,6 +59,8 @@ def source(root, batch, index, budget=30):
             out=dict(batch=batch,index=index,identity=job['identity'],summary_sha256=job['result_sha256'],
                      sql_sha256=artifacts[paths[0]],city=raw.get('city'),period=raw.get('period'),
                      step_minutes=raw.get('step_minutes'),registered_status=job['status'],checked_at=now(),
+                     acceptance_note=(review_summary(review_info) or review_info['label']+'；'+review_info['display_scope']) if review_info else ('警告待复核' if job['status']=='review' else '原结果自动校验通过'),
+                     review_info=review_info,
                      note='只读已登记输出；不改变接受结论，不提交计算。日期按原模拟日历，未换算为当前年份或浏览器时区。')
             yield db,raw,env[0]['EnvironmentPeriodIndex'],out
             no_journal()
@@ -111,8 +116,40 @@ def inventory(root,batch,index):
         daily=systems(rows) if any(t['IntervalType']==2 for t in times) else {}
         out.update(frequencies=times,coverage=coverage,dictionary=rows,systems=sorted(daily),
                    has_subdaily_time_records=detailed,max_days=MAX_DAYS,
-                   hourly_note='发现小时／步级时间记录；首批仅开放逐日冷热需求，逐时变量配对与物理位置仍待验收。' if detailed else '本结果没有逐小时／逐步时间记录。求解步长不等于输出频率；月均室温和平均状态不能还原变化过程。',
+                   hourly_note='发现小时／步级时间记录，可按原变量和对象读取有限日期范围；房间与表面位置不从对象名称自动推断。' if detailed else '本结果没有逐小时／逐步时间记录。求解步长不等于输出频率；月均室温和平均状态不能还原变化过程。',
                    state_note='状态／作息按原变量名称列出。平均状态值不代表瞬时状态，也不能据此推断精确切换时刻。')
+    return out
+
+
+def series(root,batch,index,variable,start,end):
+    """One raw series, at most 31 days / 12,000 points; no resampling."""
+    with source(root,batch,index) as (db,raw,env,out):
+        first=day_number(start,raw['period']);last=day_number(end,raw['period'])
+        require(1<=last-first+1<=31,'每次请选择连续 1—31 天。')
+        row=next((r for r in dictionary(db) if r['ReportDataDictionaryIndex']==variable),None)
+        require(row is not None,'输出项不存在。')
+        types={'Daily':(2,1440),'Hourly':(1,60),'Zone Timestep':(-1,raw['step_minutes'])}
+        require(row['ReportingFrequency'] in types,'请选择逐日、逐时或区域步输出。')
+        it,minutes=types[row['ReportingFrequency']];expected=(last-first+1)*1440//minutes
+        require(expected<=12000,'本次范围超过 12,000 个时间点，请缩短日期范围。')
+        points=[dict(r) for r in db.execute('''SELECT t.TimeIndex,t.Year,t.Month,t.Day,t.Hour,t.Minute,t.Interval,t.SimulationDays,r.Value
+            FROM ReportData r JOIN Time t USING(TimeIndex)
+            WHERE r.ReportDataDictionaryIndex=? AND t.EnvironmentPeriodIndex=? AND t.IntervalType=?
+            AND COALESCE(t.WarmupFlag,0)=0 AND t.SimulationDays BETWEEN ? AND ? ORDER BY t.TimeIndex LIMIT 12001''',
+            (variable,env,it,first,last))]
+        require(len(points)==expected and len({p['TimeIndex'] for p in points})==expected,'所选范围的数据缺失或重复；未插值或补零。')
+        origin=dt.date(2025,*raw['period'][:2]);slots=set()
+        for p in points:
+            date=origin+dt.timedelta(days=p['SimulationDays']-1)
+            require((p['Month'],p['Day'])==(date.month,date.day) and p['Interval']==minutes and
+                    isinstance(p['Value'],(int,float)) and math.isfinite(p['Value']),'时间或数值未通过核对。')
+            ending=1440 if it==2 else p['Hour']*60+p['Minute']
+            require(minutes<=ending<=1440 and ending%minutes==0,'明细时刻与统计间隔不一致。')
+            slots.add((p['SimulationDays'],ending))
+            p['label']=f"{p['Month']:02}-{p['Day']:02} {ending//60:02}:{ending%60:02}"
+        require(len(slots)==expected,'明细时刻重复。')
+        out.update(variable=row,start=start,end=end,rows=points,
+                   note='时间为原模拟当地时间的区间结束时刻。Sum 是区间累积量，Avg 是区间均值；原单位保留，不自动换算为耗电量。')
     return out
 
 

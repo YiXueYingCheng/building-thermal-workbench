@@ -76,6 +76,7 @@ import result_index
 import source_overview
 import building_geometry
 import result_review
+from bulk_result_review import BulkReviews
 from research_sets import Sets
 import research_exports
 from research_execution import Runs as SetRuns
@@ -108,9 +109,10 @@ def make_server(root=ROOT,port=None,start_workers=False):
         return approved_sources(Sets(catalog,root),store.get(ident,revision))
     input_jobs=InputJobs(root,preparation_bindings)
     result_reviews=result_review.Reviews(root)
+    bulk_reviews=BulkReviews(root,result_reviews)
     set_runs=SetRuns(root,lambda:catalog,workers=start_workers)
     def cleanup_active():
-        return bool(result_reviews.active) or any(j['state'] in ('queued','running') for j in list(input_jobs.jobs.values())) or any(not f.done() for f in list(set_runs.futures.values()))
+        return bool(bulk_reviews.active) or bool(result_reviews.active) or any(j['state'] in ('queued','running') for j in list(input_jobs.jobs.values())) or any(not f.done() for f in list(set_runs.futures.values()))
     storage_requests=result_storage.Requests()
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
@@ -144,9 +146,19 @@ def make_server(root=ROOT,port=None,start_workers=False):
             if not self.safe_host():return self.error(403,'访问主机不受支持。')
             url=urlparse(self.path);route=unquote(url.path);query=parse_qs(url.query)
             try:
+                if route in ('/bulk-result-review.js','/output-resolution.js','/result-series.js'):
+                    return self.send(200,(root/'static'/route[1:]).read_bytes(),'text/javascript; charset=utf-8')
+                match=re.fullmatch(r'/api/bulk-result-reviews/(bulk_[a-f0-9]{32})',route)
+                if match:return self.send(200,bulk_reviews.get(match[1]))
+                if route=='/api/result-timeline/series':
+                    return self.send(200,result_timeline.series(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0]),int(query.get('variable',['-1'])[0]),query.get('start',[''])[0],query.get('end',[''])[0]))
                 if route=='/summary-retention.js':return self.send(200,(root/'static/summary-retention.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route in ('/result-timeline.js','/result-timeline.css'):
                     return self.send(200,(root/'static'/route[1:]).read_bytes(),'text/javascript; charset=utf-8' if route.endswith('.js') else 'text/css; charset=utf-8')
+                if route in ('/api/failed-result','/api/failed-result/download'):
+                    from failed_result_diagnostics import collect
+                    download=route.endswith('/download')
+                    return self.send(200,collect(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0]),download),'application/zip' if download else 'application/json; charset=utf-8')
                 if route=='/api/result-timeline/inventory':
                     return self.send(200,result_timeline.inventory(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0])))
                 if route=='/api/result-timeline/daily':
@@ -210,7 +222,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/workbench-theme.css':return self.send(200,(root/'static/workbench-theme.css').read_bytes(),'text/css; charset=utf-8')
                 if route=='/api/building-imports':return self.send(200,accdb_import.listing(root))
                 if route=='/api/building-import-options':return self.send(200,accdb_import.options(catalog,root)[0])
-                match=re.fullmatch(r'/api/building-imports/(import_[a-f0-9]{32})',route)
+                match=re.fullmatch(r'/api/building-imports/(import_(?:[a-f0-9]{12}|[a-f0-9]{32}))',route)
                 if match:return self.send(200,accdb_import.status(root,match[1]))
                 if route=='/comparison-library.js':return self.send(200,(root/'static/comparison-library.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/version-history.js':return self.send(200,(root/'static/version-history.js').read_bytes(),'text/javascript; charset=utf-8')
@@ -231,13 +243,14 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/building-geometry.js':return self.send(200,(root/'static/building-geometry.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/envelope-navigation.js':return self.send(200,(root/'static/envelope-navigation.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/building-viewer.js':return self.send(200,(root/'static/building-viewer.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route=='/wall-optics-reuse.js':return self.send(200,(root/'static/wall-optics-reuse.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/room-viewer.js':return self.send(200,(root/'static/room-viewer.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/building-info.js':return self.send(200,(root/'static/building-info.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/material-viewer.js':return self.send(200,(root/'static/material-viewer.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/material-catalog.js':return self.send(200,(root/'static/material-catalog.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/scope-results-viewer.js':return self.send(200,(root/'static/scope-results-viewer.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/input-workflow.js':return self.send(200,(root/'static/input-workflow.js').read_bytes(),'text/javascript; charset=utf-8')
-                if route in ('/material-types.js','/material-inputs.js','/material-registration.js','/reference-library.js','/weather-downloads.js','/construction-library.js'):
+                if route in ('/material-types.js','/material-inputs.js','/material-registration.js','/reference-library.js','/weather-downloads.js','/weather-folder.js','/construction-library.js'):
                     return self.send(200,(root/'static'/route[1:]).read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/api/reference-library':
                     import reference_library
@@ -332,6 +345,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/api/output-storage':return self.send(200,output_storage.status(root))
                 if route=='/api/execution':
                     state=navigation_cache.queue_state(queue,root);state['machine']=resources.snapshot(root)
+                    state['cpu_budget']=resources.cpu_budget.admission(state['resources'],state['machine'],[])
                     return self.send(200,state)
                 if route=='/api/execution/validation':
                     proof=read_json(root/'verification/numerical-validation.json')
@@ -467,6 +481,15 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     from database_picker import browse
                     return self.send(200,browse(root,body.get('path',''),kind='weather'))
                 if route=='/api/weather-import/inspect':return self.send(200,weather_import.inspect(body.get('path'))[0])
+                if route=='/api/weather-import/folder-browse':
+                    from output_picker import browse
+                    return self.send(200,browse(root,body.get('path',''),title='选择包含 EPW 气象的文件夹'))
+                if route=='/api/weather-import/folder-scan':
+                    return self.send(200,weather_import.scan_folder(body.get('path'),body.get('recursive',False)))
+                if route=='/api/weather-import/folder-register':
+                    result=weather_import.register_folder_item(root,body['path'],body['expected_sha256'],body['metadata'],catalog)
+                    catalog=current(root);store=Store(catalog,root)
+                    return self.send(201,result)
                 if route=='/api/weather-import/register':
                     result=weather_import.register(root,body['path'],body['expected_sha256'],body['metadata'],catalog)
                     catalog=current(root);store=Store(catalog,root)
@@ -497,6 +520,8 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     result=accdb_import.publish(root,body['id'],body['expected_sha256']);catalog=current(root);store=Store(catalog,root)
                     return self.send(201,result)
                 if route=='/api/calculation-budget':return self.send(200,calculation_budget.build(root,body['review_id'],body['plan_sha256']))
+                if route=='/api/bulk-result-reviews':return self.send(202,bulk_reviews.start(body.get('batch')))
+                if route=='/api/bulk-result-reviews/accept':return self.send(202,bulk_reviews.accept(body['id'],body['preview_sha256'],body.get('decision'),body.get('confirmed') is True))
                 if route=='/api/result-reviews':
                     return self.send(200,result_reviews.start(body['batch'],body['index'],body.get('force') is True))
                 if route=='/api/result-reviews/accept':
@@ -576,10 +601,12 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/api/weather-downloads/browse':
                     from output_picker import browse
                     return self.send(200,browse(root,body.get('path',''),title='选择气象下载文件夹'))
-                if route in ('/api/weather-downloads/start','/api/weather-downloads/cancel','/api/weather-downloads/resume','/api/weather-downloads/register'):
+                if route in ('/api/weather-downloads/start','/api/weather-downloads/cancel','/api/weather-downloads/resume','/api/weather-downloads/register','/api/weather-downloads/fallback-preview','/api/weather-downloads/fallback-start'):
                     import weather_downloads
                     op=route.rsplit('/',1)[1]
                     if op=='start':result=weather_downloads.start(root,body.get('ids'),body.get('output'))
+                    elif op=='fallback-preview':result=weather_downloads.fallback_preview(root,body['id'])
+                    elif op=='fallback-start':result=weather_downloads.fallback_start(root,body['id'],body.get('ids'),body.get('stamp'),body.get('reviewed'))
                     elif op=='register':
                         result=weather_downloads.register(root,body['id'],body.get('ids'),catalog,body.get('reviewed'))
                         catalog=current(root);store=Store(catalog,root)
@@ -654,7 +681,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     return self.send(201,result)
                 if route=='/api/input-preparations':
                     record=store.get(body['id'],body['revision'])
-                    return self.send(202,input_jobs.start(record,catalog,body.get('kind','generate'),body.get('bundle_id'),body.get('record_sha256')))
+                    return self.send(202,input_jobs.start(record,catalog,body.get('kind','generate'),body.get('bundle_id'),body.get('record_sha256'),body.get('output_contract','monthly_period_v1')))
                 if route=='/api/execution/prepare':
                     with preparation_slot(root):result=preparation_recovery.prepare(root,body['bundle_id'],store,body.get('record'),body.get('separate_from'),body.get('output_contract','monthly_period_v1'))
                     return self.send(200 if result['preparation_reused'] else 201,result)
@@ -667,15 +694,19 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     return self.send(200,browse(root,body.get('path','')))
                 if route=='/api/execution/submit':
                     result=queue.submit(body['review_id'],body['plan_sha256'],body.get('destination'))
-                    if start_workers and not result['reused_submission']:ensure_worker(root)
+                    if start_workers and not result['reused_submission']:result['startup']=ensure_worker(root)
                     return self.send(201,result)
                 if route=='/api/execution/control':
+                    # Finish worker interruption recovery BEFORE applying the user's
+                    # per-batch resume/retry, otherwise recovery can pause it again.
+                    if start_workers and body['action'] in ('resume','retry'):
+                        startup=ensure_worker(root)
+                        if not startup['ready']:return self.error(503,startup['error'])
                     result=queue.control(body['id'],body['action'])
-                    if start_workers:ensure_worker(root)
                     return self.send(200,result)
                 if route=='/api/execution/wake':
-                    if start_workers:ensure_worker(root)
-                    return self.send(200,dict(requested=True))
+                    result=ensure_worker(root) if start_workers else dict(ready=False,error='此隔离界面未启用计算后台。')
+                    return self.send(200,dict(requested=True,**result))
                 if route=='/api/comparisons':
                     result=store.save_comparison(body['name'],body['left'],body['right'],body['metric'])
                     return self.send(200 if result['reused_comparison'] else 201,dict(**result['comparison'],reused_comparison=result['reused_comparison']))
@@ -699,7 +730,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
     server.disk_observer=observer
     close_server=server.server_close
     def close_with_inspections():
-        inspections.close();input_jobs.close();result_reviews.close();set_runs.close();close_server()
+        inspections.close();input_jobs.close();bulk_reviews.close();result_reviews.close();set_runs.close();close_server()
     server.server_close=close_with_inspections
     return server
 

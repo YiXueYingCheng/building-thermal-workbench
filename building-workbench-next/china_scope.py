@@ -2,13 +2,33 @@
 from pathlib import Path
 import copy
 from foundation import read_json, digest, ROOT
-from scope_management import scope_value, weather_detail
+from scope_management import scope_value, weather_detail, registered
+from starter_library import bundled_file
 
 REGIONS = frozenset('110000 120000 130000 140000 150000 210000 220000 230000 310000 320000 330000 340000 350000 360000 370000 410000 420000 430000 440000 450000 460000 500000 510000 520000 530000 540000 610000 620000 630000 640000 650000 710000 810000 820000'.split())
 
 
+def public_preset(catalog):
+    """Resolve bundled download identities to this workspace's registered site IDs."""
+    rows=[r for r in read_json(bundled_file('examples/weather/sources.json'))['weather'] if r['source_group']=='china34']
+    regions=[]
+    for row in rows:
+        candidates=sorted((s for s in registered(catalog).values() if s.get('eligible') and s.get('weather',{}).get('sha256')==row['epw_sha256']),key=lambda s:s['id'])
+        site=candidates[0] if candidates else {}
+        candidate=dict(site_id=site.get('id',row['id']),default=True,city=row['name'],climate=site.get('climate'),
+            sha256=row['epw_sha256'],dataset=row['dataset'],source_url=row['source_url'],
+            reason='公开下载清单中的地区预设地点；按气象文件校验值匹配本工作区登记。',
+            climate_sampling='沿用本工作区已登记分类；未分类不自动推断。',
+            header={k:site.get(k) for k in ('station','elevation','latitude','longitude')},metrics=None)
+        regions.append(dict(id=row['id'].removeprefix('china34_'),name=row['region'],candidates=[candidate]))
+    data=dict(kind='public_download_catalog',regions=regions,
+        note='本预设来自随包公开的下载清单；先在“气象下载”选择中国 34 地区，下载并登记后回来选择。仅下载到文件夹还不算登记；同名城市的不同气象文件不自动替代。')
+    return dict(data=data,sha256=digest(data))
+
+
 def describe(catalog, root=ROOT):
-    packet = read_json(Path(root)/'data/china34-preset.json')
+    file=Path(root)/'data/china34-preset.json'
+    packet = read_json(file) if file.is_file() else public_preset(catalog)
     data = packet['data']
     if digest(data) != packet['sha256']:
         raise ValueError('中国 34 地区预设内容校验失败。')
@@ -29,7 +49,8 @@ def describe(catalog, root=ROOT):
             seen.add(ident)
             site = catalog['sites'].get(ident, {})
             c['available'] = bool(site.get('eligible') and site.get('weather', {}).get('sha256') == c['sha256'] and site.get('climate') == c['climate'])
-            c['unavailable_reason'] = '' if c['available'] else '登记气象缺失、暂缓，或内容标识/气候分类已变化，请核对来源。'
+            c['unavailable_reason'] = '' if c['available'] else ('此预设气象尚未登记；请到“气象下载”下载并登记后重新打开。' if data.get('kind')=='public_download_catalog' else '登记气象缺失、暂缓，或内容标识/气候分类已变化，请核对来源。')
+    result['available_regions']=sum(any(c['available'] for c in r['candidates']) for r in result['regions'])
     return result
 
 
