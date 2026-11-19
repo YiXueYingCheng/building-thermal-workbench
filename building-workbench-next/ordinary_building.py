@@ -58,7 +58,11 @@ def capability(record,catalog):
   if f['condition']['reference_runs']:
    from ordinary_orientation import validate_binding
    validate_binding(r,catalog)
-  if r['numerics']!=s['numerics']:raise ValueError('此建筑首轮沿用已验证的 5 min 步长与原计算引擎。')
+  from solid_eca import enabled,numerics
+  if enabled(r):
+   numerics(r,s)
+   if any(c.get('channel')=='orientation' and c.get('mode')=='calendar' for c in f['condition']['controls']) and not f['condition']['reference_runs']:raise ValueError('等待新版 1 min W00 逐日参考与日历；尚未生成或提交翻面输入。')
+  elif r['numerics']!=s['numerics']:raise ValueError('此建筑首轮沿用已验证的 5 min 步长与原计算引擎。')
   if set(f['scope'])-{'site_ids','period','aggregation'}:raise ValueError('范围包含未支持字段。')
   if any(i!=s['site']['id'] and (catalog['sites'][i].get('source_kind') not in ('reviewed_global','imported_epw_v1') or not catalog['sites'][i].get('eligible')) for i in f['scope']['site_ids']):raise ValueError('所选地点没有可用的登记气象。')
   resolve(r,catalog,s['usage'])
@@ -112,7 +116,7 @@ def compile_case(record,site_id,catalog,reader,operation_mode=None):
  days=(dt.date(2025,*period[:2])-dt.date(2025,1,1)).days
  rp['day_of_week_for_start_day']=('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday')[days%7]
  effective=resolve(record,catalog,s['usage'])[1]
- report=dict(adapter=ADAPTER,site_id=site_id,city=site['name'],mode=mode,period=period,step_minutes=5,
+ report=dict(adapter=ADAPTER,site_id=site_id,city=site['name'],mode=mode,period=period,step_minutes=record['numerics']['step_minutes'],
   source_model=s['models'][mode],weather=site['weather'],dependencies=s['dependencies'],source_notes=s['notes'])
  report['time_basis']=dict(statistics_period=copy.deepcopy(period),statistics_days=(dt.date(2025,*period[2:])-dt.date(2025,*period[:2])).days+1,
   weather_prehistory_days=0,warmup_strategy='source_model',warmup_parameters={k:v for k,v in next(iter(original['Building'].values())).items() if 'warmup' in k or 'convergence' in k},
@@ -123,5 +127,10 @@ def compile_case(record,site_id,catalog,reader,operation_mode=None):
  from ordinary_materials import apply as apply_material
  material=apply_material(m,record,s)
  if material:report['material_application']=material
+ from solid_eca import enabled,apply_numerics,compact_schedules
+ if enabled(record):
+  apply_numerics(m,record,s)
+  report['numerical_method']=record['numerics']['heat_transfer_profile']
+  report['schedule_compaction']=compact_schedules(m,report['dependencies'],reader)
  report.update(adapter=ADAPTER,envelope_changes=applied,differences=changes(original,m),generated_model_digest=digest(m),exact_input_match=m==original)
  return m,report

@@ -98,6 +98,8 @@ def verify(folder,case,returncode,elapsed):
         for key,value in daily['totals'].items():close(value,loads[key])
         (folder/'daily-loads.csv').write_text(daily_csv(daily),encoding='utf-8-sig',newline='')
     artifacts={str(folder/'model.epJSON'):sha(folder/'model.epJSON')}
+    if case.get('warmup_observer'):
+        artifacts[str(folder/'wb_warmup.py')] = sha(folder/'wb_warmup.py')
     artifacts.update({str(out/n):sha(out/n) for n in ('eplusout.sql','eplusout.err','eplusout.end')})
     if daily:artifacts[str(folder/'daily-loads.csv')]=sha(folder/'daily-loads.csv')
     result=dict(created=now(),status='review' if pending else 'passed',site_id=case['site_id'],city=case['city'],mode=case['mode'],period=case['period'],days=days,step_minutes=case['step_minutes'],
@@ -105,6 +107,7 @@ def verify(folder,case,returncode,elapsed):
         warnings=warnings,pending_warnings=pending,elapsed_seconds=elapsed,output_bytes=sum(p.stat().st_size for p in folder.rglob('*') if p.is_file()),
         checks=dict(process_exit_zero=True,err_end_success=True,sqlite_quick_check='ok',full_period=True,monthly_reconciliation=True,sqlite_completion_flags=flags,
             completion_basis='Process + end/err + independent full-period coverage + monthly reconciliation; SQL flags retained unmodified.'),artifacts=artifacts)
+    if case.get('schedule_sharing'):result['schedule_sharing']=case['schedule_sharing']
     if daily:result.update(output_contract=contract,daily_reference=daily)
     if contract in output_resolution.CONTRACTS:result.update(output_contract=contract,time_detail=time_detail)
     return result

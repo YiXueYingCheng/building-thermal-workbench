@@ -8,22 +8,22 @@ const planLabels={
  thermal_input:'热学输入方式',resistance_m2K_W:'热阻 / m²·K/W',thickness_mm:'厚度 / mm',conductivity_W_mK:'导热系数 / W/(m·K)',
  optics:'光学参数',reflectance:'太阳反射率',solar_absorptance:'太阳吸收率',emissivity:'热发射率',input_basis:'输入依据',
  optics_depend_on_state:'按状态区分光学参数',source_note:'材料来源说明',material_id:'材料编号',component:'应用构件类型',position:'安装位置',
- target_ids:'作用构件',orientation:'两面含义',placement_basis:'安装依据',between_layers:'插入层位',layers:'材料层序',
+ target_ids:'作用构件',orientation:'光学参数组含义',placement_basis:'安装依据',between_layers:'插入层位',layers:'材料层序',
  operation:'建筑运行',mode:'使用方式',settings:'运行设置',load_basis:'负荷口径',controls:'材料控制',application_id:'材料应用编号',
- channel:'控制对象',state_id:'固定或初始状态',face_id:'朝外面',rule:'反馈规则',update:'控制更新',minutes:'更新间隔 / min',
+ channel:'控制对象',state_id:'固定或初始状态',face_id:'外表面光学参数组',rule:'反馈规则',update:'控制更新',minutes:'更新间隔 / min',
  policy:'反馈判据',cold_C:'低温阈值 / °C',hot_C:'高温阈值 / °C',flux_deadband_W_m2:'热流死区 / W/m²',minimum_hold_minutes:'最短保持时间 / min',
  state_roles:'反馈选择状态',positive:'抑制传热时选择',negative:'促进传热时选择',reference_runs:'控制参考计算',calendar:'参考日历',
  site_ids:'地点清单',site_id:'地点',period:'计算时段',aggregation:'汇总方式',weighting:'权重',missing:'缺失值处理',class_count:'气候类别数',
  step_minutes:'求解步长 / min',engine:'计算引擎',engine_files:'引擎文件核对信息',legacy_construction_overrides:'原构造修改',
- A_R:'A 面 · R 状态',A_C:'A 面 · C 状态',B_R:'B 面 · R 状态',B_C:'B 面 · C 状态',A:'A 面',B:'B 面'
+ A_R:'A 组 · R 状态',A_C:'A 组 · C 状态',B_R:'B 组 · R 状态',B_C:'B 组 · C 状态',A:'A 组',B:'B 组'
 };
 const planEnums={
  controlled:'温控冷热需求',natural:'自然室温',both:'自然室温与温控',inherited:'继承原输入',fixed:'固定',feedback:'反馈调节',calendar:'按参考日历',
- thermal:'热学状态',orientation:'朝向',R:'R 状态',C:'C 状态',A:'A 面',B:'B 面',UNIFIED:'统一反馈',GROUPED:'按朝向分组反馈',
+ thermal:'热学状态',orientation:'表面光学',R:'R 状态',C:'C 状态',A:'A 组',B:'B 组',UNIFIED:'统一反馈',GROUPED:'按朝向分组反馈',
  solver_step:'每个求解步',minutes:'固定分钟间隔',single_layer:'单层材料',independent:'独立状态',
  equivalent_resistance_no_layer_storage:'等效热阻，忽略该层蓄热',resistance:'直接输入热阻',conductivity_thickness:'厚度与导热系数',
  exterior:'外侧附加',interior:'内侧附加',between:'原构造两层之间',legacy_construction:'原构造指定',wall:'墙体',roof:'屋顶',floor:'楼板',window:'窗户',
- cooling_face:'制冷面',other_face:'另一面',opaque_reflectance:'不透明材料反射率',inherit_frozen_building:'继承原建筑运行',
+ cooling_face:'A 组',other_face:'B 组',opaque_reflectance:'不透明材料反射率',inherit_frozen_building:'继承原建筑运行',
  zone_sensible_demand:'热区显热需求',climate:'气候类型',equal_sites:'代表地点等权',null:'保留无数据',
  frozen_model_family:'已冻结模型',legacy_outer_equivalent_model:'沿用原外侧等效模型'
 };

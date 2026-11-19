@@ -9,7 +9,7 @@ from inspection_io import reading
 import calendar_library
 
 TRANSITION_CONFIRMATION='出现多段或不确定季节，可查看完整曲线，但保存前需共同确认，不自动合并。'
-LEGACY_APPLICATION_HINT='本建筑已接通日历预览和独立版本；材料朝向执行尚待适配，本轮不能启用翻面。'
+LEGACY_APPLICATION_HINT='本建筑已接通日历预览和独立版本；表面光学切换尚待适配，本轮不能启用光学切换。'
 
 def complete_pending_preview(record,result):
     """Cache viewing only when every source/day is present; never allow adoption."""
@@ -35,7 +35,7 @@ def display_result(result):
     if result.get('source_kind')=='accepted_queue_daily_v1' and not result.get('can_save'):
         result=copy.deepcopy(result)
         result['application_issues']=[
-            '日历尚未就绪；请先完成逐日参考核对或季节切换确认，再核对材料与翻面执行。' if v==LEGACY_APPLICATION_HINT else v
+            '日历尚未就绪；请先完成逐日参考核对或季节切换确认，再核对材料与表面光学切换执行。' if v==LEGACY_APPLICATION_HINT else v
             for v in result.get('application_issues',[])]
     return result
 
@@ -89,7 +89,7 @@ class Inspections:
                     # Pin a logical registry view. Dispatch/heartbeat bookkeeping
                     # may change while accepted sources and plans stay identical.
                     from inspection_registry import watch_queue
-                    watch_queue(reads,self.root)
+                    watch_queue(reads,self.root,record)
                     for suffix in ('','-wal','-journal'):reads.watch(self.root/'data'/('components.sqlite'+suffix))
                     for p in [*self.root.glob('*.py'),Path(__file__),Path(calendar_library.__file__),self.root/'data/current.json']:
                         reads.watch(p)
@@ -124,13 +124,13 @@ class Inspections:
             job=self.jobs.get(ident) if isinstance(ident,str) else None
             cached=self.cache.get(key)
             if not job or job['state']!='ready' or job['key']!=key or not cached:raise ValueError(problem)
-            if time.monotonic()-job.get('validated_monotonic',0)>300:raise ValueError(problem)
             result=cached['result']
-            if not result.get('can_save') or result.get('content_sha256')!=job['result'].get('content_sha256'):raise ValueError(problem)
+            if not result.get('can_save') or result is not job['result']:raise ValueError(problem)
             evidence=cached['evidence']
         from manage import current
         if (self.root/'data/current.json').exists() and digest(current(self.root))!=digest(catalog):raise ValueError(problem)
-        if not evidence.valid():raise ValueError(problem)
+        changed=evidence.invalid_reason()
+        if changed:raise ValueError(changed+'。请重新核对；尚未保存或采用。')
         return copy.deepcopy(result)
     def save_or_apply(self,ident,record,catalog,expected,accept,action,record_sha256,parent=None,transition_confirmations=None):
         if action not in ('save','apply') or accept is not True:raise ValueError('请明确接受本轮展示的参考来源、原警告和已有规则。')

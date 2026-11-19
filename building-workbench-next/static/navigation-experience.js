@@ -10,8 +10,8 @@ executionView=function(){return S.execution?navigationExecutionView():`<section 
 S.queueQuery='';S.queueCategory='all';S.queueGroupOpen=new Set();
 const navigationBatchCards=executionBatches;
 function queueGroups(){const groups=new Map();for(const b of S.execution?.batches||[]){const owner=S.boot.records.find(r=>r.id===b.record_id)?.research_set;const key=JSON.stringify([b.record_id||b.record_name,b.revision,b.output_contract]);if(!groups.has(key))groups.set(key,{key,name:b.record_name,revision:b.revision,owner,batches:[]});groups.get(key).batches.push(b);}return [...groups.values()];}
-executionBatches=function(){const groups=queueGroups(),q=S.queueQuery.trim().toLocaleLowerCase(),all=groups.filter(g=>(S.queueCategory==='all'||S.queueCategory==='research'&&g.owner||S.queueCategory==='other'&&!g.owner||S.queueCategory==='attention'&&g.batches.some(b=>b.counts.review||b.counts.failed||b.counts.interrupted||b.counts.running||b.counts.pending))&&(!q||[g.name,...g.batches.flatMap(b=>b.jobs.map(j=>j.city))].join(' ').toLocaleLowerCase().includes(q)));
- const original=S.execution.batches;let content='';try{content=all.map(g=>{const counts=g.batches.reduce((c,b)=>{for(const [k,n] of Object.entries(b.counts))c[k]=(c[k]||0)+n;return c;},{}),n=g.batches.reduce((n,b)=>n+b.case_count,0),id=sectionHash(g.key),sites=new Set(g.batches.flatMap(b=>b.jobs.map(j=>j.site_id)));S.execution.batches=g.batches.filter(b=>!q||[g.name,...b.jobs.map(j=>j.city)].join(' ').toLocaleLowerCase().includes(q));let ci=0;const cards=navigationBatchCards().replace(/<h3>(.*?)<\/h3>/g,(_,title)=>{const b=S.execution.batches[ci++];return '<h4>'+esc(b.jobs.map(j=>j.city).join('、'))+' · '+title+'</h4>';});return `<details class="queue-group" data-queue-group="${esc(id)}"${S.queueGroupOpen.has(id)?' open':''}><summary><strong>${esc(g.name)}</strong><span>v${g.revision} · ${sites.size} 地点 · ${n} 算例 · 已通过/复用 ${(counts.passed||0)+(counts.reused||0)}/${n}${counts.review?' · 待复核 '+counts.review:''}${counts.pending||counts.running?' · 待算/运行 '+((counts.pending||0)+(counts.running||0)):''}</span></summary><p class="muted">按同一保存版本聚合 ${g.batches.length} 个底层批次；逐项来源、重试与核验记录保留。</p>${cards.replace(/(<p class="muted">结果位置：[\s\S]*?<\/p>)/g,'<details><summary>结果保存位置</summary>$1</details>')}</details>`;}).join('');}finally{S.execution.batches=original;}
+executionBatches=function(){const groups=queueGroups(),q=S.queueQuery.trim().toLocaleLowerCase(),all=groups.filter(g=>(S.queueCategory==='all'||S.queueCategory==='research'&&g.owner||S.queueCategory==='other'&&!g.owner||S.queueCategory==='attention'&&g.batches.some(queueNeedsAttention))&&(!q||[g.name,...g.batches.flatMap(b=>b.jobs.map(j=>j.city))].join(' ').toLocaleLowerCase().includes(q)));
+ const original=S.execution.batches;let content='';try{content=all.map(g=>{const counts=g.batches.reduce((c,b)=>{for(const [k,n] of Object.entries(b.counts))c[k]=(c[k]||0)+n;return c;},{}),n=g.batches.reduce((n,b)=>n+b.case_count,0),id=sectionHash(g.key),sites=new Set(g.batches.flatMap(b=>b.jobs.map(j=>j.site_id)));S.execution.batches=g.batches.filter(b=>!q||[g.name,...b.jobs.map(j=>j.city)].join(' ').toLocaleLowerCase().includes(q));let ci=0;const cards=navigationBatchCards().replace(/<h3>(.*?)<\/h3>/g,(_,title)=>{const b=S.execution.batches[ci++];return '<h4>'+esc(b.jobs.map(j=>j.city).join('、'))+' · '+title+'</h4>';});return `<details class="queue-group" data-queue-group="${esc(id)}"${S.queueGroupOpen.has(id)?' open':''}><summary><strong>${esc(g.name)}</strong><span>v${g.revision} · ${sites.size} 地点 · ${n} 条算例记录 · 通过/复用 ${(counts.passed||0)+(counts.reused||0)} 条${counts.review?' · 待复核 '+counts.review:''}${counts.pending||counts.running?' · 待算/运行 '+((counts.pending||0)+(counts.running||0)):''}</span></summary><p class="muted">按同一保存版本聚合 ${g.batches.length} 个底层批次；逐项来源、重试与核验记录保留。</p>${cards}</details>`;}).join('');}finally{S.execution.batches=original;}
  return `<div class="queue-filters"><label>任务范围<select id="queue-category">${options([['research','对比集研究任务'],['attention','运行与待处理'],['other','其他方案与历史记录'],['all','全部记录']],S.queueCategory)}</select></label><label>查找方案或地点<input id="queue-query" type="search" value="${esc(S.queueQuery)}" placeholder="如：昆明、W00"></label></div><p class="muted">显示 ${all.length} 组，共登记 ${groups.length} 组 / ${original.length} 个底层批次。展开后选择具体地点结果。尚未提交的成员在对比集中查看。</p><div id="queue-groups">${content||'<p>当前筛选没有任务。</p>'}</div>`;
 };
 document.addEventListener('toggle',e=>{const k=e.target.dataset?.queueGroup;if(k){if(e.target.open)S.queueGroupOpen.add(k);else S.queueGroupOpen.delete(k);}},true);
@@ -23,9 +23,43 @@ let queueResultEpoch=0;
 const navigationResultsMarkup=executionResults;
 executionResults=function(){return S.queueResultWindow?'':navigationResultsMarkup();};
 function queueResultDialog(){let d=document.getElementById('queue-results-dialog');if(d)return d;d=document.createElement('dialog');d.id='queue-results-dialog';d.className='queue-results-dialog';d.setAttribute('aria-labelledby','queue-result-title');document.body.append(d);d.addEventListener('cancel',e=>{e.preventDefault();closeQueueResult();});d.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;e.stopPropagation();if(b.dataset.action==='close-execution-results'){closeQueueResult();return;}const v=S.queueResultWindow;if(!v||v.pending)return;v.scroll=d.querySelector('.focused-body').scrollTop;if(b.dataset.batchCase!==undefined){v.suspended=true;d.close();await batchResultsAction(b);resultViewDialog().addEventListener('close',()=>{if(S.queueResultWindow===v){v.suspended=false;drawQueueResult();}},{once:true});return;}v.pending=true;try{await batchResultsAction(b);}catch(error){v.error=error.message;}finally{v.pending=false;drawQueueResult();}});return d;}
-function drawQueueResult(){const v=S.queueResultWindow;if(!v||v.suspended)return;const d=queueResultDialog();d.innerHTML=`<header class="viewer-head"><h2 id="queue-result-title">计算结果与核验</h2><button data-action="close-execution-results">关闭并返回任务</button></header><div class="focused-body">${v.error?'<p class="warning">'+esc(v.error)+'</p>':''}${v.pending?'<p role="status">正在读取并核验结果，可以关闭后继续其他操作…</p>':navigationResultsMarkup()}</div>`;if(!d.open)d.showModal();d.querySelector('.focused-body').scrollTop=v.scroll||0;}
+function drawQueueResult(){
+ const v=S.queueResultWindow;if(!v||v.suspended)return;
+ const d=queueResultDialog();
+ const receipt=v.verified&&!v.error&&!v.pending?`<p class="muted" data-batch-read-status>${v.reused?'已读取最近核验的结果 · 登记与文件状态一致':'本次已完成内容核验'} · ${esc(v.verified.replace('T',' '))}</p>`:'';
+ d.innerHTML=`<header class="viewer-head"><h2 id="queue-result-title">计算结果与核验</h2><button data-action="close-execution-results">关闭并返回任务</button></header><div class="focused-body">${v.error?'<p class="warning" role="alert">'+esc(v.error)+'</p>':''}${v.pending?'<p role="status">正在读取批次，首次打开需核验文件。可以先关闭窗口。</p>':receipt+navigationResultsMarkup()}</div>`;
+ if(!d.open)d.showModal();
+ d.querySelector('.focused-body').scrollTop=v.scroll||0;
+}
 function closeQueueResult(){const v=S.queueResultWindow;if(!v)return;++queueResultEpoch;S.queueResultWindow=null;queueResultDialog().close();queueResultDialog().replaceChildren();S.executionResults=null;resetBatchResults();requestAnimationFrame(()=>{scrollTo({top:v.y,behavior:'instant'});document.querySelector(`[data-batch-results="${v.id}"], [data-index-open="${v.id}"]`)?.focus({preventScroll:true});});}
-loadBatchResults=async function(id,reset=false){const epoch=++queueResultEpoch;let v=S.queueResultWindow;if(!v||v.id!==id){S.executionResults=null;resetBatchResults();v=S.queueResultWindow={id,y:scrollY,scroll:0};}v.pending=true;v.error='';drawQueueResult();try{const d=await api('/api/execution/'+id+'/summary');if(epoch!==queueResultEpoch||S.queueResultWindow!==v)return;if(reset)resetBatchResults();if(d.dataset_sha256!==S.executionResults?.dataset_sha256)S.batchExport=null;S.executionResults=d;}catch(e){if(S.queueResultWindow===v)v.error=e.message;}finally{if(epoch===queueResultEpoch&&S.queueResultWindow===v){v.pending=false;drawQueueResult();}}};
+const batchReadsInProgress=new Map();
+function readBatchView(id,force){
+ const running=batchReadsInProgress.get(id);
+ if(running&&(!force||running.force))return running.promise;
+ const promise=api('/api/execution/'+id+'/summary?view='+(force?'refresh':'recent'));
+ const read={promise,force};batchReadsInProgress.set(id,read);
+ const clear=()=>{if(batchReadsInProgress.get(id)===read)batchReadsInProgress.delete(id);};
+ promise.then(clear,clear);return promise;
+}
+loadBatchResults=async function(id,reset=false,force=false){
+ const epoch=++queueResultEpoch;let v=S.queueResultWindow;
+ if(!v||v.id!==id){S.executionResults=null;resetBatchResults();v=S.queueResultWindow={id,y:scrollY,scroll:0};}
+ v.pending=true;v.error='';drawQueueResult();
+ try{
+   const read=await readBatchView(id,force);
+   if(epoch!==queueResultEpoch||S.queueResultWindow!==v)return false;
+   const d=read.summary||read;
+   if(reset)resetBatchResults();
+   if(d.dataset_sha256!==S.executionResults?.dataset_sha256)S.batchExport=null;
+   S.executionResults=d;v.verified=read.verified;v.reused=read.reused;
+   return true;
+ }catch(e){
+   if(epoch===queueResultEpoch&&S.queueResultWindow===v){S.executionResults=null;v.error=e.message;v.verified=null;}
+   return false;
+ }finally{
+   if(epoch===queueResultEpoch&&S.queueResultWindow===v){v.pending=false;drawQueueResult();}
+ }
+};
 let listViewEpoch=0,sourceSelectionBusy=false,indexSelectionEpoch=0;
 async function openListLocally(view){
  const epoch=++listViewEpoch;S.view=view;

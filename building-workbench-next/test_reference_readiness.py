@@ -20,6 +20,47 @@ def record():
 
 
 class ReferenceReadiness(unittest.TestCase):
+    def test_calendar_queue_ignores_unrelated_completed_jobs_but_detects_changed_reference(self):
+        from execution_queue import Queue
+        from execution_inputs import DAILY_CONTRACT
+        from inspection_registry import watch_queue,watched_queue
+        from inspection_io import reading
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            queue=Queue(root)
+            def add(name,contract,building='b',sites=('site',),state='passed'):
+                review='review_'+name.zfill(32)
+                folder=root/'data/execution/reviews'/review
+                folder.mkdir(parents=True)
+                frozen=rr.baseline(record())
+                frozen['factors']['building']['id']=building
+                (folder/'record.json').write_text(json.dumps(frozen),encoding='utf-8')
+                cases=[dict(index=i,site_id=s,mode='controlled',period=[1,1,12,31],step_minutes=5) for i,s in enumerate(sites)]
+                plan=dict(record_sha256=digest(frozen),output_contract=contract,cases=cases)
+                with queue.db() as db:
+                    db.execute('INSERT INTO batches VALUES(?,?,?,?,?,?)',(name,review,json.dumps(plan),digest(plan),'run','now'))
+                    for i in range(len(cases)):
+                        db.execute('INSERT INTO jobs(batch,idx,status,identity,updated,result_sha256) VALUES(?,?,?,?,?,?)',(name,i,state,'case','now','original'))
+            add('1',DAILY_CONTRACT,sites=('site','other'))
+            add('2','timeseries_daily_v1',state='running')
+            with reading() as reads:
+                watch_queue(reads,root,record())
+                add('3',DAILY_CONTRACT,building='other')
+                add('4',DAILY_CONTRACT,sites=('other',))
+                with queue.db() as db:
+                    db.execute("UPDATE jobs SET status='passed' WHERE batch='2'")
+                    db.execute("UPDATE jobs SET result_sha256='changed' WHERE batch='1' AND idx=1")
+                self.assertEqual(set(watched_queue(reads,root)[1]),{('1',0)})
+            with self.assertRaisesRegex(ValueError,'逐日参考'):
+                with reading() as reads:
+                    watch_queue(reads,root,record())
+                    with queue.db() as db:
+                        db.execute("UPDATE jobs SET result_sha256='replaced' WHERE batch='1' AND idx=0")
+            with self.assertRaisesRegex(ValueError,'逐日参考'):
+                with reading() as reads:
+                    watch_queue(reads,root,record())
+                    add('5',DAILY_CONTRACT)
+
     def test_baseline_preserves_all_other_inputs_and_original(self):
         r=record();before=copy.deepcopy(r);b=rr.baseline(r)
         self.assertEqual(r,before)

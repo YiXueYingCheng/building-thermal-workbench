@@ -38,7 +38,7 @@ buildingPanel=function(){
  html+=`<section class="well usage-editor"><div class="row"><h3>房间与建筑默认运行</h3><span id="usage-edit-status">${S.usageDirty?'配置有未保存修改':'配置已读取'}</span></div><p class="muted">${usageMembershipText()}。作息输入为该小时的实际人数或功率，空调可用计划独立设置。</p><label class="field">配置名称<input id="usage-name" value="${esc(S.usageName)}"${disabled()}></label><div class="grid2"><label class="field">房间<select id="usage-room">${S.usageDraft.rooms.map((r,i)=>`<option value="${i}"${i===S.usageRoom?' selected':''}>${esc(r.zone)} · ${esc(usageRoomType(r).name)} · ${format(r.area_m2,2)} m² · ${r.conditioned?'空调房':'非空调房'}</option>`).join('')}</select></label><label class="field">使用计划<select id="usage-channel">${Object.entries(roomChannels).filter(([k])=>k!=='available'||room.hvac).map(([k,v])=>`<option value="${k}"${k===channel?' selected':''}>${v}</option>`).join('')}</select></label></div>${dayTable(value,'data-usage-hour="'+channel+'"')}${room.hvac?`<details><summary>此房间的默认启停温度</summary><div class="grid2">${Object.entries(temperatureLabels).map(([k,v])=>`<label class="field">${v} / °C<input type="number" step="any" data-usage-temperature="${k}" value="${room.hvac[k]}"${disabled()}></label>`).join('')}</div><p class="muted">本模型保留四个启停温度及原回差控制；工况可显式覆盖这些值。</p></details>`:''}<div class="actions"><button data-configuration="usage-save" class="primary"${disabled()}>保存配置版本并用于当前草稿</button><button data-configuration="usage-discard">撤销配置编辑</button></div><p class="muted">这里只保存建筑配置版本；当前方案还需“保存版本”。其他方案不会自动更新。</p></section>`;
  return html;
 };
-function controlPresetToolbar(){return S.record.factors.materials.definitions.length?`<div class="actions control-presets">${[['fixed','固定'],['calendar','季节翻面'],['feedback','热阻反馈'],['combined','反馈加翻面']].map(([k,label])=>`<button data-control-preset="${k}"${disabled()}>${label}</button>`).join('')}</div><p class="muted">预设只组织工况；缺少本地日历或对应物性时会提示。热学与朝向仍可在工况中分别调整。</p>`:'';}
+function controlPresetToolbar(){return S.record.factors.materials.definitions.length?`<div class="actions control-presets">${[['fixed','固定'],['calendar','季节光学切换'],['feedback','热阻反馈'],['combined','表面光学切换＋热阻调节']].map(([k,label])=>`<button data-control-preset="${k}"${disabled()}>${label}</button>`).join('')}</div><p class="muted">预设只组织工况；缺少本地日历或对应物性时会提示。热学状态与表面光学仍可在工况中分别调整。</p>`:'';}
 const originalConditionPanel=conditionPanel;
 conditionPanel=function(){
  let html=originalConditionPanel();if(!configurationSupported())return html;
@@ -89,8 +89,8 @@ async function configurationAction(button){
  }
  if(a==='default-material'){await loadConfiguration();applyMaterial(S.configuration.data.material_template.definitions[0]);return true;}
  if(a==='remove-material'){
-  if(S.record.provenance.adapter!=='global_frozen_v011')throw Error('此旧动态来源暂未接通 W00 转换，请选全球 W00 来源建立基准。');
-  S.materialParent=null;setPath('factors.materials',{definitions:[],applications:[]});setPath('factors.condition.controls',[]);setPath('factors.condition.reference_runs',[]);return true;
+  removeResearchMaterialFromDraft();
+  return true;
  }
  return false;
 }

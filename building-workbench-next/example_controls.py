@@ -56,7 +56,7 @@ def create(root=ROOT):
         for state,label in [('R','蓬松'),('C','压缩')]:
             comp=store.add_comparison('Drawing26 · 固定'+label+'与热阻反馈',fixed['records'][state],rows['feedback'],'total');comparisons[state]=comp['id']
         original=store.get('global_w00');f=copy.deepcopy(original['factors']);f['scope']['period']=[1,1,12,31]
-        annual=store.create(original['id'],original['revision'],dict(name='Drawing26 示例 · 翻面日历全年参考',factors=f))
+        annual=store.create(original['id'],original['revision'],dict(name='Drawing26 示例 · 光学切换日历全年参考',factors=f))
         rows['annual_reference']=dict(id=annual['id'],revision=annual['revision'])
         saved=dict(records=rows,comparisons=comparisons,new_simulations=0);write_json(receipt,saved,root)
         return {**saved,'reused':False}
@@ -78,15 +78,15 @@ def create_orientation(root=ROOT):
         preview=prepare(base,c,root)
         if not preview['can_apply']:raise ValueError('逐日日历尚不能采用：'+'；'.join(preview['issues']+preview['application_issues']+[i for row in preview['rows'] for i in row['issues']]))
         switches=preview['rows'][0]['preview']['switches']
-        if not switches:raise ValueError('该参考全年保持同一朝向，不能作为切换演示。')
+        if not switches:raise ValueError('该参考全年使用同一组光学参数，不能作为切换演示。')
         switch=switches[0];start=max(1,min(335,switch['day_of_year']-15));end=start+30
         a=dt.date(2025,1,1)+dt.timedelta(days=start-1);b=dt.date(2025,1,1)+dt.timedelta(days=end-1)
         accepted=save_or_apply(base,c,root,preview['content_sha256'],True,'apply',preview['record_sha256'])
         f=copy.deepcopy(base['factors']);f['scope']['period']=[a.month,a.day,b.month,b.day]
-        left=store.create(base['id'],base['revision'],dict(name='Drawing26 示例 · 固定 A 面 · 长沙31日',factors=f))
-        f['condition']=accepted['condition'];right=store.create(base['id'],base['revision'],dict(name='Drawing26 示例 · 逐日翻面 · 长沙31日',factors=f))
+        left=store.create(base['id'],base['revision'],dict(name='Drawing26 示例 · 固定 A · 长沙31日',factors=f))
+        f['condition']=accepted['condition'];right=store.create(base['id'],base['revision'],dict(name='Drawing26 示例 · 逐日光学切换 · 长沙31日',factors=f))
         rows={key:dict(id=r['id'],revision=r['revision']) for key,r in [('fixed_A',left),('orientation',right)]}
-        comp=store.add_comparison('Drawing26 · 固定 A 面与逐日翻面',rows['fixed_A'],rows['orientation'],'total')
+        comp=store.add_comparison('Drawing26 · 固定 A与逐日光学切换',rows['fixed_A'],rows['orientation'],'total')
         saved=dict(records=rows,comparison_id=comp['id'],period=f['scope']['period'],switch=switch,calendar=accepted['snapshot'],new_simulations=0)
         write_json(receipt,saved,root)
         return {**saved,'reused':False}

@@ -32,7 +32,7 @@ def fixed_capability(record,catalog):
         if f['condition']['operation']!=reference['factors']['condition']['operation']:
             raise NotSupported('当前生成器保留原温控运行、设定点与作息；自然室温及运行覆盖待适配。')
         if any(x.get('kind')!='workspace_daily_calendar_v1' for x in f['condition'].get('reference_runs',[])):
-            raise NotSupported('带参考日历的朝向控制将在动态适配阶段开放。')
+            raise NotSupported('带参考日历的表面光学控制将在动态适配阶段开放。')
         if {k:v for k,v in r['numerics'].items() if k!='step_minutes'}!={k:v for k,v in reference['numerics'].items() if k!='step_minutes'}:
             raise NotSupported('计算引擎设置已改变，不能沿用本适配。')
         if any(not catalog['sites'][s].get('eligible') or catalog['sites'][s]['source_kind'] not in ('reviewed_global','imported_epw_v1') for s in f['scope']['site_ids']):
@@ -53,15 +53,15 @@ def fixed_capability(record,catalog):
         if any(s.get('resistance_m2K_W') is None for s in states.values()):raise NotSupported('请补全两个状态的热阻或厚度与导热系数。')
         maps={'thermal':{},'orientation':{}}
         for control in controls:
-            if control['mode']!='fixed':raise NotSupported('当前只生成固定状态与固定朝向；反馈和日历控制待适配。')
+            if control['mode']!='fixed':raise NotSupported('当前只生成固定状态与固定光学参数组；反馈和日历控制待适配。')
             channel=control['channel']
             for target in control['target_ids']:
                 if target in maps[channel]:raise NotSupported('同一构件存在重复控制指定。')
                 maps[channel][target]=control['state_id'] if channel=='thermal' else control['face_id']
-        if any(set(v)!=set(app['target_ids']) for v in maps.values()):raise NotSupported('每个应用构件都需要唯一的固定状态与朝向。')
+        if any(set(v)!=set(app['target_ids']) for v in maps.values()):raise NotSupported('每个应用构件都需要唯一的固定状态与光学参数组。')
         for target,state in maps['thermal'].items():
             optical=d['optics'].get(maps['orientation'][target]+'_'+state,{})
-            if any(optical.get(k) is None for k in ('solar_absorptance','emissivity')):raise NotSupported('所选状态与朝外面的光学参数尚未补全。')
+            if any(optical.get(k) is None for k in ('solar_absorptance','emissivity')):raise NotSupported('所选状态与外表面所选的光学参数尚未补全。')
         return dict(supported=True,reasons=[],case='FIXED_COOL_LOW7',assignments=maps)
     except (ValueError,KeyError,TypeError,AttributeError) as error:return dict(supported=False,reasons=[str(error)])
 
@@ -204,7 +204,7 @@ def _build_bundle(record,catalog,root,site_ids=None,*,compact_check=False):
             from source_locations import prepare_case
             compiled.append(prepare_case(*compile_case(record,site,catalog,reader,operation_mode=mode),reader))
     reader.unchanged()
-    identity=dict(recipe=recipe_digest(normalize(record)),record=digest(record),adapter_sha256=digest({p.name:sha(p) for p in [Path(__file__),Path(__file__).with_name('construction_library.py'),Path(__file__).with_name('material_types.py'),Path(__file__).with_name('surface_materials.py'),Path(__file__).with_name('dynamic_adapter.py'),Path(__file__).with_name('calendar_library.py'),Path(__file__).with_name('calendar_preview.py'),Path(__file__).with_name('weather_import.py'),Path(__file__).with_name('source_locations.py')]+([Path(__file__).with_name('building_configuration.py'),Path(__file__).with_name('component_library.py'),Path(__file__).with_name('usage_schedules.py')] if __import__('building_configuration').has_configuration(record) else [])+([Path(__file__).with_name(n) for n in ('ordinary_building.py','ordinary_envelope.py','ordinary_materials.py','ordinary_orientation.py','queue_calendar.py','transition_confirmation.py','building_configuration.py','component_library.py','usage_schedules.py')] if record['provenance']['adapter']=='ordinary_building_v1' else [])}))
+    identity=dict(recipe=recipe_digest(normalize(record)),record=digest(record),adapter_sha256=digest({p.name:sha(p) for p in [Path(__file__),Path(__file__).with_name('construction_library.py'),Path(__file__).with_name('material_types.py'),Path(__file__).with_name('surface_materials.py'),Path(__file__).with_name('surface_controls.py'),Path(__file__).with_name('dynamic_adapter.py'),Path(__file__).with_name('calendar_library.py'),Path(__file__).with_name('calendar_preview.py'),Path(__file__).with_name('weather_import.py'),Path(__file__).with_name('source_locations.py')]+([Path(__file__).with_name('building_configuration.py'),Path(__file__).with_name('component_library.py'),Path(__file__).with_name('usage_schedules.py')] if __import__('building_configuration').has_configuration(record) else [])+([Path(__file__).with_name(n) for n in ('ordinary_building.py','ordinary_envelope.py','ordinary_materials.py','ordinary_orientation.py','solid_eca.py','solid_feedback.py','queue_calendar.py','transition_confirmation.py','building_configuration.py','component_library.py','usage_schedules.py')] if record['provenance']['adapter']=='ordinary_building_v1' else [])}))
     if reader.location_uses:identity['source_locations']=digest(reader.location_uses)
     if selected!=scope_sites:identity['selected_site_ids']=selected
     # Only private import checks use a short alias. Formal input IDs stay stable;

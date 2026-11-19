@@ -80,20 +80,24 @@ def estimate_job_gib(samples):
     if len(samples)<3:return .75
     return max(.5,max(samples)*1.25+.05)
 
-def dispatch_budget(policy,machine,running,per_job_gib=.75,per_job_disk_gib=.1):
+def dispatch_budget(policy,machine,running,per_job_gib=.75,per_job_disk_gib=.1,*,per_job_commit_gib=None,exclusive=False):
+    commit_estimate=per_job_gib if per_job_commit_gib is None else per_job_commit_gib
     growing=sum(max(0,r.get('reserved_gib',per_job_gib)-r.get('working_gib',0)) for r in running)
-    commit_growth=sum(max(0,r.get('reserved_gib',per_job_gib)-r.get('commit_gib',0)) for r in running)
+    commit_growth=sum(max(0,r.get('reserved_commit_gib',r.get('reserved_gib',commit_estimate))-r.get('commit_gib',0)) for r in running)
     needed=policy['reserve_gib']+per_job_gib+growing
-    commit_needed=policy['reserve_gib']+per_job_gib+commit_growth
+    commit_needed=policy['reserve_gib']+commit_estimate+commit_growth
     disk_needed=policy['disk_reserve_gib']+per_job_disk_gib*(len(running)+1)
     reason=None
-    if len(running)>=policy['max_parallel']:reason='已达到当前并行上限'
-    elif machine['available_gib']<needed:reason=f'等待内存：新增一路前需可用 {needed:.2f} GiB，当前 {machine["available_gib"]:.2f} GiB'
-    elif machine['commit_available_gib']<commit_needed:reason=f'等待系统可提交内存：需 {commit_needed:.2f} GiB，当前 {machine["commit_available_gib"]:.2f} GiB'
+    if exclusive and running:reason='等待当前算例结束后独占运行'
+    elif any(r.get('exclusive') for r in running):reason='独占算例运行中，其他算例等待'
+    elif len(running)>=policy['max_parallel']:reason='已达到当前并行上限'
+    elif exclusive and min(machine['available_gib'],machine['commit_available_gib'])<=policy['reserve_gib']:reason='等待可用内存和系统可提交内存均高于保留线'
+    elif not exclusive and machine['available_gib']<needed:reason=f'等待内存：新增一路前需可用 {needed:.2f} GiB，当前 {machine["available_gib"]:.2f} GiB'
+    elif not exclusive and machine['commit_available_gib']<commit_needed:reason=f'等待系统可提交内存：需 {commit_needed:.2f} GiB，当前 {machine["commit_available_gib"]:.2f} GiB'
     elif machine['disk_free_gib']<disk_needed:reason='等待磁盘：剩余空间低于保留线'
     cpu = cpu_budget.admission(policy, machine, running)
-    if reason is None and cpu['reason']:reason=cpu['reason']
-    return dict(reason=reason,allowed=reason is None,reserve_gib=policy['reserve_gib'],next_job_gib=per_job_gib,
+    if reason is None and not exclusive and cpu['reason']:reason=cpu['reason']
+    return dict(reason=reason,allowed=reason is None,exclusive=exclusive,reserve_gib=policy['reserve_gib'],next_job_gib=per_job_gib,
         running_growth_gib=growing,required_available_gib=needed,available_gib=machine['available_gib'],
         required_commit_gib=commit_needed,available_commit_gib=machine['commit_available_gib'],cpu=cpu)
 

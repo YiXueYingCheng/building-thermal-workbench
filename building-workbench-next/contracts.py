@@ -127,7 +127,7 @@ def validate(record, sites=None):
         if control.get('channel')=='thermal' and not isinstance(control.get('state_id'),str):
             errors.append('热学控制需要明确固定或初始状态。')
         if control.get('channel')=='orientation' and control.get('mode')=='fixed' and control.get('face_id') not in ('A','B'):
-            errors.append('固定朝向需要明确材料的朝外面。')
+            errors.append('固定光学参数组需要明确材料的外表面光学参数组。')
         app=applications.get(control.get('application_id'))
         if app is None:
             errors.append('控制策略引用了不存在的材料应用。');continue

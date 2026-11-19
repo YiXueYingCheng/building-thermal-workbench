@@ -69,7 +69,7 @@ class Runs:
   return dict(id=ident,revision=revision,set_sha256=s['sha256'],roles=roles,site_ids=sites,
    members={k:ref(records[k]) for k in roles},cases=len(sites)*len(roles),policy=policy,
    storage=storage,destination=destination,
-   note='按地点准备小清单，进度集中显示。全年 W00 同时保留逐日参考；短时段仅计算所选日期，不能代替全年日历参考。翻面另需匹配日历。')
+   note='按地点准备小清单，进度集中显示。全年 W00 同时保留逐日参考；短时段仅计算所选日期，不能代替全年日历参考。表面光学切换另需匹配日历。')
  def start(self,ident,revision,roles,expected,submit=False,destination=None):
   require(type(submit) is bool,'提交选项无效。');p=self.preflight(ident,revision,roles,destination)
   require(p['set_sha256']==expected,'对比集版本与预览不同。');require(p['storage']['fits'],'当前空间不足以覆盖本轮留量与磁盘保留值，请减少本轮成员或调整保存位置。')

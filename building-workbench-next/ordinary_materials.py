@@ -59,6 +59,8 @@ def preset(source,catalog,state_id='R'):
  return dict(definitions=[definition],applications=[app]),controls
 
 def validate(record,source):
+ from solid_eca import enabled,validate as solid_validate
+ if enabled(record):return solid_validate(record,source)
  f=record['factors'];m=f['materials'];controls=f['condition']['controls'];refs=f['condition']['reference_runs']
  if m=={'definitions':[],'applications':[]} and not controls and not refs:return None
  if source['building']['id']!=BUILDING:raise ValueError('本轮材料适配仅开放已核实五层建筑。')
@@ -73,30 +75,32 @@ def validate(record,source):
  expected=dict(id=a['id'],material_id=d['id'],component='wall',position='exterior',target_ids=ids,orientation={'A':'cooling_face','B':'other_face'},placement_basis=PLACEMENT,surface_model=SURFACE_DEFAULTS)
  actual=copy.deepcopy(a);actual['target_ids']=sorted(actual.get('target_ids',[]))
  if actual!=expected:raise ValueError('首轮采用全部 135 面外墙的外侧附加层，不能套用原 14/7 段范围或其他层位。')
- if len(controls)!=2:raise ValueError('请明确全体外墙的固定状态和制冷面朝外。')
+ if len(controls)!=2:raise ValueError('请明确全体外墙的固定状态和固定 A。')
  thermal=[c for c in controls if c.get('channel')=='thermal']
  state_id=thermal[0].get('state_id') if len(thermal)==1 else None
  if state_id not in ('R','C'):raise ValueError('请选择固定蓬松 R 或固定压缩 C。')
  want=[dict(application_id=a['id'],channel='thermal',mode='fixed',target_ids=ids,state_id=state_id),dict(application_id=a['id'],channel='orientation',mode='fixed',target_ids=ids,face_id='A')]
  if refs:
   from calendar_library import verify_reference
-  if len(refs)!=1 or state_id!='R':raise ValueError('五层翻面须固定蓬松 R，并绑定一个已核对的逐日日历版本。')
+  if len(refs)!=1 or state_id!='R':raise ValueError('五层表面光学切换须固定蓬松 R，并绑定一个已核对的逐日日历版本。')
   snapshot=verify_reference(refs[0])
   if snapshot['content']['schema_version']!=2 or snapshot['content']['basis']['building']['id']!=BUILDING:raise ValueError('请采用本建筑自身的逐日日历。')
   want[1].update(mode='calendar',reference_id=refs[0]['id'])
  observed=copy.deepcopy(controls)
  for item in observed:item['target_ids']=sorted(item.get('target_ids',[]))
- if sorted(observed,key=lambda x:x.get('channel',''))!=sorted(want,key=lambda x:x['channel']):raise ValueError('此建筑支持固定 R/C、A 面朝外，或固定 R 并按本建筑日历翻面；其他朝向或反馈分组待适配。')
+ if sorted(observed,key=lambda x:x.get('channel',''))!=sorted(want,key=lambda x:x['channel']):raise ValueError('此建筑支持固定 R/C、固定 A，或固定 R 并按本建筑日历切换表面光学参数；其他光学选择或反馈分组待适配。')
  r=states[state_id].get('resistance_m2K_W');optical=d['optics'].get('A_'+state_id,{})
  if type(r) not in (float,int) or not math.isfinite(r) or r<=0:raise ValueError('所选状态热阻须为有限正数。')
- if set(optical)-{'reflectance','solar_absorptance','emissivity','input_basis'}:raise ValueError('制冷面光学含未支持字段。')
+ if set(optical)-{'reflectance','solar_absorptance','emissivity','input_basis'}:raise ValueError('A 组光学参数含未支持字段。')
  for key in ('solar_absorptance','emissivity'):
   v=optical.get(key)
-  if type(v) not in (int,float) or not math.isfinite(v) or not 0<=v<=1:raise ValueError('需明确制冷面的太阳吸收率与发射率。')
+  if type(v) not in (int,float) or not math.isfinite(v) or not 0<=v<=1:raise ValueError('需明确A 组的太阳吸收率与发射率。')
  if optical['emissivity']<=0 or optical['emissivity']>.99999:raise ValueError('本引擎的外侧层发射率须大于 0 且不超过 0.99999。')
  return dict(material_id=d['id'],name=d['name'],state=state_id,face='A',resistance_m2K_W=r,optics=copy.deepcopy(optical),targets=ids,surface_model=copy.deepcopy(SURFACE_DEFAULTS))
 
 def apply(model,record,source):
+ from solid_eca import enabled,apply as solid_apply
+ if enabled(record):return solid_apply(model,record,source)
  spec=validate(record,source)
  if spec is None:return None
  name='NX_ECA_Exterior_'+digest(spec)[:20];values=dict(**spec['surface_model'],thermal_resistance=spec['resistance_m2K_W'],solar_absorptance=spec['optics']['solar_absorptance'],thermal_absorptance=spec['optics']['emissivity'])
@@ -134,10 +138,10 @@ def preview(record,catalog,action='adopt',state_id='R'):
  elif action!='inspect':raise ValueError('未知材料核对操作。')
  if action!='inspect' and record['factors']['condition']['reference_runs']:raise ValueError('请先核对已有参考日历，不能直接替换。')
  out=normalize(out);cap=capability(out,catalog)
- if not cap['supported']:raise ValueError('；'.join(cap['reasons']))
+ if not cap['supported'] and action!='inspect':raise ValueError('；'.join(cap['reasons']))
  current=validate(normalize(record),s);planned=validate(out,s);reader.unchanged()
  result=dict(action=action,inventory=data,current=current,planned=planned,materials=out['factors']['materials'],controls=out['factors']['condition']['controls'],
              record_sha256=digest(record),changed=out['factors']['materials']!=record['factors']['materials'] or out['factors']['condition']['controls']!=record['factors']['condition']['controls'],
              source=s['models']['controlled'],generation=cap)
- result['orientation_mode']='calendar' if record['factors']['condition']['reference_runs'] else 'fixed'
+ result['orientation_mode']='calendar' if any(c.get('channel')=='orientation' and c.get('mode')=='calendar' for c in record['factors']['condition']['controls']) else 'fixed'
  result['preview_sha256']=digest(result);result['checked_at']=now();return result

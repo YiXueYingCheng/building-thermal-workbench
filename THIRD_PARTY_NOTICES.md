@@ -14,7 +14,7 @@ destep 为 DeST 数据解释与 EnergyPlus 模型映射提供了参考。本平�
 
 随包 `destep-source.zip` 保存所参考的源码快照。通用转换时，本平台读取该归档、计算 SHA-256，并将其写入 `source-manifest.json`，用于追溯参考来源；这项记录不表示执行了 destep 或验证了两套转换器的数值等价。公开示例使用已准备的模型模板，登记和计算时不重新运行上述通用转换。
 
-原作者署名 **Copyright (c) 2024 Hongyuan Jia**、原 MIT 许可和源码归档均完整保留。ECA 控制、翻面日历、方案管理、队列与结果比较由本平台代码实现，热环境数值求解由 EnergyPlus 执行。具体规则、调用位置和来源版本见 [destep 参考说明](docs/DESTEP_REFERENCE.md)。
+原作者署名 **Copyright (c) 2024 Hongyuan Jia**、原 MIT 许可和源码归档均完整保留。ECA 控制、光学切换日历、方案管理、队列与结果比较由本平台代码实现，热环境数值求解由 EnergyPlus 执行。具体规则、调用位置和来源版本见 [destep 参考说明](docs/DESTEP_REFERENCE.md)。
 
 ## 外部组件与数据
 

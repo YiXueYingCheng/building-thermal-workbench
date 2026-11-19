@@ -34,7 +34,8 @@ def active_references(record):
 def check_active(record,catalog):
     for ref in active_references(record):
         bound(record,catalog,ref)
-        if ref['snapshot']['content']['schema_version']==2 and record['provenance']['adapter']=='ordinary_building_v1':
+        from surface_materials import enabled as physical_surface
+        if ref['snapshot']['content']['schema_version']==2 and record['provenance']['adapter']=='ordinary_building_v1' and not physical_surface(record):
             from ordinary_orientation import validate_binding
             validate_binding(record,catalog)
 
@@ -121,19 +122,20 @@ def engine_matches(record,source,reader):
     for p,h in engine.items():reader.check(dict(path=p,sha256=h))
 
 def with_reference(record,snapshot):
-    if snapshot['content'].get('schema_version')==2 and record['provenance']['adapter']=='ordinary_building_v1':
+    from surface_materials import enabled as physical_surface
+    if snapshot['content'].get('schema_version')==2 and record['provenance']['adapter']=='ordinary_building_v1' and not physical_surface(record):
         from ordinary_orientation import EXECUTION_VERIFIED
-        if not EXECUTION_VERIFIED:raise ValueError('五层翻面短期实跑尚未完成。')
+        if not EXECUTION_VERIFIED:raise ValueError('五层表面光学切换短期实跑尚未完成。')
     r=copy.deepcopy(record);controls=r['factors']['condition']['controls']
     if not r['factors']['materials']['applications'] or not any(c['channel']=='orientation' for c in controls):
-        raise ValueError('可先保存日历版本；启用翻面需先配置材料应用及两面的光学参数。')
+        raise ValueError('可先保存日历版本；启用光学切换需先配置材料应用及两组表面光学参数。')
     for c in controls:
         if c['channel']=='orientation':c.update(mode='calendar',reference_id=snapshot['id'])
     r['factors']['condition']['reference_runs']=[snapshot_reference(snapshot)]
     return r
 
 def temporary_snapshot(content):
-    s=dict(kind='calendar',id='component_'+'0'*32,revision=1,name='逐日翻面预览',created='preview',content=content)
+    s=dict(kind='calendar',id='component_'+'0'*32,revision=1,name='逐日光学切换预览',created='preview',content=content)
     s['sha256']=payload_hash(s);return s
 
 def prepare(record,catalog,root=ROOT,transition_confirmations=None):
@@ -158,7 +160,7 @@ def _prepare(record,catalog,root=ROOT,transition_confirmations=None):
     sources={s['id']:s for s in sources};reader=VerifiedReader(catalog);entries=[]
     for position,row in enumerate(inspected['rows']):
         from inspection_io import progress
-        progress('推导翻面日历',position,len(inspected['rows']),row['city'])
+        progress('推导光学切换日历',position,len(inspected['rows']),row['city'])
         item=dict(site_id=row['site_id'],city=row['city'],ready=False,issues=[],preview=None);out['rows'].append(item)
         eligible=[s for s in row['sources'] if s['daily_checks_passed'] and s['input_match'] and s['kind']=='china34']
         if len(eligible)!=1:
@@ -194,7 +196,7 @@ def _save_prepared(record,catalog,root,expected,accept,action,record_sha256,fres
     # Internal boundary: callers must freshly prepare or fully revalidate a service-owned inspection.
     if action not in ('save','apply') or accept is not True:raise ValueError('请明确接受本轮展示的参考来源、原警告和已有规则。')
     if not fresh['can_save'] or fresh.get('content_sha256')!=expected or fresh['record_sha256']!=record_sha256:raise ValueError('方案、参考条件或来源已变化，请重新预览。')
-    if action=='apply' and not fresh['can_apply']:raise ValueError('当前不能启用翻面：'+'；'.join(fresh['application_issues']))
+    if action=='apply' and not fresh['can_apply']:raise ValueError('当前不能启用光学切换：'+'；'.join(fresh['application_issues']))
     content=fresh['content']
     with LOCK:
         library=Library(root)
@@ -208,7 +210,7 @@ def _save_prepared(record,catalog,root,expected,accept,action,record_sha256,fres
             refs=references(record)
             if parent is None and len(refs)==1 and content['schema_version']==1:
                 previous=verify_reference(refs[0]);parent={k:previous[k] for k in ('id','revision')}
-            name=('逐日翻面 · '+record['factors']['building']['name']+' · '+str(len(content['sites']))+' 地点')[:100]
+            name=('逐日光学切换 · '+record['factors']['building']['name']+' · '+str(len(content['sites']))+' 地点')[:100]
             snapshot=library.save('calendar',name,content,parent);reused=False
     result=dict(snapshot=snapshot,reused=reused,applied=action=='apply',new_simulations=0)
     if action=='apply':result['condition']=with_reference(record,snapshot)['factors']['condition']
@@ -234,7 +236,7 @@ def verify_for_site(record,catalog,site_id,reader):
         if not checked['daily_checks_passed']:raise ValueError('日历逐日来源核对失败：'+'；'.join(checked['issues']))
         result,actual=derive(source,checked,catalog,reader)
         actual.update(site_id=site_id,city=expected['city'])
-        if actual!=expected:raise ValueError('日历版本的来源、规则或朝向已变化，请重新预览。')
+        if actual!=expected:raise ValueError('日历版本的来源、规则或选用的光学参数组已变化，请重新预览。')
         r=baseline(record);r['factors']['scope']['period']=[1,1,12,31]
         from model_adapter import compile_case
         model,report=compile_case(r,site_id,catalog,reader,'controlled');reader.check(report['weather'])

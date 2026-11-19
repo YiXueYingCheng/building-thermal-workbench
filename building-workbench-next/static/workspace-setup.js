@@ -14,7 +14,7 @@ function workspaceSetupView(){
  <div class="grid2"><section class="well"><h2>1. 计算引擎</h2><p>${e?'已登记 '+esc(e.version):'尚未登记'}</p><p>当前转换程序使用 EnergyPlus ${esc(w.required_engine)}。</p><label class="field">energyplus.exe 完整路径<input id="setup-engine-path" value="${esc(S.enginePath||e?.executable||'')}" placeholder="选择已安装的 EnergyPlus"></label><div class="actions"><button data-setup="browse-engine">浏览…</button><button data-setup="register-engine" class="primary">核验并登记引擎</button></div><p class="muted">登记只读取版本和文件校验值。新导入建筑使用此次登记；已有方案保留各自绑定。</p></section>
  <section class="well"><h2>2. 气象文件</h2><p>已有 ${w.weather_count} 个可用地点。</p><p>导入自己的 EPW 文件，核对逐时完整性、地点及来源说明。</p><button data-weather-action="open">导入 EPW 气象</button><p class="muted">地点可以暂不分类，之后在方案范围中明确选择。</p></section>
  <section class="well"><h2>3. 建筑模型</h2><p>从已有模型文件读取房间与围护结构，再核对作息和温控配置。</p><p>${buildingImportFormatText()}</p><button data-import-action="open"${!e&&!S.boot.records.length||!w.weather_count?' disabled':''}>导入建筑模型</button>${buildingImportPreparation()}${buildingImportFileHelp()}<p class="muted">${!e&&!S.boot.records.length?'请先登记引擎。 ':''}${!w.weather_count?'请先导入气象。 ':''}转换核对通过后，确认加入建筑列表，再另存为研究方案。</p></section>
- <section class="well"><h2>4. 研究材料</h2><p>独立创建材料并保存版本，再按建筑支持范围预览应用。</p><button data-view="material-library">打开公用材料库</button><p class="muted">支持仅表面光学、固定实体层和通用多状态固定对照；新入口不自动套用 ECA 动态算法。原建筑窗户仍参与计算。</p></section></div>
+ <section class="well"><h2>4. 研究材料</h2><p>独立创建材料并保存版本，再按建筑支持范围预览应用。</p><button data-view="material-library">打开公用材料库</button><p class="muted">双面、双态实体材料可在所选外墙和屋面同时启用表面光学切换和热阻调节。原建筑窗户仍参与计算。</p></section></div>
  ${miSupportMarkup(S.boot.material_support)}${workspacePlanSummary()}</section>`;
 }
 const beforeSetupRender=render;

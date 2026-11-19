@@ -57,7 +57,7 @@ def preview(record,kind,target,catalog,root=ROOT):
         fields=changes(old['content'],new['content'])
         out['factors']['materials']['definitions']=[copy.deepcopy(new['content'])]
         out['factors']['materials']['definition_reference']=copy.deepcopy(new)
-        notes=['保留当前材料应用、构件范围、固定/反馈规则及状态和朝向指定；本入口不恢复模板控制。']
+        notes=['保留当前材料应用、构件范围、固定/反馈规则及热学状态和光学参数组；本入口不恢复模板控制。']
     out=normalize(out);errors=validate(out,catalog['sites'])
     if errors:raise ValueError('更新后配置不完整：'+'；'.join(errors))
     from model_adapter import capability

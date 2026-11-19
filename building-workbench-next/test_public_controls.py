@@ -33,7 +33,9 @@ class PublicControlsTests(unittest.TestCase):
             example_text=json.dumps(d['examples'],ensure_ascii=False)
             self.assertNotIn('五层',example_text)
             research=next(x for x in d['material_support'] if x['id']=='development_solid_eca')
-            self.assertIn('本通用入口未接入',research['status'])
+            self.assertIn('历史验证',research['status'])
+            general=next(x for x in d['material_support'] if x['id']=='solid_variable_v1')
+            self.assertIn('反馈',general['control'])
             self.assertIn('不推广为任意材料算法',research['control'])
             self.assertTrue(all(not x['records'] for x in d['examples']))
 

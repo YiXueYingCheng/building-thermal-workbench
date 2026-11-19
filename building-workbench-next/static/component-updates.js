@@ -4,7 +4,7 @@ function componentTarget(row){return {id:row.id,revision:row.revision,sha256:row
 function componentUpdateContext(){return JSON.stringify({record:weatherContext(),usageDirty:S.usageDirty,usageDraft:S.usageDirty?S.usageDraft:null});}
 function materialUpdateLabel(path,p){
  const labels={name:'名称',id:'状态编号',kind:'材料类型',model:'传热模型',thermal_input:'热学输入方式',resistance_m2K_W:'热阻 / m²·K/W',thickness_mm:'厚度 / mm',conductivity_W_mK:'导热系数 / W/(m·K)',areal_capacity_J_m2K:'面热容 / J/(m²·K)',optics_depend_on_state:'光学是否随状态变化',solar_absorptance:'太阳吸收率',emissivity:'热发射率',reflectance:'反射率',input_basis:'光学输入方式'};
- return path.map((key,i)=>path[0]==='states'&&i===1?(p.after.content.states[key]?.name||p.before.content.states[key]?.name||key):labels[key]||({states:'热学状态',optics:'光学',A_R:'A 面 · R 态',A_C:'A 面 · C 态',B_R:'B 面 · R 态',B_C:'B 面 · C 态'})[key]||key).join(' / ');
+ return path.map((key,i)=>path[0]==='states'&&i===1?(p.after.content.states[key]?.name||p.before.content.states[key]?.name||key):labels[key]||({states:'热学状态',optics:'光学',A_R:'A 组 · R 态',A_C:'A 组 · C 态',B_R:'B 组 · R 态',B_C:'B 组 · C 态'})[key]||key).join(' / ');
 }
 function componentUpdatesMarkup(m){const listing=m.components,p=m.componentPreview;
  return `<section class="well component-source-updates"><div class="row"><h3>建筑配置与材料版本</h3><button data-component-update="refresh"${m.pending||m.componentPending?' disabled':''}>${m.componentPending?'读取中…':'刷新库版本'}</button></div><p class="muted">只查看本方案已绑定配置的较新版本；日计划先在建筑配置中选用，再更新建筑配置版本。</p>${m.componentError?`<p class="warning">${esc(m.componentError)}</p>`:''}

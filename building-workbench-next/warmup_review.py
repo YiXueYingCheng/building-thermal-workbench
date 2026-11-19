@@ -129,6 +129,7 @@ def handle_start(root,batch,index):
     write_json(p/'job.json',job,root)
     q=Queue(root)
     with q.db() as db:
+        require(not db.execute('SELECT 1 FROM site_recalculations WHERE parent=? AND idx=?',(batch,index)).fetchone(),'该失败记录已关联单地点补算，请在原地点查看或确认补算结果。')
         cur=db.execute("update jobs set status='review',result=?,result_sha256=?,error=NULL,updated=? where batch=? and idx=? and status='failed' and attempt=? and identity=? and result IS ? and result_sha256 IS ? and error IS ? and updated=?",
             (str(candidate),candidate_sha,created,batch,index,j['attempt'],j['identity'],j['result'],j['result_sha256'],j['error'],j['updated']))
         require(cur.rowcount==1,'原失败记录已变化，没有建立新的可用结果。')

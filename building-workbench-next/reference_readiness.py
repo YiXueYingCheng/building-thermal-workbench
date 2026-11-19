@@ -18,6 +18,8 @@ from review_evidence import reviewed
 
 def baseline(record):
     r = copy.deepcopy(record)
+    from surface_materials import restore_reference_step
+    restore_reference_step(r)
     if r['provenance']['adapter'] not in ('global_frozen_v011', 'ordinary_building_v1'):
         raise ValueError('该旧动态来源尚未接通独立原构造参考转换；保留原绑定，不能直接移植到新地点。')
     m = r['factors']['materials']
@@ -33,9 +35,14 @@ def baseline(record):
     return r
 
 
-def physical(model, dependencies, reader):
+def physical(model, dependencies, reader, *, warmup_observer=False):
     from inspection_io import resolve_path
     value = copy.deepcopy({k:v for k,v in model.items() if not k.startswith('Output')})
+    if warmup_observer:
+        from execution_inputs import OBSERVER
+        if value.get('PythonPlugin:Instance') != OBSERVER:
+            raise ValueError('冻结模型的预热记录程序与登记不符。')
+        del value['PythonPlugin:Instance']
     refs = {resolve_path(p):h for p,h in dependencies.items()}
     for schedule in value.get('Schedule:File', {}).values():
         p = resolve_path(schedule['file_name'])
@@ -114,7 +121,7 @@ def match_case(reference, case, plan, model, required_physical, weather_sha, rea
         if actual != expected:reasons.append(label+'不同')
     if digest({k:v for k,v in model.items() if not k.startswith('Output')}) != case['physical_digest']:
         raise ValueError('冻结模型与物理内容校验值不一致。')
-    if not reasons and physical(model, case['dependencies'], reader) not in (required_physical,equivalent_physical):
+    if not reasons and physical(model, case['dependencies'], reader, warmup_observer=bool(case.get('warmup_observer'))) not in (required_physical,equivalent_physical):
         reasons.append('实际建筑、使用配置、运行规则或数值模型不同')
     return reasons
 
@@ -167,7 +174,7 @@ def build(record, catalog, root=ROOT, accepted_only=False):
     root = Path(root).resolve()
     f = record['factors'];selected = f['scope']['site_ids']
     out = dict(checked_at=now(), record=dict(id=record['id'], revision=record['revision'], name=record['name'], sha256=digest(record)),
-        basis='沿用已有 W00 逐日冷热需求驱动翻面日历的路径，核对原构造参考准备。此准备针对季节翻面，热阻反馈本身不要求该日历；本清单不指定新的翻面规则。',
+        basis='沿用已有 W00 逐日冷热需求驱动光学切换日历的路径，核对原构造参考准备。此准备针对季节光学切换，热阻反馈本身不要求该日历；本清单不指定新的表面光学切换规则。',
         requirements=dict(building=f['building']['name'], period=f['scope']['period'], step_minutes=record['numerics']['step_minutes'],
             mode='controlled', quantity='逐日显热供热需求与制冷需求，kWh；日历与天气、作息日期对应',
             retain='保留当前建筑基础构造、房间配置和运行设置；只在核对副本中移除研究材料及其控制。'),
@@ -175,10 +182,12 @@ def build(record, catalog, root=ROOT, accepted_only=False):
         limits=['“输入匹配”核对实际物理模型、气象及引擎；路径不同但内容相同的已登记作息按内容比较。',
                 '上方扫描统一队列结果；旧逐日资料请点击“核对旧逐日资料”单独检查。不把队列未留存理解成旧目录无数据。',
                 '月份或全年总量不能还原逐日需求。此检查不会启动计算、补跑、生成或采用日历。'])
-    try:reference = baseline(record)
+    try:
+        reference = baseline(record)
+        out['requirements']['step_minutes'] = reference['numerics']['step_minutes']
     except ValueError as exc:reference = None;out['issues'].append(str(exc))
     if f['scope']['period'] != [1,1,12,31]:
-        out['issues'].append('当前是局部时段；已有全年翻面路径需要完整参考年，本次未扩大范围。')
+        out['issues'].append('当前是局部时段；已有全年光学切换日历需要完整参考年，本次未扩大范围。')
     batches,jobs = queue_snapshot(root);available=[]
     for b in batches:
         try:

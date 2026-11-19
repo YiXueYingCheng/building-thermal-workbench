@@ -8,7 +8,7 @@ function geometryControl(w){
  const apps=S.record.factors.materials.applications.filter(a=>a.target_ids.includes(w.id));
  if(!apps.length)return '未应用研究材料';
  return apps.map(a=>{const d=S.record.factors.materials.definitions.find(x=>x.id===a.material_id),controls=S.record.factors.condition.controls.filter(c=>c.target_ids.includes(w.id));
-  return (d?.name||a.material_id)+' · '+({exterior:'外侧附加',interior:'内侧',between:'层间'}[a.position]||a.position)+'；'+controls.map(c=>c.channel==='thermal'?(c.mode==='fixed'?'固定 '+(d?.states.find(x=>x.id===c.state_id)?.name||c.state_id):'传热反馈'):(c.mode==='fixed'?c.face_id+' 面朝外':'按日历翻面')).join('；');
+  return (d?.name||a.material_id)+' · '+({exterior:'外侧附加',interior:'内侧',between:'层间'}[a.position]||a.position)+'；'+controls.map(c=>c.channel==='thermal'?(c.mode==='fixed'?'固定 '+(d?.states.find(x=>x.id===c.state_id)?.name||c.state_id):'传热反馈'):(c.mode==='fixed'?'固定 '+c.face_id:'按日历切换表面光学参数')).join('；');
  }).join(' / ');
 }
 function geometrySVG(m){

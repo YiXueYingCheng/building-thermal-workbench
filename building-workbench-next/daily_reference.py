@@ -60,7 +60,7 @@ def build(record, catalog, root=ROOT):
         preservation='沿用当前建筑基础构造、房间使用配置、温控启停、作息、气象、步长及原预热；参考副本移除研究材料和材料控制。',
         retention='保留现有月度/全年汇总，仅额外请求两项逐日冷热需求；核对后汇总为每地点 365 行。',
         storage_note='记录数量是新增输出规模，不是磁盘峰值估算；实际文件大小和运行峰值需首个样本实测。',
-        can_freeze=False,freeze_issue='',next_step='可为已保存的全年温控原构造方案创建逐日参考清单，再到统一计算队列核对预算并明确提交。结果核验及警告复核通过后才列为可用参考；五层建筑翻面控制仍需独立适配。')
+        can_freeze=False,freeze_issue='',next_step='可为已保存的全年温控原构造方案创建逐日参考清单，再到统一计算队列核对预算并明确提交。结果核验及警告复核通过后才列为可用参考；五层建筑表面光学切换控制仍需独立适配。')
     try:require_baseline(record);out['can_freeze']=True
     except ValueError as exc:out['freeze_issue']=str(exc)
     try:

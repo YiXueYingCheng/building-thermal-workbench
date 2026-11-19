@@ -103,7 +103,8 @@ def complete_attempt(q,r,rc):
         folder=output_storage.attempt_folder(root,job['attempt'])
         if folder!=r['folder']:raise ValueError('原执行位置发生变化。')
         output_storage.write_run(folder/'execution.json',dict(returncode=rc,pid=r['proc'].pid,
-            elapsed_seconds=elapsed,peak_gib=r['peak'],resources=r['policy'],
+            elapsed_seconds=elapsed,peak_gib=r['peak'],peak_working_gib=r.get('peak_working'),peak_commit_gib=r.get('peak_commit'),
+            exclusive=job.get('manual_start')=='exclusive',resources=r['policy'],
             resource_estimate=r['resource_estimate'],finished=now()),root)
         load_review(root,job['plan']['id'],job['checksum'])
         if sha(folder/'model.epJSON')!=job['case']['model_sha256']:raise ValueError('实际运行输入变化。')
@@ -142,11 +143,17 @@ def run(root,idle_exit=False):
         history=ResourceHistory(root,progress=history_progress)
         while True:
             for key,r in list(active.items()):
-                r['memory']=resources.process_memory(r['proc']._handle);r['peak']=max(r['peak'],r['memory']['peak_gib'],r['memory']['peak_commit_gib'])
+                r['memory']=resources.process_memory(r['proc']._handle)
+                r['peak_working']=max(r.get('peak_working',0),r['memory']['peak_gib'])
+                r['peak_commit']=max(r.get('peak_commit',0),r['memory']['peak_commit_gib'])
+                r['peak']=max(r['peak_working'],r['peak_commit'])
+                r['memory']['exclusive']=r['job'].get('manual_start')=='exclusive'
                 r['cpu'].sample(r['proc']._handle)
                 r['memory'].update(cpu_percent=r['cpu'].percent,cpu_peak_percent=r['cpu'].peak,
                     cpu_settling_seconds=max(0,cpu_budget.SETTLE_SECONDS-(time.monotonic()-r['started'])))
-                r['memory']['reserved_gib']=max(r['resource_estimate']['reserved_gib'],history.history.estimate(r['resource_estimate']['key'])['reserved_gib'],r['peak']*1.25+.05)
+                latest=history.history.estimate(r['resource_estimate']['key'])
+                r['memory']['reserved_gib']=max(r['resource_estimate']['reserved_gib'],latest['reserved_gib'],r['peak_working']*1.25+.05)
+                r['memory']['reserved_commit_gib']=max(r['resource_estimate']['reserved_commit_gib'],latest['reserved_commit_gib'],r['peak_commit']*1.25+.05)
                 rc=r['proc'].poll()
                 if rc is None:continue
                 complete_attempt(q,r,rc)
@@ -159,8 +166,11 @@ def run(root,idle_exit=False):
                 candidate=q.next_pending()
                 if candidate:
                     resource_estimate=history.estimate(candidate);estimate=resource_estimate['reserved_gib']
-                    budget=resources.dispatch_budget(policy,machine,[r['memory'] for r in active.values()],estimate)
+                    budget=resources.dispatch_budget(policy,machine,[r['memory'] for r in active.values()],estimate,
+                        per_job_commit_gib=resource_estimate.get('reserved_commit_gib'),exclusive=candidate.get('exclusive',False))
                     budget.update(completed_samples=resource_estimate['configuration_samples'],family_samples=resource_estimate['family_samples'],basis=resource_estimate['basis'],observed_family_peak_gib=resource_estimate['observed_family_peak_gib'])
+                    budget.update({k:resource_estimate.get(k) for k in ('reference_peak_gib','reference_commit_gib','used_samples','legacy_peak','reserved_commit_gib')})
+                    budget.update(batch=candidate['batch'],index=candidate['idx'])
                     disk_budget=output_storage.dispatch_capacity(root,candidate['batch'],policy,list(active.values()))
                     budget['storage']=disk_budget
                     if budget['reason'] is None and disk_budget['reason']:budget.update(reason=disk_budget['reason'],allowed=False)
@@ -187,6 +197,9 @@ def run(root,idle_exit=False):
                             else:
                                 c=job['case'];source=owned(q.folder/'reviews'/plan['id']/c['model_file'],root)
                                 (folder/'model.epJSON').write_bytes(source.read_bytes());(folder/'run').mkdir()
+                                if c.get('warmup_observer'):
+                                    from execution_inputs import stage_observer
+                                    stage_observer(folder,plan['code_hashes'])
                                 log=(folder/'engine.log').open('ab')
                                 try:
                                     flags=subprocess.CREATE_NO_WINDOW | (subprocess.BELOW_NORMAL_PRIORITY_CLASS if policy['priority']=='below_normal' else subprocess.NORMAL_PRIORITY_CLASS)
@@ -204,7 +217,8 @@ def run(root,idle_exit=False):
             except Exception as error:reason='暂停派发：'+str(error);print(traceback.format_exc(),flush=True)
             if time.monotonic()-last_status>2:
                 publish_status(root,dict(pid=os.getpid(),root=str(root),heartbeat=now(),active=len(active),resources=policy,machine=machine,foreign_engine_pids=foreign,reason=reason,per_job_reserved_gib=estimate,budget=budget,cpu_jobs=[dict(pid=r['proc'].pid,percent=r['cpu'].percent,peak_percent=r['cpu'].peak) for r in active.values()]));last_status=time.monotonic()
-            if idle_exit and not active and not any(b['counts']['pending'] and b['mode']=='run' for b in q.state()['batches']):break
+            if idle_exit and not active and not any(b['counts']['pending'] and (b['mode']=='run' or
+                    any(j['status']=='pending' and j.get('manual_start') for j in b.get('jobs',[]))) for b in q.state()['batches']):break
             time.sleep(1)
     finally:
         if group is not None:group.close()

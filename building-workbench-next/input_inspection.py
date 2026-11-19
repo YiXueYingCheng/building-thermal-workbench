@@ -39,7 +39,7 @@ def case_detail(root,ident,index,store):
     model=owned(folder/row['model_file'],folder)
     if sha(model)!=row['model_sha256'] or digest(read_json(model))!=row['generated_model_digest']:raise ValueError('所选模型内容变化，请保留并核查。')
     fields=('city','mode','period','step_minutes','wall_assignments','wall_assignments_basis','differences',
-        'usage_configuration','usage_version','operation_overrides','control_groups','source_model','weather','dependencies','calendar_binding','orientation_calendar')
+        'usage_configuration','usage_version','operation_overrides','control_groups','source_model','weather','dependencies','calendar_binding','orientation_calendar','drawing_wall_scope')
     complete=read_audit(folder,row);report={k:copy.deepcopy(complete[k]) for k in fields if k in complete};del complete
     if isinstance(report.get('usage_version'),dict):report['usage_version']={k:report['usage_version'][k] for k in ('id','revision','name') if k in report['usage_version']}
     url=f'/api/model-inputs/{ident}/'+row.get('audit',{}).get('file','manifest.json')

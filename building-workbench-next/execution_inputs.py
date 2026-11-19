@@ -5,12 +5,36 @@ import re
 import uuid
 import os
 import output_resolution
+from schedule_sharing import share_files
 from foundation import ROOT, read_json, write_json, sha, digest, owned, now
 from model_adapter import VerifiedReader
 
 OUTPUT_CONTRACT = 'monthly_period_v1'
 DAILY_CONTRACT = 'daily_sensible_reference_v1'
-CODE_FILES = ('execution_inputs.py','execution_results.py','execution_queue.py','execution_worker.py','resources.py','cpu_budget.py','worker_runtime.py','daily_reference.py','resource_history.py','output_storage.py','output_resolution.py')
+CODE_FILES = ('execution_inputs.py','execution_results.py','execution_queue.py','execution_worker.py','resources.py','cpu_budget.py','worker_runtime.py','daily_reference.py','resource_history.py','output_storage.py','output_resolution.py','wb_warmup.py','site_recalculation.py','schedule_sharing.py')
+
+OBSERVER = {'WB Daily Warmup': {'run_during_warmup_days':'Yes',
+            'python_module_name':'wb_warmup','plugin_class_name':'DailyRoomTemperatures'}}
+
+def add_warmup_observer(model, engine):
+    periods = model.get('RunPeriod', {})
+    install = Path(engine).parent
+    if (len(periods) != 1 or not model.get('Zone') or
+            any(key.startswith('PythonPlugin:') for key in model) or
+            not (install/'pyenergyplus/plugin.py').is_file() or not (install/'python_lib').is_dir()):
+        return None
+    building = next(iter(model['Building'].values()))
+    model['PythonPlugin:Instance'] = copy.deepcopy(OBSERVER)
+    return dict(environment=next(iter(periods)), tolerance=building.get('temperature_convergence_tolerance_value', 0.4),
+                minimum_days=building.get('minimum_number_of_warmup_days', 6))
+
+def stage_observer(folder, codes):
+    import shutil
+    source = ROOT/'wb_warmup.py'
+    target = folder/source.name
+    shutil.copyfile(source, target)
+    if sha(target) != codes[str(source)]:
+        raise ValueError('预热记录程序与冻结版本不一致，请重新准备。')
 
 def code_hashes():
     return {str(ROOT/n):sha(ROOT/n) for n in CODE_FILES}
@@ -18,10 +42,23 @@ def code_hashes():
 def execution_revision(frozen,root,*,historical=False):
     actual=code_hashes()
     if frozen==actual:return dict(kind='frozen',code_hashes=actual)
+    # Trace exact pairs backwards. Previously prepared models are run as frozen.
+    contract_path=ROOT.parent/'EXECUTOR_COMPATIBILITY.json'
+    compatible=[actual]
+    if contract_path.is_file():
+        contract=read_json(contract_path)
+        for key in ('schedule_sharing_update','scheduling_update'):
+            revision=contract.get(key)
+            if not revision:continue
+            before={str(ROOT/n):h for n,h in revision['from'].items()}
+            after={str(ROOT/n):h for n,h in revision['to'].items()}
+            if after in compatible and before:
+                compatible.append(before)
+                if frozen==before:return dict(kind='audited_scheduling_update',id=revision['id'],code_hashes=actual)
     path=Path(root)/'data/execution/runtime-compatibility.json'
     if path.exists():
         for upgrade in read_json(path).get('upgrades',[]):
-            if upgrade['from_code_hashes']==frozen and upgrade['to_code_hashes']==actual:
+            if upgrade['from_code_hashes']==frozen and upgrade['to_code_hashes'] in compatible:
                 if upgrade.get('historical_only') and not historical:
                     continue
                 return dict(kind=upgrade.get('kind','audited_scheduling_update'),id=upgrade['id'],code_hashes=actual)
@@ -96,7 +133,7 @@ def validate_output(record, output_contract):
         require_baseline(record)
 
 
-def bundle(root,ident,expected=None,output_contract=OUTPUT_CONTRACT):
+def bundle(root,ident,expected=None,output_contract=OUTPUT_CONTRACT,*,observe_warmup=True,share_schedules=True):
     root=Path(root).resolve()
     if not re.fullmatch(r'inputs_[a-f0-9]{32}',str(ident)):raise ValueError('输入包编号不正确。')
     folder=owned(root/'data/model-inputs'/ident,root)
@@ -128,16 +165,21 @@ def bundle(root,ident,expected=None,output_contract=OUTPUT_CONTRACT):
         for p in required:
             if p not in refs:raise ValueError('模型引用尚未登记的外部文件：'+p)
             required[p]=refs[p]
+        sharing=share_files(prepared,required) if share_schedules else None
         for v in prepared.get('Schedule:File',{}).values():
             p=str(Path(v['file_name']).resolve());alias=portable_reference(root,p,required[p],'.txt')
             v['file_name']=alias;required[alias]=required[p]
         original_weather=str(Path(weather).resolve());weather=portable_reference(root,original_weather,required[original_weather],'.epw');required[weather]=required[original_weather]
         mode=row.get('mode') or record['factors']['condition']['operation']['mode']
+        observer=add_warmup_observer(prepared,engines[0]) if observe_warmup else None
         physical={k:v for k,v in prepared.items() if not k.startswith('Output')}
         if output_contract==DAILY_CONTRACT and (mode!='controlled' or row['period']!=[1,1,12,31]):raise ValueError('逐日参考算例必须为全年温控。')
         identity=dict(model=digest(prepared),dependencies=required,engine_files=engine_files,output_contract=output_contract)
+        if sharing:identity['schedule_sharing']=sharing
         cases.append(dict(site_id=row['site_id'],city=row['city'],mode=mode,period=row['period'],step_minutes=row['step_minutes'],
             weather=weather,dependencies=required,model=prepared,physical_digest=digest(physical),identity=digest(identity)))
+        if observer:cases[-1]['warmup_observer']=observer
+        if sharing:cases[-1]['schedule_sharing']=sharing
         if output_contract!=OUTPUT_CONTRACT:cases[-1]['output_contract']=output_contract
     reader.unchanged()
     return manifest,record,engines[0],engine_files,cases
@@ -150,6 +192,7 @@ def prepare(root,ident,output_contract=OUTPUT_CONTRACT):
         model=c.pop('model');name=f'{index:03d}.epJSON';write_json(folder/name,model,root)
         c.update(index=index,model_file=name,model_sha256=sha(folder/name))
         c['identity']=digest(dict(inputs=c['identity'],executor=codes))
+    if any(c.get('warmup_observer') for c in cases):stage_observer(folder,codes)
     plan=dict(id=token,created=now(),bundle_id=ident,bundle_sha256=sha(root/'data/model-inputs'/ident/'manifest.json'),
         record_name=record['name'],record_id=record['id'],revision=record['revision'],record_sha256=digest(record),
         engine=engine,engine_files=engine_files,cases=cases,case_count=len(cases),code_hashes=codes,
@@ -159,11 +202,14 @@ def prepare(root,ident,output_contract=OUTPUT_CONTRACT):
 
 def public(plan,root):
     return {k:plan[k] for k in ('id','created','bundle_id','record_name','record_id','revision','case_count','output_contract')} | dict(
-        cases=[{k:c[k] for k in ('index','site_id','city','mode','period','step_minutes')} for c in plan['cases']],
+        cases=[{k:c[k] for k in ('index','site_id','city','mode','period','step_minutes')} |
+               (dict(schedule_counts=dict(original=c['schedule_sharing']['original_count'],
+                                          retained=c['schedule_sharing']['retained_count'])) if c.get('schedule_sharing') else {})
+               for c in plan['cases']],
         output_detail=output_resolution.description(plan['output_contract'],plan['cases'][0]['period'],plan['cases'][0]['step_minutes']) if plan['cases'] else None,
         plan_sha256=sha(Path(root)/'data/execution/reviews'/plan['id']/'plan.json'))
 
-def load_review(root,ident,checksum,*,historical=False):
+def load_review(root,ident,checksum,*,historical=False,only_index=None):
     if not re.fullmatch(r'review_[a-f0-9]{32}',str(ident)):raise ValueError('计算预览编号不正确。')
     folder=owned(Path(root)/'data/execution/reviews'/ident,root)
     if sha(folder/'plan.json')!=checksum:raise ValueError('待提交的计算清单变化，请重新预览。')
@@ -172,10 +218,17 @@ def load_review(root,ident,checksum,*,historical=False):
     record=read_json(folder/'record.json')
     if digest(record)!=plan['record_sha256']:raise ValueError('方案快照变化。')
     validate_output(record,plan['output_contract'])
+    followup = plan.get('site_recalculation')
+    if followup and not historical:
+        from site_recalculation import validate_step
+        if len(plan['cases']) != 1 or plan['cases'][0]['step_minutes'] != followup['step']:
+            raise ValueError('单地点补算清单与登记的步长不符。')
+        validate_step(record, followup['original_step'], followup['step'], followup.get('purpose','recovery'))
     reader=VerifiedReader()
     reader.check(dict(path=str(Path(root)/'data/model-inputs'/plan['bundle_id']/'manifest.json'),sha256=plan['bundle_sha256']))
     for p,h in plan['engine_files'].items():reader.check(dict(path=p,sha256=h))
-    for c in plan['cases']:
+    cases=plan['cases'] if only_index is None else [plan['cases'][only_index]]
+    for c in cases:
         if c.get('output_contract',OUTPUT_CONTRACT)!=plan['output_contract']:raise ValueError('算例与清单的输出类型不一致。')
         reader.check(dict(path=str(owned(folder/c['model_file'],folder)),sha256=c['model_sha256']))
         for p,h in c['dependencies'].items():reader.check(dict(path=p,sha256=h))

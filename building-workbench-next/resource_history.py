@@ -22,13 +22,18 @@ def fingerprint(record, plan, case, model):
     family = digest(dict(building=building['id'], source=source, zones=building['zones'],
                          engine_files=sorted(engine.values())))
     shape = {kind: len(items) for kind, items in model.items() if isinstance(items, dict)}
+    if case.get('schedule_sharing'):
+        family = digest([family, 'shared_file_schedules_v1', shape['Schedule:File']])
     configuration = dict(family=family, mode=case['mode'], period=case['period'],
-        step_minutes=case['step_minutes'], output_contract=case.get('output_contract', 'monthly_period_v1'),
+        step_minutes=case['step_minutes'], output_contract=plan.get('output_contract', 'monthly_period_v1'),
         objects=shape, algorithms={k: model.get(k, {}) for k in ('HeatBalanceAlgorithm',
             'ZoneAirHeatBalanceAlgorithm', 'SurfaceConvectionAlgorithm:Inside', 'SurfaceConvectionAlgorithm:Outside')},
         program_lines=sum(len(v.get('lines', [])) for v in model.get('EnergyManagementSystem:Program', {}).values()),
         output_frequencies=sorted(v.get('reporting_frequency', '') for v in model.get('Output:Variable', {}).values()))
-    return dict(family=family, configuration=digest(configuration))
+    timing = digest([family, case['mode'], case['step_minutes'], configuration['output_contract'],
+                     len(model.get('Schedule:File', {}))])
+    workload = digest([timing, case['period'], len(model.get('SurfaceProperty:HeatTransferAlgorithm', {}))])
+    return dict(family=family, configuration=digest(configuration), timing=timing, workload=workload)
 
 
 @dataclass(frozen=True)
@@ -37,6 +42,10 @@ class Sample:
     family: str
     configuration: str
     peak_gib: float
+    timing: str = ''
+    workload: str = ''
+    working: float | None = None
+    committed: float | None = None
 
 
 def valid_peak(value):
@@ -61,10 +70,18 @@ class History:
     def estimate(self, key):
         family = [s for s in self.samples.values() if s.family == key['family']]
         exact = [s for s in family if s.configuration == key['configuration']]
-        peak = max((s.peak_gib for s in family), default=0.)
-        return dict(reserved_gib=max(.75, peak * 1.25 + .05), family_samples=len(family),
-            configuration_samples=len(exact), observed_family_peak_gib=peak or None,
-            basis='same_configuration_and_building_floor' if exact else 'same_building_floor' if family else 'no_history',
+        comparable = [s for s in family if s.workload and s.workload == key.get('workload')]
+        same_step = [s for s in family if s.timing and s.timing == key.get('timing')]
+        used = exact or comparable or same_step or family
+        working = max((s.working or s.peak_gib for s in used), default=0.)
+        committed = max((s.committed or s.peak_gib for s in used), default=0.)
+        return dict(reserved_gib=max(.75, working * 1.25 + .05),
+            reserved_commit_gib=max(.75, committed * 1.25 + .05),
+            reference_peak_gib=working or None, reference_commit_gib=committed or None,
+            used_samples=len(used), legacy_peak=any(not s.working or not s.committed for s in used),
+            family_samples=len(family),configuration_samples=len(exact),
+            observed_family_peak_gib=max((s.peak_gib for s in family),default=None),
+            basis='exact' if exact else 'comparable' if comparable else 'same_step' if same_step else 'family' if family else 'no_history',
             unseen_configuration=not exact)
 
 
@@ -202,7 +219,10 @@ class ResourceHistory:
                 if result is not None and result.get('peak_gib') != peak:
                     raise ValueError('结果与实际内存观测不一致。')
                 # Reused/accepted copies of one attempt remain one observation.
-                history.add(Sample(str(folder.resolve()), **c['key'], peak_gib=peak))
+                working, committed = (execution.get(k) for k in ('peak_working_gib','peak_commit_gib'))
+                if not all(valid_peak(v) and v <= peak for v in (working,committed)):
+                    working = committed = None
+                history.add(Sample(str(folder.resolve()), **c['key'], peak_gib=peak,working=working,committed=committed))
             except (OSError, ValueError, KeyError, TypeError, IndexError, json.JSONDecodeError):
                 skipped += 1
         self.history = history

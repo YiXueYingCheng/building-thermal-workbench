@@ -14,10 +14,17 @@ def enabled(record):
 
 def baseline(record):
     r=copy.deepcopy(record)
+    restore_reference_step(r)
     r['factors']['materials']=dict(definitions=[], applications=[])
     r['factors']['condition']['controls']=[]
     r['factors']['condition']['reference_runs']=[]
     return r
+
+
+def restore_reference_step(r):
+    for control in r['factors']['condition'].get('controls',[]):
+        if control.get('mode')=='feedback' and 'reference_step_minutes' in control and enabled(r):
+            r['numerics']['step_minutes']=control['reference_step_minutes']
 
 
 def specification(record):
@@ -33,16 +40,16 @@ def specification(record):
     if not a['target_ids'] or len(a['target_ids'])!=len(set(a['target_ids'])):raise ValueError('请选择不重复的外墙或屋面。')
     controls=f['condition']['controls']
     if f['condition']['reference_runs'] or len(controls)!=2 or any(c.get('mode')!='fixed' for c in controls):
-        raise ValueError('新实体材料当前支持固定状态计算；翻面或动态热阻需相应材料专项校准，不能沿用 ECA 控制。')
+        raise ValueError('新实体材料当前支持固定状态计算；表面光学切换或动态热阻需相应材料专项校准，不能沿用 ECA 控制。')
     states={s['id']:s for s in d['states']}; chosen={}
     for c in controls:
         channel=c.get('channel');key='state_id' if channel=='thermal' else 'face_id'
-        if channel not in ('thermal','orientation') or channel in chosen or set(c)!={'application_id','channel','mode','target_ids',key} or c['application_id']!=a['id'] or set(c['target_ids'])!=set(a['target_ids']):raise ValueError('请为全部应用表面指定唯一的固定状态和朝外面。')
+        if channel not in ('thermal','orientation') or channel in chosen or set(c)!={'application_id','channel','mode','target_ids',key} or c['application_id']!=a['id'] or set(c['target_ids'])!=set(a['target_ids']):raise ValueError('请为全部应用表面指定唯一的固定状态和外表面光学参数组。')
         chosen[channel]=c[key]
     if chosen.get('thermal') not in states or chosen.get('orientation') not in d['faces']:raise ValueError('材料状态或表面不存在。')
     state=states[chosen['thermal']];key=chosen['orientation']+'_'+(chosen['thermal'] if d['optics_depend_on_state'] else 'R')
     optics=d['optics'].get(key,{})
-    if any(optics.get(k) is None for k in ('solar_absorptance','emissivity')):raise ValueError('请补齐所选朝外面的有效太阳吸收率和长波发射率。')
+    if any(optics.get(k) is None for k in ('solar_absorptance','emissivity')):raise ValueError('请补齐所选光学参数组的有效太阳吸收率和长波发射率。')
     return dict(definition=d, state=state, optics=optics, targets=a['target_ids'], face=chosen['orientation'])
 
 
@@ -104,6 +111,10 @@ def capability(record,catalog):
     try:
         errors=validate(record,catalog['sites'])
         if errors:raise ValueError('；'.join(errors))
+        import surface_controls
+        if surface_controls.active(record):
+            compile_case(record,record['factors']['scope']['site_ids'][0],catalog,operation_mode='controlled')
+            return dict(supported=True,reasons=[],case='CONTROLLED_PHYSICAL_SURFACE')
         specification(record)
         base=baseline(record);cap=base_capability(base,catalog)
         if not cap['supported']:return cap
@@ -118,20 +129,41 @@ def compile_case(record,site_id,catalog,reader=None,operation_mode=None):
     from contracts import validate
     errors=validate(record,catalog['sites'])
     if errors:raise ValueError('；'.join(errors))
-    specification(record)
+    import surface_controls
+    dynamic=surface_controls.active(record)
+    if dynamic:surface_controls.controls(record)
+    else:specification(record)
     reader=reader or VerifiedReader(catalog)
     model,report=base_compile(baseline(record),site_id,catalog,reader,operation_mode)
-    before=copy.deepcopy(model);report['material_application']=apply(model,record)
+    before=copy.deepcopy(model)
+    if dynamic:
+        from calendar_library import active_references, verify_for_site, bound
+        refs=active_references(record);calendar=None
+        if refs:
+            verify_for_site(record,catalog,site_id,reader)
+            row=bound(record,catalog,refs[0])[site_id]
+            calendar=row['calendar']
+            report['calendar_binding']=dict(site_id=site_id,calendar_sha256=row['calendar_sha256'],weather_sha256=row['weather_sha256'])
+        report['material_application']=surface_controls.apply(model,record,calendar)
+        report['step_minutes']=record['numerics']['step_minutes']
+        reader.unchanged()
+    else:report['material_application']=apply(model,record)
+    from drawing_wall_scope import available, generated
+    if available(record) and all(before['BuildingSurface:Detailed'][t]['surface_type']=='Wall' for t in record['factors']['materials']['applications'][0]['target_ids']):
+        source = catalog.get('ordinary_buildings', {}).get(record['factors']['building']['id'])
+        conditioned = {r['zone']:r['conditioned'] for r in source['usage']['rooms']} if source else None
+        report['drawing_wall_scope']=generated(record,before,model,report['material_application'],conditioned)
     report['differences']=report.get('differences',[])+changes(before,model)
     report.update(generated_model_digest=digest(model),exact_input_match=False,untouched_fields_match=True,
-        numerical_equivalence='fixed_physical_material_requires_result_review',material_adapter='fixed_surface_material_v1')
+        numerical_equivalence='physical_control_requires_result_review' if dynamic else 'fixed_physical_material_requires_result_review',
+        material_adapter='controlled_surface_material_v1' if dynamic else 'fixed_surface_material_v1')
     return model,report
 
 
 def adoption(record,row,catalog,state_id='R',face='A',targets=None):
     from contracts import normalize,validate
     from model_adapter import compile_case,VerifiedReader,changes
-    if record['factors']['condition']['reference_runs'] or any(c.get('mode')!='fixed' for c in record['factors']['condition']['controls']):raise ValueError('当前方案有反馈或翻面日历；请先另存并明确改为固定工况，再采用新类别材料。')
+    if record['factors']['condition']['reference_runs'] or any(c.get('mode')!='fixed' for c in record['factors']['condition']['controls']):raise ValueError('当前方案有反馈或光学切换日历；请先另存并明确改为固定工况，再采用新类别材料。')
     base=baseline(record);reader=VerifiedReader(catalog)
     model,_=compile_case(base,base['factors']['scope']['site_ids'][0],catalog,reader)
     rows=target_rows(model);targets=targets if targets is not None else [r['id'] for r in rows if r['type']=='Wall']
@@ -144,5 +176,5 @@ def adoption(record,row,catalog,state_id='R',face='A',targets=None):
     return dict(target=row,materials=out['factors']['materials'],controls=out['factors']['condition']['controls'],
         differences=changes(record['factors']['materials'],out['factors']['materials']),
         control_differences=changes(record['factors']['condition']['controls'],out['factors']['condition']['controls']),
-        notes=['按固定状态 '+audit['state_name']+'、'+face+' 面朝外预览；'+audit['note'], '可选外表面 '+str(len(rows))+' 个，本次明确采用 '+str(len(targets))+' 个。'],
+        notes=['按固定状态 '+audit['state_name']+'、固定 '+face+' 的预览；'+audit['note'], '可选外表面 '+str(len(rows))+' 个，本次明确采用 '+str(len(targets))+' 个。'],
         available_targets=rows,audit=audit,record_sha256=digest(record),generation=dict(supported=True,reasons=[]))

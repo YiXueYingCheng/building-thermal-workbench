@@ -67,6 +67,6 @@
 5. `POST /api/material-library/optics-preview`，提交 `{id,revision,changes}` 核对本方案实际光学。audit 逐表面列出 `visible_absorptance.value/source/original_material/original_value`；来源分别为 `user_override`、`target_outer_layer`、`engine_default`。单层仅光学模型还列 `preserved_inside_optics`。
 6. 复用平台原输入生成、预算、核对及计算提交流程，不把保存材料当作启动计算。
 
-`changes` 为当前方案允许的修改对象；无草稿变更时用 `{}`。采用预览绑定原方案与所选组件版本，异步返回后若草稿改变应重做预览。通用新模型只接受固定状态与固定朝外面，不能借用旧 ECA 动态控制字段。
+`changes` 为当前方案允许的修改对象；无草稿变更时用 `{}`。采用预览绑定原方案与所选组件版本，异步返回后若草稿改变应重做预览。通用新模型只接受固定状态与固定光学参数组，不能借用旧 ECA 动态控制字段。
 
 新增元数据是可选字段，旧方案不会自动迁移。人的页面和上述接口共用材料校验、版本快照及计算适配路径。单层外侧光学修正只改变此类新生成输入；旧结果与旧 ECA 接法保留。

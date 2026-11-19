@@ -18,7 +18,7 @@ def material_labels(record):
             if control.get('application_id')!=app['id']:continue
             mode=control.get('mode');channel=control.get('channel')
             if channel=='thermal':label='固定'+states.get(control.get('state_id'),control.get('state_id','')) if mode=='fixed' else {'feedback':'热学反馈调节','calendar':'热学按日历'}.get(mode,'热学设置见配置')
-            elif channel=='orientation':label=str(control.get('face_id',''))+' 面朝外' if mode=='fixed' else {'calendar':'朝向按日历','feedback':'朝向反馈调节'}.get(mode,'朝向设置见配置')
+            elif channel=='orientation':label='固定 '+str(control.get('face_id','')) if mode=='fixed' else {'calendar':'按日历切换表面光学参数','feedback':'光学参数按反馈切换'}.get(mode,'光学选择见工况')
             else:continue
             parts.append(label+(f" × {len(control['target_ids'])}" if 'target_ids' in control else ''))
         labels.append(' · '.join(parts))
@@ -55,13 +55,16 @@ def build(catalog, store, root=ROOT):
         if key not in labels: labels[key] = record_label(record, catalog)
         return labels[key]
 
-    rows, counts = [], {}
+    rows, counts, adopted_steps = [], {}, {}
     queue = root / 'data/execution/queue.sqlite'
     if queue.exists():
         with closing(sqlite3.connect(queue.as_uri() + '?mode=ro', uri=True, timeout=5)) as db:
             db.row_factory = sqlite3.Row
             db.execute('BEGIN')
             rows = [dict(r) for r in db.execute('SELECT id,review,plan,checksum,mode,created FROM batches ORDER BY created DESC,rowid DESC')]
+            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='site_recalculations'").fetchone():
+                for link in db.execute('SELECT parent,idx,step FROM site_recalculations WHERE adopted IS NOT NULL'):
+                    adopted_steps.setdefault(link['parent'],{})[link['idx']]=link['step']
             for row in db.execute('SELECT batch,status,COUNT(*) n FROM jobs GROUP BY batch,status'):
                 counts.setdefault(row['batch'], {})[row['status']] = row['n']
     for b in rows:
@@ -81,12 +84,16 @@ def build(catalog, store, root=ROOT):
             if type(p['case_count']) is not int or len(p['cases']) != p['case_count'] or set(c) - set(STATUSES) or sum(c.values()) != p['case_count']:
                 raise ValueError('算例与状态数量不一致')
             site_ids=list(dict.fromkeys(x['site_id'] for x in p['cases']))
-            batches.append(dict(kind='batch', id=b['id'], name=r['name'], record=label(r),
+            effective=adopted_steps.get(b['id'],{})
+            steps=[effective.get(i,x.get('step_minutes',r['numerics']['step_minutes'])) for i,x in enumerate(p['cases'])]
+            from site_recalculation import step_label
+            batches.append(dict(kind='batch', id=b['id'], name=p.get('record_name') or r['name'], record=label(r),
+                                actual_steps=sorted(set(steps)),step_label=step_label(steps),adopted_count=len(effective),
                                 created=b['created'], queue_mode=b['mode'], case_count=p['case_count'],
                                 site_count=len({x['site_id'] for x in p['cases']}),
                                 site_names=[catalog.get('sites',{}).get(k,{}).get('name',k) for k in site_ids],
                                 modes=sorted({x['mode'] for x in p['cases']}), counts={s:c.get(s, 0) for s in STATUSES},
-                                status=batch_status(c, p['case_count'], b['mode'])))
+                                status=batch_status(dict(c,failed=c.get('failed',0)-len(effective),passed=c.get('passed',0)+len(effective)), p['case_count'], b['mode'])))
         except (OSError, ValueError, KeyError, TypeError) as error:
             issues.append(dict(kind='batch', id=b['id'], message=str(error)))
     for comparison in store.comparisons():

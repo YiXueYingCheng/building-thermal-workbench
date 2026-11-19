@@ -32,7 +32,7 @@ def figure_kind(data):
 
 def annual_site_rows(data):
     site=data['sites'][0]
-    return [dict(site_id=site['site_id'],city=site['city'],demand=kind,
+    return [dict(site_id=site['site_id'],city=site['city'],left_step_minutes=site.get('left_step_minutes'),right_step_minutes=site.get('right_step_minutes'),demand=kind,
         data_retention='contains_retained_summary' if __import__('summary_retention').notices(data) else 'full_evidence',
         reference_kWh=site[f'left_{kind}_kWh'],study_kWh=site[f'right_{kind}_kWh'],
         saved_kWh=site[f'{kind}_saved_kWh'],saved_percent=site[f'{kind}_saved_percent'])
@@ -73,12 +73,27 @@ def export(data, root=ROOT):
     if assets:write_json(stage/'map.json',assets,root)
     for name,source in notices.items():
         (stage/name).write_bytes(source.read_bytes())
+    summaries=data.get('pairing_summaries')
+    if summaries:
+        (stage/'pairing-summary.csv').write_bytes(csv_bytes(summaries))
+        climates=[dict(basis=summaries[i]['basis'],**c) for i,rows in enumerate((data['strict_classes'],data['classes'])) for c in rows]
+        if climates:(stage/'pairing-climates.csv').write_bytes(csv_bytes(climates))
     from review_annotations import annotate,export_notes
     export_notes(stage,data,root)
+    wall_rows = [dict(site_id=sid,side=side,**wall) for sid,sides in data.get('wall_scopes',{}).items()
+                 for side,scope in sides.items() for wall in scope['rows']]
+    if wall_rows:
+        (stage/'wall-coverage.csv').write_bytes(csv_bytes(wall_rows))
     if kind=='site':(stage/'period-loads.csv').write_bytes(csv_bytes(annotate(annual_site_rows(data),data)))
     for name,rows in [('sites',data['sites']),('climates',data['classes']),('monthly',data['monthly']),('rooms',data['rooms'])]:
         if rows:
-            table=[{k:v for k,v in r.items() if not k.endswith('_evidence') and not k.endswith('_pending_warnings')} for r in rows]
+            table=[{k:v for k,v in r.items() if k!='step_waiver' and not k.endswith('_evidence') and not k.endswith('_pending_warnings')} for r in rows]
+            if name=='sites' and wall_rows:
+                for row in table:
+                    sides=data['wall_scopes'].get(row['site_id'],{})
+                    for side in ('left','right'):
+                        for field in ('covered_m2','feedback_m2'):
+                            row[side+'_'+field]=sides.get(side,{}).get(field)
             from summary_retention import notices
             if notices(data):
                 for row in table:row['data_retention']='contains_retained_summary'
@@ -92,7 +107,7 @@ def export(data, root=ROOT):
 参考：{data['records']['left']['name']}，版本 {data['records']['left']['revision']}，来源 {data['left']['id']}
 研究：{data['records']['right']['name']}，版本 {data['records']['right']['revision']}，来源 {data['right']['id']}
 数据标识：{data['dataset_sha256']}
-计算时段：{data['period']}；步长：{data['step_minutes']} min；有效地点：{data['paired_sites']}/{data['selected_sites']}。
+计算时段：{data['period']}；两侧实际步长：{data.get('step_label',data['step_minutes'])}；有效地点：{data['paired_sites']}/{data['selected_sites']}。
 {data['note']}
 {data['difference']}。{data['energy_basis']}。归一化面积：{data['conditioned_area_m2']} m²。
 
@@ -152,6 +167,8 @@ left 为参考、right 为研究；saved 为参考减研究。空白保留为缺
     notes=[('参考' if side=='left' else '研究')+'：'+export_text(note) for side,note in data.get('research_input_notes',{}).items() if note]
     if notes:readme='研究输入适用性\n'+'\n'.join(notes)+'\n数值警告接受与研究输入是否符合约定分别核对。\n\n'+readme
     if assets:readme+='\n地图署名与许可见 MAP_ATTRIBUTION.md 和 atlas-LICENSE.txt。单独分享或修改地图时应保留来源、许可链接与修改说明。\n'
+    if wall_rows:
+        readme+='\nwall-coverage.csv 逐地点列出两侧的墙号、房间、净面积和材料状态。left 为参考，right 为研究。covered 为是否铺设，thermal 为反馈或固定；未铺墙保留基准构造。sites.csv 的 covered_m2 和 feedback_m2 分别为铺设、反馈净面积。\n'
     (stage/'编辑说明.txt').write_text(readme,encoding='utf-8-sig')
     if kind:
         from runtime_settings import plotting_python
@@ -159,6 +176,11 @@ left 为参考、right 为研究；saved 为参考减研究。空白保留为缺
         run=subprocess.run([str(python),'-X','utf8',str(ROOT/'plot_comparison.py'),str(stage)],capture_output=True,text=True,encoding='utf-8',
             timeout=90,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         if run.returncode:raise ValueError('论文图导出失败：'+run.stderr[-600:])
+    if summaries:
+        with (stage/'编辑说明.txt').open('a',encoding='utf-8') as handle:
+            handle.write('\n配对口径：pairing-summary.csv 并列严格配对与含已确认豁免的汇总。负荷列为有效配对地点的等权均值（kWh/地点）。'
+                         'pairing-climates.csv 按气候给出两套统计。地点表、月表、房间表及图表使用含已确认豁免的口径；'
+                         'pairing_basis、双方步长和确认时间见 sites.csv，来源见 dataset.json。\n')
     from summary_retention import export_notice
     export_notice(stage,data)
     with zipfile.ZipFile(stage/'comparison.zip','w',zipfile.ZIP_DEFLATED) as archive:

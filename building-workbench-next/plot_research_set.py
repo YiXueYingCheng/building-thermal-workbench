@@ -20,7 +20,7 @@ def plot(folder, font=None):
     colors={'baseline':'#778681','fixed':'#267c61','flip':'#b87333','feedback':'#715596'}
     colors={k:v for k,v in colors.items() if any(r['role']==k for r in d['rows'])}
     offsets=[(i-(len(colors)-1)/2)*.21 for i in range(len(colors))]
-    labels={'baseline':'W00 原构造','fixed':'固定 ECA','flip':'翻面 ECA','feedback':'翻面＋热阻反馈'}
+    labels={'baseline':'W00 原构造','fixed':'固定 ECA','flip':'ECA 表面光学切换','feedback':'表面光学切换＋热阻调节'}
     metrics={'heating':'供暖显热需求','cooling':'制冷显热需求','total':'冷热需求合计'}
     sites=list(dict.fromkeys(r['site_id'] for r in d['rows']));pages=[]
     lookup={(r['site_id'],r['metric'],r['role']):r for r in d['rows']}

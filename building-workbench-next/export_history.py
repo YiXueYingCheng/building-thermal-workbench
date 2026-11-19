@@ -26,7 +26,7 @@ def listing(kind,ident,root=ROOT):
             excluded={'dataset_sha256','created'} if kind=='comparison' else {'dataset_sha256'}
             h=digest({k:v for k,v in data.items() if k not in excluded})
             if h!=data['dataset_sha256'] or h!=r['dataset_sha256']:raise ValueError('导出数据内容摘要不一致。')
-            row=dict(id=r['id'],created=r['created'],dataset_sha256=h,period=data['period'],step_minutes=data['step_minutes'],files=sorted(r['files']))
+            row=dict(id=r['id'],created=r['created'],dataset_sha256=h,period=data['period'],step_minutes=data['step_minutes'],step_label=data.get('step_label') or f"{data['step_minutes']} min",files=sorted(r['files']))
             if kind=='comparison':
                 c=data['comparison']
                 for side in ('left','right'):
@@ -38,7 +38,7 @@ def listing(kind,ident,root=ROOT):
                 if r.get('figure_kind')=='site':row['unit']='图表 kWh；数据表另含 MJ/m²' if data.get('normalized') else 'kWh'
             else:
                 if r['batch_id']!=ident or r['counts']!=data['counts']:raise ValueError('导出批次或计数不一致。')
-                row.update(name=data['record_name'],record=dict(id=data['record_id'],revision=data['revision']),counts=data['counts'],modes=data['modes'])
+                row.update(name=data['record_name'],record=dict(id=data['record_id'],revision=data['revision']),counts=data['counts'],modes=data['modes'],selection=r.get('selection',[]))
             rows.append(row)
         except (OSError,ValueError,KeyError,TypeError,AttributeError) as error:
             issues.append(dict(id=folder.name,scope='selected',message=str(error)))

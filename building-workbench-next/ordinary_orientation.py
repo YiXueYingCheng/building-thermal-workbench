@@ -23,9 +23,9 @@ def fixed_record(record):
 
 def validate_binding(record,catalog):
     from calendar_library import active_references,bound
-    if not EXECUTION_VERIFIED:raise ValueError('五层翻面短期实跑尚未完成。')
+    if not EXECUTION_VERIFIED:raise ValueError('五层表面光学切换短期实跑尚未完成。')
     refs=active_references(record)
-    if len(refs)!=1:raise ValueError('五层翻面须绑定唯一逐日日历。')
+    if len(refs)!=1:raise ValueError('五层表面光学切换须绑定唯一逐日日历。')
     optics(record,catalog);bound(record,catalog,refs[0])
     return refs[0]['snapshot']['content']
 
@@ -33,16 +33,16 @@ def validate_binding(record,catalog):
 def optics(record,catalog):
     r=normalize(record)
     spec=validate(r,source(catalog,r['factors']['building']['id']))
-    if not spec:raise ValueError('当前是原构造方案。可独立保存日历；核对翻面输入需先选择 ECA 材料应用。')
-    if spec['state']!='R':raise ValueError('首轮翻面输入核对采用固定蓬松 R；当前固定压缩方案保持。')
+    if not spec:raise ValueError('当前是原构造方案。可独立保存日历；核对表面光学切换输入需先选择 ECA 材料应用。')
+    if spec['state']!='R' and not spec.get('feedback'):raise ValueError('首轮表面光学切换输入核对采用固定蓬松 R；当前固定压缩方案保持。')
     d=r['factors']['materials']['definitions'][0];faces={}
     for face in ('A','B'):
         item=copy.deepcopy(d['optics'].get(face+'_R',{}))
         for key,label in (('solar_absorptance','太阳吸收率'),('emissivity','发射率')):
             v=item.get(key)
-            if v is None:raise ValueError(f'当前材料版本尚未登记 {face} 面的{label}；请先核对并采用双面材料版本。')
-            if type(v) not in (int,float) or not math.isfinite(v) or not 0<=v<=1:raise ValueError(f'{face} 面{label}无效。')
-        if not 0<item['emissivity']<=.99999:raise ValueError(f'{face} 面发射率不在本引擎支持范围内。')
+            if v is None:raise ValueError(f'当前材料版本尚未登记 {face} 组的{label}；请先核对并采用双面材料版本。')
+            if type(v) not in (int,float) or not math.isfinite(v) or not 0<=v<=1:raise ValueError(f'{face} 组{label}无效。')
+        if not 0<item['emissivity']<=.99999:raise ValueError(f'{face} 组发射率不在本引擎支持范围内。')
         faces[face]=item
     return r,spec,faces
 
@@ -103,9 +103,9 @@ def compile_inspection(record,catalog,content,site_id,reader=None,operation_mode
     if sorted(exposed)!=spec['targets']:raise ValueError('材料暴露面与应用范围不一致。')
     start=(dt.date(2025,*r['factors']['scope']['period'][:2])-dt.date(2025,1,1)).days
     initial=faces['A' if calendar[start] else 'B']
-    m['Material:NoMass'][name].update(solar_absorptance=initial['solar_absorptance'],thermal_absorptance=initial['emissivity'])
+    m[applied.get('object_kind','Material:NoMass')][name].update(solar_absorptance=initial['solar_absorptance'],thermal_absorptance=initial['emissivity'])
     for kind,objects in m.items():
-        if isinstance(objects,dict) and any(str(k).startswith(PREFIX) for k in objects):raise ValueError('翻面输入对象名称与已有模型冲突。')
+        if isinstance(objects,dict) and any(str(k).startswith(PREFIX) for k in objects):raise ValueError('表面光学切换输入对象名称与已有模型冲突。')
     def add(kind,key,value):m.setdefault(kind,{})[PREFIX+key]=value
     for key,control in (('_Solar','Solar'),('_Thermal','Thermal')):
         add('EnergyManagementSystem:Actuator',key,dict(actuated_component_unique_name=name,actuated_component_type='Material',actuated_component_control_type=f'Surface Property {control} Absorptance'))
@@ -117,12 +117,12 @@ def compile_inspection(record,catalog,content,site_id,reader=None,operation_mode
     for freq in ('Daily','Monthly','RunPeriod'):add('Output:Variable','_Face_'+freq,dict(key_value='*',variable_name=PREFIX+'_FaceOutput',reporting_frequency=freq))
     reader.unchanged()
     report=dict(status='input_ready',execution_enabled=EXECUTION_VERIFIED,runtime_verified=EXECUTION_VERIFIED,new_simulations=0,
-        site_id=site_id,material_name=spec['name'],state='R',resistance_m2K_W=spec['resistance_m2K_W'],faces=faces,
+        site_id=site_id,material_name=spec['name'],state=spec['state'],resistance_m2K_W=spec['resistance_m2K_W'],faces=faces,
         surfaces=len(exposed),net_area_m2=measured['totals']['net_m2'],period=r['factors']['scope']['period'],initial_face='A' if calendar[start] else 'B',
         calendar_sha256=digest(calendar),calendar_content_sha256=digest(content),material_sha256=digest(r['factors']['materials']['definitions'][0]),
         material_version=copy.deepcopy(r['factors']['materials'].get('definition_reference')),source=row['reference_record'],
-        generated_model_sha256=digest(m),control=dict(calling_point=CALLING_POINT,lines=lines,thermal_state='fixed_R',
-            warmup='沿用原求解器预热；预热也按当前模拟日期取朝向，不追加实际天气前置。',date_basis='实际非闰年日序，局部时段不从日历第一项重排。'),
+        generated_model_sha256=digest(m),control=dict(calling_point=CALLING_POINT,lines=lines,thermal_state='feedback' if spec.get('feedback') else 'fixed_R',
+            warmup='沿用原求解器预热；预热也按当前模拟日期取光学参数组，不追加实际天气前置。',date_basis='实际非闰年日序，局部时段不从日历第一项重排。'),
         days=[dict(day_of_year=i+1,date=(dt.date(2025,1,1)+dt.timedelta(days=i)).strftime('%m-%d'),face='A' if f else 'B',
             solar_absorptance=faces['A' if f else 'B']['solar_absorptance'],emissivity=faces['A' if f else 'B']['emissivity']) for i,f in enumerate(calendar)],
         note='已核对双面参数、范围及日历接线；采用后需保存方案，再准备计算。' if EXECUTION_VERIFIED else '双面参数、范围及日历接线已核对；短期实跑尚未完成。')

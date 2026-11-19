@@ -2,6 +2,8 @@ from pathlib import Path
 from contextlib import closing
 from unittest.mock import patch
 import unittest, tempfile, sqlite3, json
+import csv
+import batch_timeseries as details
 from foundation import sha
 from execution_queue import Queue
 import result_timeline as rt
@@ -45,6 +47,31 @@ class TimelineTests(unittest.TestCase):
     def mutate(self,statement):
         with closing(sqlite3.connect(self.sql)) as db, db:db.execute(statement)
         self.save()
+
+    def test_shared_schedule_lookup_and_export_by_original_name(self):
+        self.raw['schedule_sharing'] = dict(version=1,original_count=2,retained_count=1,aliases={'Room B':'Room A'})
+        self.raw['period'] = [1,1,1,31]
+        with closing(sqlite3.connect(self.sql)) as db, db:
+            for i,freq in enumerate(('Daily','Monthly','Run Period'),4):
+                db.execute('INSERT INTO ReportDataDictionary VALUES(?,0,?,?,?,?,?)',(i,'Avg','ROOM A','Schedule Value',freq,''))
+            db.execute('INSERT INTO ReportData SELECT TimeIndex,4,0.5 FROM Time WHERE WarmupFlag IS NULL')
+            for ident,interval in ((5,3),(6,4)):
+                db.execute('INSERT INTO Time VALUES(?,2007,1,31,24,0,0,44640,?,31,1,NULL)',(100+ident,interval))
+                db.execute('INSERT INTO ReportData VALUES(?,?,0.5)',(100+ident,ident))
+        self.save()
+        inventory=rt.inventory(self.root,self.batch,0)
+        aliases=[r for r in inventory['dictionary'] if r.get('SharedSchedule')]
+        self.assertEqual(len(aliases),3)
+        for row in aliases:
+            key=row['ReportDataDictionaryIndex']
+            values=rt.series(self.root,self.batch,0,key,'01-01','01-31')
+            physical=rt.series(self.root,self.batch,0,row['SourceDictionaryIndex'],'01-01','01-31')
+            self.assertEqual(values['variable']['KeyValue'],'ROOM B')
+            self.assertEqual(values['rows'],physical['rows'])
+        path=self.root/'names.csv'
+        variables={4:('schedules',dict(KeyValue='ROOM A'))}
+        details.write_schedule_names(self.raw,variables,path)
+        with path.open(encoding='utf-8-sig',newline='') as f:self.assertEqual(list(csv.reader(f))[1:],[['ROOM B','ROOM A']])
 
     def test_inventory_distinguishes_solver_step_and_actual_frequency(self):
         r=rt.inventory(self.root,self.batch,0)
@@ -125,6 +152,61 @@ class TimelineTests(unittest.TestCase):
     def test_read_deadline_stops_verification(self):
         with self.assertRaises(ValueError):
             with rt.source(self.root,self.batch,0,budget=-1):pass
+
+    def test_export_native_material_states_separately_and_keep_fixed_channels_out(self):
+        self.raw['period']=[1,1,1,31]
+        with closing(sqlite3.connect(self.sql)) as db, db:
+            for ident,name in ((7,'NX_SC_StateOutput'),(8,'NX_SC_FaceOutput')):
+                db.execute("INSERT INTO ReportDataDictionary VALUES(?,0,'Avg','EMS',?,'Daily','')",(ident,name))
+                db.executemany("INSERT INTO ReportData VALUES(?,?,?)",
+                    [(day,ident,0.25 if ident==7 else int(day<=12)) for day in range(1,32)])
+                db.execute("INSERT INTO ReportData VALUES(100,?,6)",(ident,))
+        self.save()
+        controls=[dict(channel='thermal',mode='feedback',target_ids=['S_10']),
+                  dict(channel='orientation',mode='calendar',target_ids=['S_10'])]
+        record={'factors':{'condition':{'controls':controls}}}
+        case=dict(index=2,city='Fixture',mode='controlled',status='passed',status_label='通过',
+                  evidence=dict(batch_id=self.batch,index=0,result_sha256=sha(self.summary),identity='same'))
+        data=dict(record_id='scheme',revision=1,record_sha256=details.digest(record),results=[case])
+        with patch.object(details,'current'),patch.object(details,'Store') as store:
+            store.return_value.get.return_value=record
+            options=details.inspect(data,self.root)
+            self.assertEqual(options['choices'],[dict(group=g,frequency='Daily',cases=1) for g in ('loads','optical','thermal')])
+            for group,expected in [('thermal',[25]*31),('optical',[100]*12+[0]*19)]:
+                response=details.inspect(data,self.root,[(group,'Daily')],self.root)
+                self.assertEqual(response['inventory_sha256'],options['inventory_sha256'])
+                entry=response['cases'][0]
+                self.assertEqual((entry['source_index'],entry['rows']),(0,31))
+                with (self.root/entry['file']).open(encoding='utf-8-sig') as f:
+                    rows=list(csv.DictReader(f))
+                self.assertEqual([float(r['状态占比_%']) for r in rows],expected)
+                self.assertEqual({r['算例'] for r in rows},{'3'})
+                self.assertEqual(rows[-1]['区间结束日期'],'01-31')
+            controls[1]['mode']='fixed';data['record_sha256']=details.digest(record)
+            options=details.inspect(data,self.root)
+            self.assertNotIn('optical',options['groups'])
+            self.assertFalse(any(r['group']=='optical' for r in options['choices']))
+            self.sql.unlink()
+            missing=details.inspect(data,self.root)
+            self.assertEqual(missing['choices'],[])
+            self.assertIn('SQL',missing['cases'][0]['note'])
+
+    def test_month_output_is_read_as_a_complete_simulated_period(self):
+        self.raw['period']=[1,8,1,12]
+        with closing(sqlite3.connect(self.sql)) as db, db:
+            db.execute("INSERT INTO Time VALUES(200,2007,1,12,24,0,0,44640,3,5,1,0)")
+            db.execute("INSERT INTO ReportData VALUES(200,3,19.25)")
+            db.execute("INSERT INTO ReportDataDictionary VALUES(4,0,'Avg','EMS','NX_Fb_StateOutput','Monthly','')")
+            db.execute("INSERT INTO ReportData VALUES(200,4,0.25)")
+        self.save()
+        d=rt.series(self.root,self.batch,0,3,'01-08','01-12')
+        self.assertEqual((d['rows'][0]['label'],d['rows'][0]['Value']),('01-08 至 01-12',19.25))
+        self.assertEqual(rt.inventory(self.root,self.batch,0)['monthly_controls']['compressed']['months'],{1:0.25})
+        with self.assertRaises(ValueError):rt.series(self.root,self.batch,0,3,'01-09','01-12')
+        self.mutate("INSERT INTO ReportData VALUES(200,4,0.25)")
+        self.assertIn('error',rt.inventory(self.root,self.batch,0)['monthly_controls']['compressed'])
+        self.mutate("UPDATE ReportDataDictionary SET KeyValue='OTHER' WHERE ReportDataDictionaryIndex=4")
+        self.assertFalse(rt.inventory(self.root,self.batch,0)['monthly_controls'])
 
 
 if __name__=='__main__':unittest.main()

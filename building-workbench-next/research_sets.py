@@ -14,7 +14,7 @@ from calendar_library import stable_numbers
 
 ROLES=('baseline','fixed','flip')
 ALL_ROLES=(*ROLES,'feedback')
-LABELS=dict(baseline='W00 · 原构造',fixed='固定 ECA',flip='翻面 ECA',feedback='翻面＋热阻反馈')
+LABELS=dict(baseline='W00 · 原构造',fixed='固定 ECA',flip='ECA 表面光学切换',feedback='表面光学切换＋热阻调节')
 COMMON=dict(building='建筑、基材与房间使用',operation='温控与运行作息',scope='地点与时段',numerics='步长与数值设置')
 
 def require(ok,message):
@@ -42,7 +42,11 @@ def common(record):
 def compatible(records):
     base=common(records['baseline']);rows=[]
     for key,label in COMMON.items():
-        rows.append(dict(key=key,label=label,equal=all(common(r)[key]==base[key] for r in records.values())))
+        values=[common(r)[key] for r in records.values()]
+        if key=='numerics':
+            values=[{k:v for k,v in n.items() if k!='step_minutes'} for n in values]
+            label='引擎与数值设置（实际步长逐地点配对）'
+        rows.append(dict(key=key,label=label,equal=all(v==values[0] for v in values)))
     issues=[]
     b=records['baseline'];m=b['factors']['materials']
     if m.get('applications') or m.get('legacy_construction_overrides') or b['factors']['condition']['controls']:issues.append('W00 需保留原构造，不含研究材料应用或材料控制。')
@@ -54,12 +58,12 @@ def compatible(records):
             if not any(x['mode']=='feedback' for x in thermal) or any(x['mode'] not in ('fixed','feedback') for x in thermal):issues.append(LABELS[role]+'需要明确的反馈作用范围，其余墙面保持固定。')
         elif not thermal or any(x['mode']!='fixed' for x in thermal):issues.append(LABELS[role]+'的热学控制与成员角色不一致。')
         face=[x for x in c if x['channel']=='orientation']
-        if not face or any(x['mode']!=('fixed' if role=='fixed' else 'calendar') for x in face):issues.append(LABELS[role]+'的朝向控制与角色不一致。')
+        if not face or any(x['mode']!=('fixed' if role=='fixed' else 'calendar') for x in face):issues.append(LABELS[role]+'的表面光学控制与角色不一致。')
     p=[r['provenance'] for r in records.values()]
     if len({(r['adapter'],r['snapshot_id']) for r in p})!=1:issues.append('组内成员的建筑来源不同，需要先核对。')
-    rows.append(dict(key='research_basis',label='两项 ECA 的热学、A 面与应用范围',equal=material_basis(records['fixed'])==material_basis(records['flip'])))
+    rows.append(dict(key='research_basis',label='两项 ECA 的热学参数、A 组光学参数与应用范围',equal=material_basis(records['fixed'])==material_basis(records['flip'])))
     if 'feedback' in records:
-        rows.append(dict(key='feedback_basis',label='仅翻面与反馈的材料参数、A/B 两面及应用范围',equal=material_basis(records['flip'],False)==material_basis(records['feedback'],False) and records['flip']['factors']['materials']['definitions']==records['feedback']['factors']['materials']['definitions']))
+        rows.append(dict(key='feedback_basis',label='仅表面光学切换与反馈的材料参数、A/B 光学参数及应用范围',equal=material_basis(records['flip'],False)==material_basis(records['feedback'],False) and records['flip']['factors']['materials']['definitions']==records['feedback']['factors']['materials']['definitions']))
         def thermal_targets(record):
             targets={}
             for c in record['factors']['condition']['controls']:
@@ -76,7 +80,7 @@ def compatible(records):
         def calendar_content(r):
             refs=active_references(r)
             return [v['snapshot']['content'] for v in refs]
-        rows.append(dict(key='control_calendar',label='仅翻面与反馈使用同一逐日日历',equal=calendar_content(records['flip'])==calendar_content(records['feedback'])))
+        rows.append(dict(key='control_calendar',label='仅表面光学切换与反馈使用同一逐日日历',equal=calendar_content(records['flip'])==calendar_content(records['feedback'])))
     issues += [r['label']+'不一致' for r in rows if not r['equal']]
     return dict(consistent=not issues,rows=rows,issues=issues)
 
@@ -112,6 +116,8 @@ class Sets:
         s=self.get(ident,revision);r=self.records(s);out=dict(id=s['id'],revision=s['revision'],name=s['name'],notes=s['notes'],created=s['created'],sha256=s['sha256'],audit=compatible(r),
             members={k:dict(**short(r[k]),source=v['source'],source_summary=short(self.store.get(v['source']['id'],v['source']['revision'])),result_candidates=len(v.get('results',[]))) for k,v in s['members'].items()})
         if summary_only:return out
+        from solid_eca import enabled
+        out['fixed_feedback_experiment']=('feedback' in r and enabled(r['fixed']) and enabled(r['feedback']) and out['audit']['consistent'])
         with self.store.connect() as db:out['history']=[dict(revision=row[0],created=row[1],name=loads(row[2])['name']) for row in db.execute('SELECT revision,created,payload FROM research_sets WHERE id=? ORDER BY revision DESC',(ident,))]
         out['latest_revision']=out['history'][0]['revision'];out['calendars']=[]
         from calendar_library import status
@@ -138,6 +144,7 @@ class Sets:
         source_ref=ref(source);source_recipe=recipe(source)
         for b in batch_rows(self.root):
             p=loads(b['plan'])
+            if p.get('site_recalculation'):continue
             if (p['record_id'],p['revision'],p['record_sha256'])==(source['id'],source['revision'],source_ref['sha256']):
                 rows.append(dict(batch_id=b['id'],source=source_ref,recipe=source_recipe,plan_sha256=b['checksum']))
         return rows
@@ -220,18 +227,20 @@ class Sets:
             self._publish(db,v)
         return dict(id=ident,revision=v['revision'],reused=False)
 
-    def results(self,ident,revision=None):
+    def results(self,ident,revision=None,*,include_monthly=False):
         from inspection_io import reading
-        with reading():return self._results(ident,revision)
+        with reading():return self._results(ident,revision,include_monthly=include_monthly)
 
-    def _results(self,ident,revision=None):
+    def _results(self,ident,revision=None,*,include_monthly=False,only_roles=None):
         s=self.get(ident,revision);records=self.records(s);out=dict(id=ident,revision=s['revision'],set_sha256=s['sha256'],name=s['name'],members={},audit=compatible(records),scope=records['baseline']['factors']['scope'],records={role:ref(r) for role,r in records.items()})
         from batch_results import build
         from execution_queue import Queue
         with Queue(self.root).db() as db:
             completed={r['batch']:r['accepted'] for r in db.execute("SELECT batch,SUM(status IN ('passed','reused')) AS accepted FROM jobs GROUP BY batch")}
         sources={}
+        monthly={}
         for role,m in s['members'].items():
+            if only_roles is not None and role not in only_roles:continue
             current_recipe=recipe(records[role])
             candidates=copy.deepcopy(m.get('results',[]))+self._bind_results(records[role]);rows=[];seen=set()
             for candidate in candidates:
@@ -252,7 +261,14 @@ class Sets:
                     d=build(candidate['batch_id'],self.catalog,self.root)
                     require((d['record_id'],d['revision'])==(source['id'],source['revision']),'结果批次未绑定所选来源版本。')
                     require(d['plan_sha256']==candidate['plan_sha256'] and d['record_sha256']==candidate['source']['sha256'],'结果冻结输入与绑定来源不一致。')
+                    if include_monthly:
+                        monthly[d['id']]={r['index']:r['monthly'] for r in d['results']
+                                          if r['accepted'] and r['mode']=='controlled' and r.get('monthly')}
                     row.update(usable=d['counts']['accepted']>0,counts=d['counts'],results=[{k:r.get(k) for k in ('index','site_id','city','accepted','acceptance','status','status_label','loads','days','period','mode','step_minutes','weather_sha256','evidence','pending_warnings','data_retention')} for r in d['results']],source=dict(name=source['name'],**candidate['source']))
                 except (ValueError,KeyError,OSError) as e:row['reason']=str(e)
             out['members'][role]=rows
-        out['dataset_sha256']=digest(out);out['checked_at']=now();return out
+        out['dataset_sha256']=digest(out);out['checked_at']=now()
+        # Monthly rows come from the same verified result bytes as the totals.
+        # This optional view does not change the existing export identity.
+        if include_monthly:out['monthly_by_batch']=monthly
+        return out

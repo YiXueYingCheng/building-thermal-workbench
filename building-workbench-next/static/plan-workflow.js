@@ -7,10 +7,38 @@ function workflowCalendarBranch(job){
  const branch=job?.branch,p=job?.result,rows=p?.rows||[],pending=rows.filter(x=>!x.ready);
  if(!branch||p.source_kind!=='accepted_queue_daily_v1'||p.can_save||p.can_apply||p.issues.length||!rows.length||rows.length!==branch.total||!pending.length||!rows.every(x=>x.source?.batch_id&&x.preview?.days?.length===365)||!pending.every(x=>x.preview.transition_review_needed&&x.issues.length===1&&x.issues[0]==='出现多段或不确定季节，可查看完整曲线，但保存前需共同确认，不自动合并。'))return branch;
  const out=copy(branch);out.rows=out.rows.map(x=>({...x,reference_ready:true,calendar_pending:!x.ready}));
- out.nodes=out.nodes.map(x=>x.id==='reference'?{...x,state:'done',label:`${rows.length}/${branch.total} 地点参考就绪`}:x.id==='calendar'?{...x,state:'attention',label:`${pending.length} 地点待确认季节切换`,note:'逐日参考齐备；请核对待确认地点的切换规则，再保存日历。'}:x.id==='orientation'?{...x,state:'attention',label:'待日历确认',note:'日历确认后再核对材料与翻面执行。'}:x);return out;
+ out.nodes=out.nodes.map(x=>x.id==='reference'?{...x,state:'done',label:`${rows.length}/${branch.total} 地点参考就绪`}:x.id==='calendar'?{...x,state:'attention',label:`${pending.length} 地点待确认季节切换`,note:'逐日参考齐备；请核对待确认地点的切换规则，再保存日历。'}:x.id==='orientation'?{...x,state:'attention',label:'待日历确认',note:'日历确认后再核对材料与表面光学切换执行。'}:x);return out;
 }
 function workflowCurrent(){const d=S.workflow?.key===workflowKey()?S.workflow.data:null;if(!d)return null;return {...d,branches:workflowBranchVisible()?workflowCalendarBranch(currentCalendarInspection()?.job)||null:null};}
-function workflowBranchStatus(){const state=currentCalendarInspection();return `<div class="flow-branch"><h3>翻面研究分支</h3><p role="status" class="${state?.error?'warning':'muted'}">${esc(calendarInspectionMessage())}</p>${!state?.pending?workflowButton('branch-refresh','重新核对'):''}</div>`;}
+function materialControlSummary(record, draft=false){
+ const controls=record?.factors?.condition?.controls||[];
+ const flip=controls.filter(c=>c.channel==='orientation'&&c.mode==='calendar');
+ const feedback=controls.filter(c=>c.channel==='thermal'&&c.mode==='feedback');
+ const targets=rows=>new Set(rows.flatMap(c=>c.target_ids||[]));
+ const overlap=new Set();
+ for(const orientation of flip){
+  const resistance=targets(feedback.filter(c=>c.application_id===orientation.application_id));
+  for(const surface of orientation.target_ids||[])if(resistance.has(surface))overlap.add(surface);
+ }
+ const title=overlap.size?'耦合工况 · '+overlap.size+' 个构件同时进行表面光学切换和热阻调节':
+  flip.length&&feedback.length?'两项控制分别作用于不同构件':flip.length?'仅表面光学切换':feedback.length?'仅热阻调节':controls.length?'固定热阻与固定光学参数组':'沿用原建筑构造';
+ const label=(text,rows)=>`<span class="mode-flag${rows.length?' mode-enabled':''}">${text} · ${rows.length?'已启用（'+targets(rows).size+' 个构件）':'未启用'}</span>`;
+ return `<section class="material-mode-summary" aria-label="材料工况设置"><strong>${draft?'当前草稿':'方案 v'+esc(record.revision)} · ${title}</strong><div>${label('表面光学切换',flip)}${label('热阻调节',feedback)}</div></section>`;
+}
+function workflowBranchStatus(d){
+ const state=currentCalendarInspection(),active=S.record.factors.condition.controls.filter(c=>c.mode==='calendar');
+ if(!active.length||state?.pending||state?.error){
+  return `<div class="flow-branch"><h3>表面光学切换研究分支</h3><p role="status" class="${state?.error?'warning':'muted'}">${esc(calendarInspectionMessage())}</p>${!state?.pending?workflowButton('branch-refresh','核对参考来源'):''}</div>`;
+ }
+ const bindings=(d.calendar_status||[]).filter(row=>row.active);
+ const ready=d.nodes.find(n=>n.id==='prepare');
+ const lines=bindings.map(row=>`<p class="${row.valid?'':'warning'}"><strong>${esc(row.name)} · v${esc(row.revision)}</strong> · ${row.valid?'已采用，参考条件匹配':esc(row.note)}</p>`).join('');
+ const matched=bindings.length>0&&bindings.every(row=>row.valid);
+ const usable=ready?.state==='ready'&&matched;
+ let next='请先核对当前方案采用的光学切换日历。';
+ if(matched)next=usable?(S.dirty?'保存方案版本后，可直接生成输入。':'可直接生成模型输入。')+'生成时会自动核对各地点的气象、参考来源和实际控制。':ready?.note||'请查看材料控制的核对结果。';
+ return `<div class="flow-branch"><h3>表面光学切换研究分支</h3>${lines||'<p>当前方案已设置按日历切换表面光学参数。</p>'}<p role="status" class="${usable?'':'warning'}">${esc(next)}</p>${workflowButton('calendar','查看已采用日历')}${workflowButton('branch-refresh','完整核对参考来源')}</div>`;
+}
 function workflowButton(action,label,extra=''){return `<button data-flow-open="${action}" ${extra}>${label}</button>`;}
 function workflowSteps(nodes,branch=false){
  return `<ol class="flow-steps${branch?' flow-branch-steps':''}">${nodes.map((n,i)=>`<li><button data-flow-node="${esc(n.id)}" class="flow-step flow-${esc(n.state)}" aria-pressed="${S.workflowNode===n.id}" aria-expanded="${S.workflowNode===n.id}" aria-controls="flow-detail"><span class="flow-step-title"><span class="flow-number">${branch?'↳':i+1}</span>${esc(n.title)}</span><span class="flow-state">${esc(n.label)}</span></button></li>`).join('')}</ol>`;
@@ -26,13 +54,13 @@ function workflowDetail(d){
  if(n.id==='results'&&!d.batches.length&&d.preparation_history?.length)content+=`<button data-flow-node="budget">查看历史准备与关联批次</button>`;
  if(n.id==='compare')content=`${d.comparisons.map(c=>`<div class="flow-record"><div><strong>${esc(c.name)}</strong><p class="muted">参考 v${c.left.revision} → 研究 v${c.right.revision}；进入后选择双方结果。</p></div><div class="actions"><button data-activity-comparison="${esc(c.id)}">查看差异</button><button data-activity-comparison-result="${esc(c.id)}">选择配对结果与出图</button></div></div>`).join('')}<div class="actions">${workflowButton('compare','前往对照总览')}</div>`;
  if(n.id==='reference')content=`${(d.branches.rows||[]).map(x=>`<p>${esc(x.city)} · ${x.reference_ready?'参考就绪'+(x.calendar_pending?'；季节切换待确认':''):x.ready?'参考就绪':esc(x.issues.join('；'))}</p>`).join('')}<div class="actions">${workflowButton('daily','查看参考与补算准备')}${workflowButton('calendar','查看日历核对')}</div>`;
- if(n.id==='calendar'||n.id==='orientation')content=`${(d.branches.rows||[]).map(x=>x.orientation_input?`<p>${esc(x.city)} · ${esc(x.orientation_input)}</p>`:'').join('')}<div class="actions">${workflowButton('calendar','查看翻面日历与输入核对')}</div>`;
+ if(n.id==='calendar'||n.id==='orientation')content=`${(d.branches.rows||[]).map(x=>x.orientation_input?`<p>${esc(x.city)} · ${esc(x.orientation_input)}</p>`:'').join('')}<div class="actions">${workflowButton('calendar','查看光学切换日历与输入核对')}</div>`;
  return `<div id="flow-detail" class="flow-detail"><div class="row"><h3>${esc(n.title)} · ${esc(n.label)}</h3><button data-flow-node="${esc(n.id)}" aria-label="收起阶段详情">收起</button></div><p>${esc(n.note)}</p>${['prepare','reference','calendar','orientation'].includes(n.id)?'':`<p class="muted">依据：当前已保存 v${d.revision} 的记录。</p>`}${content}</div>`;
 }
 function planWorkflowView(){
  if(!S.record)return '';const d=workflowCurrent();
- const content=d?`${S.dirty?`<p class="warning flow-draft">有未保存编辑：准备与翻面分支按当前编辑检查；输入、清单、批次和比较仍属于已保存 v${d.revision}。${d.same_recipe?'计算输入配方未变，仍需保存后准备计算。':'当前编辑尚无对应计算结果。'}</p>`:''}${workflowSteps(d.nodes)}<div class="flow-tools"><span class="muted">点选阶段查看依据与下一步操作。</span><button data-flow-open="branch" aria-expanded="${!!workflowBranchVisible()}"${d.branches&&!d.branches.optional?' disabled':''}>${d.branches&&!d.branches.optional?'翻面分支（当前已启用）':workflowBranchVisible()?'收起翻面分支':'查看翻面研究分支'}</button></div>${d.branches?`<div class="flow-branch"><h3>翻面研究分支${d.branches.optional?' · 可选':''}</h3><p class="muted">${d.branches.optional?'当前为固定工况；下列准备不影响固定工况主线。':'按当前翻面控制检查参考与日历。'}</p><p class="muted">${esc(calendarInspectionMessage())}</p>${workflowButton('branch-refresh','重新核对',currentCalendarInspection()?.pending?'disabled':'')}${workflowSteps(d.branches.nodes,true)}${d.branches.issues.length?`<p class="warning">${esc(d.branches.issues.join('；'))}</p>`:''}</div>`:workflowBranchVisible()?workflowBranchStatus():''}${workflowDetail(d)}${d.issues.length?`<details class="warning"><summary>部分记录需核对，流程可能不完整</summary>${d.issues.map(x=>`<p>${esc(x)}</p>`).join('')}</details>`:''}<p class="muted flow-stamp">读取于 ${esc(d.checked_at.replace('T',' '))} · ${d.scope_sites} 个范围地点 · 查看流程不启动计算</p>`:`<p class="${S.workflowError?'warning':'muted'}" role="status">${esc(S.workflowError||'正在读取当前方案状态…')}</p>`;
- return `<section id="plan-workflow" class="section plan-workflow" aria-label="方案流程总览"><div class="row"><div><h2>方案流程总览</h2><p class="muted">${esc(S.record.name)} · 已保存 v${S.record.revision}</p></div><button data-flow-open="refresh"${S.workflowPending?' disabled':''}>${S.workflowPending?'正在核对…':'刷新流程'}</button></div>${content}</section>`;
+ const content=d?`${S.dirty?`<p class="warning flow-draft">有未保存编辑：准备与光学切换分支按当前编辑检查；输入、清单、批次和比较仍属于已保存 v${d.revision}。${d.same_recipe?'计算输入配方未变，仍需保存后准备计算。':'当前编辑尚无对应计算结果。'}</p>`:''}${workflowSteps(d.nodes)}<div class="flow-tools"><span class="muted">点选阶段查看依据与下一步操作。</span><button data-flow-open="branch" aria-expanded="${!!workflowBranchVisible()}"${S.record.factors.condition.controls.some(c=>c.mode==='calendar')?' disabled':''}>${S.record.factors.condition.controls.some(c=>c.mode==='calendar')?'光学切换分支（当前已启用）':workflowBranchVisible()?'收起光学切换分支':currentCalendarInspection()?.pending?'查看后台核对进度':currentCalendarInspection()?.job?.state==='ready'?'查看已有核对结果':'查看表面光学切换研究分支'}</button></div>${d.branches?`<div class="flow-branch"><h3>表面光学切换研究分支${d.branches.optional?' · 可选':''}</h3><p class="muted">${d.branches.optional?'当前为固定工况；下列准备不影响固定工况主线。':'按当前表面光学切换控制检查参考与日历。'}</p><p class="muted">${esc(calendarInspectionMessage())}</p>${workflowButton('branch-refresh','重新核对',currentCalendarInspection()?.pending?'disabled':'')}${workflowSteps(d.branches.nodes,true)}${d.branches.issues.length?`<p class="warning">${esc(d.branches.issues.join('；'))}</p>`:''}</div>`:workflowBranchVisible()?workflowBranchStatus(d):''}${workflowDetail(d)}${d.issues.length?`<details class="warning"><summary>部分记录需核对，流程可能不完整</summary>${d.issues.map(x=>`<p>${esc(x)}</p>`).join('')}</details>`:''}<p class="muted flow-stamp">读取于 ${esc(d.checked_at.replace('T',' '))} · ${d.scope_sites} 个范围地点 · 查看流程不启动计算</p>`:`<p class="${S.workflowError?'warning':'muted'}" role="status">${esc(S.workflowError||'正在读取当前方案状态…')}</p>`;
+ return `<section id="plan-workflow" class="section plan-workflow" aria-label="方案流程总览"><div class="row"><div><h2>方案流程总览</h2><p class="muted">${esc(S.record.name)} · 已保存 v${S.record.revision}</p></div><button data-flow-open="refresh"${S.workflowPending?' disabled':''}>${S.workflowPending?'正在核对…':'刷新流程'}</button></div>${materialControlSummary(S.record,S.dirty)}${!d&&adoptedCalendarSnapshots().length?workflowButton('calendar','查看已采用日历'):''}${content}</section>`;
 }
 function updateWorkflowDOM(){const el=document.getElementById('plan-workflow');if(el)el.outerHTML=planWorkflowView();}
 function alignWorkflowIdentity(){
@@ -74,7 +102,7 @@ const workflowAction=action;action=async function(button){
  const op=button.dataset.flowOpen;if(!op)return workflowAction(button);
  if(op==='refresh'||op==='verify'){void refreshWorkflow(op==='verify');return;}
  if(op==='branch-refresh'){void requestCalendarInspection(true);return;}
- if(op==='branch'){if(S.record.factors.condition.controls.some(c=>c.mode==='calendar'))return;S.workflowBranch=!S.workflowBranch;S.workflowNode=null;updateWorkflowDOM();if(S.workflowBranch)void requestCalendarInspection();return;}
+ if(op==='branch'){if(S.record.factors.condition.controls.some(c=>c.mode==='calendar'))return;S.workflowBranch=!S.workflowBranch;S.workflowNode=null;updateWorkflowDOM();return;}
  if(op==='restore'){
   if(S.dirty)throw Error('请先保存或撤销未保存修改，再恢复原清单。');
   const prepared=await api('/api/plan-workflow/preparation',{id:S.saved.id,revision:S.saved.revision,review:button.dataset.flowValue});

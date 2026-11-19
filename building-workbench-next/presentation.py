@@ -12,9 +12,13 @@ def batch_index(root,compact=False):
  with closing(sqlite3.connect(path.as_uri()+'?mode=ro',uri=True,timeout=5)) as db:
   db.row_factory=sqlite3.Row;db.execute('BEGIN')
   rows=[dict(r) for r in db.execute("SELECT id,json_object('record_id',json_extract(plan,'$.record_id'),'revision',json_extract(plan,'$.revision'),'record_sha256',json_extract(plan,'$.record_sha256'),'case_count',json_extract(plan,'$.case_count'),'record_name',json_extract(plan,'$.record_name')) AS plan,mode,created FROM batches" if compact else 'SELECT id,plan,mode,created FROM batches')]
+  adopted={}
+  if not compact and db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='site_recalculations'").fetchone():
+   for link in db.execute('SELECT parent,idx,step FROM site_recalculations WHERE adopted IS NOT NULL'):
+    adopted.setdefault(link['parent'],{})[link['idx']]=link['step']
   counts={}
   for r in db.execute('SELECT batch,status,COUNT(*) n FROM jobs GROUP BY batch,status'):counts.setdefault(r['batch'],{})[r['status']]=r['n']
- return {b['id']:{**b,'plan':loads(b['plan']),'counts':counts.get(b['id'],{})} for b in rows}
+ return {b['id']:{**b,'plan':loads(b['plan']),'counts':counts.get(b['id'],{}),'adopted':adopted.get(b['id'],{})} for b in rows}
 
 def batch_status(counts,total,mode):
  if total<=0 or set(counts)-set(STATUSES) or sum(counts.values())!=total:return '状态待核对'
@@ -48,6 +52,9 @@ def describe_sources(data,store,catalog,index):
    else:
     b=index.get(choice['id'])
     if b is None:continue
-    p=b['plan'];meta=dict(kind='execution',status=batch_status(b['counts'],p['case_count'],b['mode']),case_count=p['case_count'],site_count=len({c['site_id'] for c in p['cases']}),counts=b['counts'],created=b['created'])
+    from site_recalculation import step_label
+    p=b['plan'];adopted=b.get('adopted',{});counts=b['counts'].copy()
+    if adopted:counts.update(failed=counts.get('failed',0)-len(adopted),passed=counts.get('passed',0)+len(adopted))
+    meta=dict(kind='execution',step_label=step_label(adopted.get(i,c.get('step_minutes',r['numerics']['step_minutes'])) for i,c in enumerate(p['cases'])),status=batch_status(counts,p['case_count'],b['mode']),case_count=p['case_count'],site_count=len({c['site_id'] for c in p['cases']}),counts=counts,created=b['created'])
    choice['display']=dict(**meta,period=f['scope']['period'],step_minutes=r['numerics']['step_minutes'])
  return data

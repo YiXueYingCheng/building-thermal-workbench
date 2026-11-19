@@ -84,7 +84,7 @@ class Importer:
             weather=weather_ref,location=weather.get('location'),source_kind='legacy_dynamic')
         calendar=city.get('daily_cooling_face')
         if not isinstance(calendar,list) or len(calendar)!=365 or any(v not in (0,1,False,True) for v in calendar):
-            raise ValueError('换季日历不是完整的非闰年逐日朝向。')
+            raise ValueError('换季日历不是完整的非闰年逐日光学选择。')
         record['factors']['condition']['reference_runs']=[dict(id='season_reference',purpose='orientation_calendar',
             reference=reference,rule=rule,calendar=calendar,calendar_sha256=digest(calendar))]
         return site_id
@@ -144,7 +144,7 @@ class Importer:
                     dict(application_id='eca_walls',channel='orientation',mode='calendar',target_ids=walls,
                         reference_id='season_reference',update=dict(kind='daily_midnight'))]
                 site_id=self.dynamic_site(p,card,record)
-                record['provenance']['notes'].append('LOW/HIGH 只固定热学状态，仍保留原逐日朝向日历。')
+                record['provenance']['notes'].append('LOW/HIGH 只固定热学状态，仍保留原逐日光学选择日历。')
             except (OSError,ValueError,KeyError,StopIteration) as error:
                 record['provenance']['notes'].append('动态定义待核对：'+str(error))
                 self.issues.append(dict(record_id=record['id'],message=str(error)))

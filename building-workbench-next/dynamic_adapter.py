@@ -60,7 +60,7 @@ def resolve(record,catalog,site_id=None,reference_context=None):
    for key in keys:
     targets=[w for w in c['target_ids'] if key=='ALL' or wallmap[w]['group']==key]
     groups.append(dict(id=f'NX_G{i}_{key}',targets=targets,area=sum(wallmap[w]['area_m2'] for w in targets),policy={k:policy[k] for k in POLICY_KEYS},interval=interval,roles=roles))
- if set(thermal)!=set(wallmap) or set(orientation)!=set(wallmap):raise NotSupported('所有应用墙面需要唯一的状态和朝向指定。')
+ if set(thermal)!=set(wallmap) or set(orientation)!=set(wallmap):raise NotSupported('所有应用墙面需要唯一的热学状态和光学参数组。')
  calendars={};workspace_calendars={}
  for w,c in orientation.items():
   if c['mode']=='calendar':
@@ -74,13 +74,13 @@ def resolve(record,catalog,site_id=None,reference_context=None):
     calendar=ref['calendar']
     if len(calendar)!=365 or digest(calendar)!=ref['calendar_sha256']:raise NotSupported('逐日日历内容与校验不一致。')
    calendars[w]=calendar
-  elif c['mode']!='fixed':raise NotSupported('朝向模式未支持。')
+  elif c['mode']!='fixed':raise NotSupported('光学选择模式未支持。')
   needed_states=['R','C'] if thermal[w]['mode']=='feedback' else [thermal[w]['state_id']]
   faces=['A','B'] if w in calendars else [c['face_id']]
   for state in needed_states:
    for face in faces:
     optical=d['optics'].get(face+'_'+state,{})
-    if any(optical.get(k) is None for k in ('solar_absorptance','emissivity')):raise NotSupported('反馈/翻面使用的 '+face+' 面 '+state+' 态光学参数未补全。')
+    if any(optical.get(k) is None for k in ('solar_absorptance','emissivity')):raise NotSupported('反馈/表面光学切换使用的 '+face+' 组 '+state+' 态光学参数未补全。')
  return dict(record=r,binding=binding,walls=wallmap,thermal=thermal,orientation=orientation,groups=groups,calendars=calendars)
 
 def capability(record,catalog,reference_context=None):

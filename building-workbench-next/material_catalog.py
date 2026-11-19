@@ -6,6 +6,56 @@ from component_library import Library
 from contracts import normalize, validate
 
 
+def import_definition(document):
+    """Validate a portable material before showing it or creating a local identity."""
+    if (not isinstance(document, dict) or document.get('schema') != 'workbench-material/v1'
+            or set(document) != {'schema', 'source_revision', 'material'}):
+        raise ValueError('请选择由材料库导出的材料 JSON。')
+    if type(document['source_revision']) is not int or document['source_revision'] < 1:
+        raise ValueError('材料来源版本无效。')
+    from material_registration import MODELS
+    from contracts import validate_definitions
+    d = document['material']
+    if not isinstance(d, dict) or d.get('model') not in MODELS:
+        raise ValueError('材料计算方式不受支持。')
+    if not isinstance(d.get('name'), str) or not 1 <= len(d['name'].strip()) <= 100:
+        raise ValueError('请核对材料名称。')
+    if not isinstance(d.get('id'), str) or not d['id'].strip() or not isinstance(d.get('source_note', ''), str):
+        raise ValueError('请核对材料编号和来源说明。')
+    states = d.get('states')
+    if not isinstance(states, list) or not states or not all(isinstance(s, dict) and isinstance(s.get('name'), str) and s['name'].strip() for s in states):
+        raise ValueError('材料状态和状态名称不完整。')
+    if not isinstance(d.get('optics'), dict) or not all(isinstance(o, dict) for o in d['optics'].values()):
+        raise ValueError('材料表面光学参数格式无效。')
+    if d['model'] == 'equivalent_resistance_no_layer_storage':
+        if (set(d) - {'id','name','kind','model','source_note','states','state_identity','optics','optics_depend_on_state'}
+                or d.get('kind') != 'single_layer' or d.get('state_identity') != 'independent'
+                or type(d.get('optics_depend_on_state')) is not bool
+                or [s.get('id') for s in states] != ['R','C']):
+            raise ValueError('等效热阻材料的定义与两态结构不一致。')
+        for s in states:
+            if (set(s) - {'id','name','thermal_input','resistance_m2K_W','thickness_mm','conductivity_W_mK'}
+                    or s.get('thermal_input') not in ('resistance','conductivity_thickness')):
+                raise ValueError('等效热阻状态含无法识别的物性或输入方式。')
+        for k, o in d['optics'].items():
+            if (k not in ('A_R','A_C','B_R','B_C')
+                    or set(o) - {'input_basis','reflectance','solar_absorptance','emissivity'}
+                    or o.get('input_basis') not in ('solar_absorptance','reflectance','opaque_reflectance')):
+                raise ValueError('等效热阻材料的表面光学输入无效。')
+    _, errors = validate_definitions([d])
+    if errors:
+        raise ValueError('；'.join(errors))
+    canonical = normalize({'factors': {'materials': {'definitions': [d]}}})['factors']['materials']['definitions'][0]
+    for state, checked in zip(states, canonical['states']):
+        value = state.get('resistance_m2K_W')
+        if value is not None and (checked.get('resistance_m2K_W') is None or
+                not math.isclose(value, checked['resistance_m2K_W'], rel_tol=1e-12)):
+            raise ValueError('材料热阻与厚度、导热率不一致，请核对原材料。')
+    if any(canonical['optics'][k] != o for k, o in d['optics'].items()):
+        raise ValueError('材料表面参数与所选输入方式或共用状态不一致。')
+    return canonical
+
+
 def inventory(catalog, root=ROOT):
     fixed=catalog['records'].get('global_fixed')
     from material_types import template as new_template, CATEGORIES, support_paths
@@ -107,7 +157,7 @@ def adoption_preview(record, target, catalog, root=ROOT, selection=None):
             from ordinary_building import source
             m, controls = preset(source(catalog, record['factors']['building']['id']), catalog, 'R')
             out['factors']['condition']['controls'] = controls
-            notes.append('新增全部 135 面外墙的外侧附加层，初始为固定蓬松 R、A 面朝外。')
+            notes.append('新增全部 135 面外墙的外侧附加层，初始为固定蓬松 R、固定 A。')
         out['factors']['materials'] = m
     elif len(m['definitions']) != 1:
         raise ValueError('当前入口只替换单一研究材料，请先核对多材料应用。')

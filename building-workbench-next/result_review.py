@@ -35,6 +35,28 @@ WEATHER_METHOD='corrected_five_storey_full_weather_function_replay'
 def require(ok,message):
     if not ok:raise ValueError(message)
 
+def review_step(raw,record,model):
+    """Only the established 5 min path or the explicit solid 1 min profile.
+
+    This validates the review scope, never accepts a warning by timestep alone.
+    Exact input regeneration and weather-event checks still follow.
+    """
+    step=raw['step_minutes']
+    require(type(step) is int and step in (1,5) and record['numerics']['step_minutes']==step,
+            '该求解步长尚未接通本次复核。')
+    timestep=list(model.get('Timestep',{}).values())
+    require(len(timestep)==1 and timestep[0]['number_of_timesteps_per_hour']==60//step,'实际模型求解步长不符。')
+    if step==1:
+        from solid_eca import enabled
+        require(enabled(record),'1 min 复核仅接通明确保存的实体四工况数值配置。')
+        walls={k for k,v in model['BuildingSurface:Detailed'].items()
+               if v['surface_type']=='Wall' and v['outside_boundary_condition']=='Outdoors'}
+        overrides=list(model.get('SurfaceProperty:HeatTransferAlgorithm',{}).values())
+        require(len(walls)==135 and len(overrides)==135 and {v['surface_name'] for v in overrides}==walls
+                and all(v['algorithm']=='ConductionFiniteDifference' for v in overrides),
+                '1 min 外墙传热算法或覆盖范围不符。')
+    return step
+
 def folder(root,ident):
     require(bool(re.fullmatch(r'review_[a-f0-9]{32}',str(ident))),'复核编号无效。')
     return owned(Path(root)/'verification/result-reviews'/ident,root)
@@ -94,29 +116,29 @@ def export_review(root,ident):
             if (p/name).exists():z.write(p/name,name)
         z.write(raw_path,'original-result.json')
         for path in raw['artifacts']:
-            if Path(path).name in ('model.epJSON','eplusout.err','eplusout.end','daily-loads.csv'):
+            if Path(path).name in ('model.epJSON','wb_warmup.py','eplusout.err','eplusout.end','daily-loads.csv'):
                 z.write(output_storage.checked_path(path,root),'original/'+Path(path).name)
     return data.getvalue()
 
 def check_orientation_outputs(sql,calendar):
     """Match saved daily faces to actual EMS monthly/yearly (and daily if present) outputs."""
-    require(len(calendar)==365 and all(type(v) is int and v in (0,1) for v in calendar),'翻面日历不完整。')
+    require(len(calendar)==365 and all(type(v) is int and v in (0,1) for v in calendar),'光学切换日历不完整。')
     with closing(sqlite3.connect(Path(sql).as_uri()+'?mode=ro',uri=True)) as db:
         db.row_factory=sqlite3.Row
         rows=[dict(r) for r in db.execute("select d.ReportingFrequency,t.Month,t.Day,r.Value from ReportData r join ReportDataDictionary d using(ReportDataDictionaryIndex) join Time t using(TimeIndex) where d.Name='NX_FiveStorey_Flip_FaceOutput'")]
     monthly=[r for r in rows if r['ReportingFrequency']=='Monthly'];annual=[r for r in rows if r['ReportingFrequency']=='Run Period'];daily=[r for r in rows if r['ReportingFrequency']=='Daily']
-    require(len(monthly)==12 and {r['Month'] for r in monthly}==set(range(1,13)) and len(annual)==1,'翻面执行输出缺少完整月度或全年记录。')
+    require(len(monthly)==12 and {r['Month'] for r in monthly}==set(range(1,13)) and len(annual)==1,'表面光学切换执行输出缺少完整月度或全年记录。')
     expected={m:[] for m in range(1,13)}
     for i,v in enumerate(calendar):expected[(dt.date(2025,1,1)+dt.timedelta(days=i)).month].append(v)
     for row in monthly:
-        values=expected[row['Month']];require(abs(row['Value']-sum(values)/len(values))<1e-10,'实际翻面月份与保存日历不符。')
-    require(abs(annual[0]['Value']-sum(calendar)/365)<1e-10,'实际全年翻面占比与保存日历不符。')
+        values=expected[row['Month']];require(abs(row['Value']-sum(values)/len(values))<1e-10,'实际表面光学切换月份与保存日历不符。')
+    require(abs(annual[0]['Value']-sum(calendar)/365)<1e-10,'实际全年表面光学切换占比与保存日历不符。')
     if daily:
-        require(len(daily)==365 and len({(r['Month'],r['Day']) for r in daily})==365,'逐日翻面执行记录不完整。')
+        require(len(daily)==365 and len({(r['Month'],r['Day']) for r in daily})==365,'逐日光学切换执行记录不完整。')
         for row in daily:
             i=(dt.date(2025,row['Month'],row['Day'])-dt.date(2025,1,1)).days
-            require(abs(row['Value']-calendar[i])<1e-10,'逐日翻面执行与保存日历不符。')
-    require(len(rows)==13+len(daily),'出现未预期的翻面输出频率。')
+            require(abs(row['Value']-calendar[i])<1e-10,'逐日光学切换执行与保存日历不符。')
+    require(len(rows)==13+len(daily),'出现未预期的表面光学切换输出频率。')
     return dict(A_days=sum(calendar),B_days=365-sum(calendar),rows=rows,monthly_and_annual_match=True)
 
 def analyse_specialist(root,ident):
@@ -133,11 +155,12 @@ def analyse_specialist(root,ident):
     check('实际执行模型与冻结输入一致',sha(run/'model.epJSON')==case['model_sha256'])
     execution=read_json(run/'execution.json');err=(run/'run/eplusout.err').read_text(encoding='utf-8',errors='replace');end=(run/'run/eplusout.end').read_text(encoding='utf-8',errors='replace')
     check('计算正常结束且没有严重错误',execution['returncode']==0 and 'EnergyPlus Completed Successfully' in end and 'EnergyPlus Completed Successfully' in err and not re.search(r'\*\*\s*(Severe|Fatal)\s*\*\*',err))
-    check('完整全年、5 min、温控显热需求',raw['days']==365 and raw['period']==[1,1,12,31] and raw['step_minutes']==5 and raw['mode']=='controlled')
+    step=review_step(raw,record,model)
+    check(f'完整全年、{step} min、温控显热需求',raw['days']==365 and raw['period']==[1,1,12,31] and raw['mode']=='controlled')
     check('输出覆盖与汇总检查通过',raw['checks']['full_period'] and raw['checks']['monthly_reconciliation'])
     if raw.get('daily_reference'):
         from daily_reference import verify_sql
-        daily=verify_sql(run/'run/eplusout.sql',model,5)
+        daily=verify_sql(run/'run/eplusout.sql',model,step)
         check('每日、月度与全年逐系统闭合',daily==raw['daily_reference'],'365 天、50 个原空调系统；仅核对数据，不替代警告影响判断。')
     # This is intentionally not a name-only warning allowlist.
     check('警告属于已接通的核查范围',len(raw['pending_warnings'])==2 and set(raw['pending_warnings'])=={WARNING},'其他警告需要单独分析，不能直接采用本方法。')
@@ -151,6 +174,7 @@ def analyse_specialist(root,ident):
     expected=[w for w in prior['review_conclusions'][0]['warnings'] if 'PsyPsatFnTemp' in w[0]]
     weather=Path(case['weather']);engine=Path(plan['engine']).parent
     beijing=sha(weather)==prior['weather_sha256']
+    require(step==5 or beijing,'1 min 的其他气象需按实际步长扩展全年函数复核，不套用五分钟扫描。')
     weather_source=None;cache_source=None
     if not beijing:
         engine_source_refs=read_json(source.parent/'source/exact-commit-sources.json');weather_source=next(x for x in engine_source_refs if Path(x['path']).name=='WeatherManager.cc')
@@ -172,15 +196,16 @@ def analyse_specialist(root,ident):
     check('基材内外两侧均为已确认的光学基准',True,'反射率 0.45、发射率 0.85；ECA 自身参数保持方案定义。')
     # Read and verify the frozen bundle; this does not rebuild or change inputs.
     from execution_inputs import bundle
-    _,_,_,_,cases=bundle(root,plan['bundle_id'],plan['bundle_sha256'],plan['output_contract'])
+    _,_,_,_,cases=bundle(root,plan['bundle_id'],plan['bundle_sha256'],plan['output_contract'],
+                         observe_warmup=bool(case.get('warmup_observer')),share_schedules=bool(case.get('schedule_sharing')))
     check('运行输入与保存方案生成的输入一致',cases[j['idx']]['model']==model)
     orientation=None
     if 'NX_FiveStorey_Flip_Apply' in model.get('EnergyManagementSystem:Program',{}):
         from calendar_library import active_references,verify_reference
-        calendar_refs=active_references(record);require(len(calendar_refs)==1,'翻面参考绑定不唯一。')
+        calendar_refs=active_references(record);require(len(calendar_refs)==1,'表面光学切换参考绑定不唯一。')
         snapshot=verify_reference(calendar_refs[0]);calendar=next(r['calendar'] for r in snapshot['content']['sites'] if r['site_id']==raw['site_id'])
         orientation=check_orientation_outputs(run/'run/eplusout.sql',calendar)
-        check('实际翻面输出与保存日历一致',True,f"制冷面 {orientation['A_days']} 天，另一面 {orientation['B_days']} 天；12 个月及全年输出均核对。")
+        check('实际表面光学切换输出与保存日历一致',True,f"A 组 {orientation['A_days']} 天，B 组 {orientation['B_days']} 天；12 个月及全年输出均核对。")
     check('当前研究用途不使用湿球驱动设备',not any(k.startswith(('EvaporativeCooler:','CoolingTower:')) for k in model)
           and all(v.get('use_weather_file_rain_indicators')=='No' for v in model['RunPeriod'].values())
           and all(v.get('dehumidification_control_type')=='None' and v.get('humidification_control_type')=='None' for v in model['ZoneHVAC:IdealLoadsAirSystem'].values())
@@ -217,7 +242,8 @@ def analyse_specialist(root,ident):
     # No report can be adopted if any input/result changes during analysis.
     _,fresh,_=target(root,j['batch'],j['idx']);verify_artifacts(raw)
     check('复核期间结果保持不变',binding(fresh)==binding(j))
-    scope=f"{plan['record_name']} v{plan['revision']}，本次冻结输入与{case['city']}气象，135 面外墙基材内外两侧反射率 0.45／发射率 0.85；5 min、原预热、全年温控显热冷热需求"+('及逐日参考' if raw.get('daily_reference') else '')+'。仅接受本次已重放、最终收敛且与原日志匹配的湿球函数事件。'
+    scope=f"{plan['record_name']} v{plan['revision']}，本次冻结输入与{case['city']}气象，135 面外墙基材内外两侧反射率 0.45／发射率 0.85；{step} min、原预热、全年温控显热冷热需求"+('及逐日参考' if raw.get('daily_reference') else '')+'。仅接受本次已重放、最终收敛且与原日志匹配的湿球函数事件。'
+    if step==1:scope+='本次明确保存的外墙 CondFD／1 min 配置已核对；没有沿用旧 5 min 的计算结果或日历。'
     if weather_scan and weather_scan['RH_above_110_hours']:
         scope+=f"原气象另有 {weather_scan['RH_above_110_hours']} 小时相对湿度超过 110%（最高 {weather_scan['max_RH_pct']:g}%），作为来源提示保留；未修正气象，不据本次函数核查证明观测真实性。"
     if cache_source:
@@ -235,7 +261,7 @@ def analyse_specialist(root,ident):
     write_json(p/'report.json',dict(created=now(),recommendation='accept_with_notes',title='本次警告可附说明接受',
         explanation='极端温度出现在湿球函数求根的中间试算中，最终正常收敛；本次输入和结果已逐项绑定核对。',
         scope=scope,checks=checks,warning_events=event_count,raw_warning_records=len(raw['pending_warnings']),
-        next_step='确认采用后，本结果列为附说明接受；逐日结果可继续用于匹配条件的翻面日历。',
+        next_step='确认采用后，本结果列为附说明接受；逐日结果可继续用于匹配条件的光学切换日历。',
         evidence_sha256=sha(p/'outcome.json'),limits=['不是重新运行全年模型或修改引擎。','结论仅适用于这一冻结结果，不会按警告名称自动放行其他结果。','原日志、数值及警告完整保留。']),root)
 
 def analyse(root,ident):

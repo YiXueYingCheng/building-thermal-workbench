@@ -4,11 +4,11 @@
 
 ## 1. 检查下载的整个压缩包
 
-从 [v0.73.13 下载页](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.73.13) 下载 `building-workbench-v0.73.13.zip` 和同名 `.zip.sha256` 两份附件。将两者放在同一目录，在该目录打开 PowerShell：
+从 [v0.73.14 下载页](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.73.14) 下载 `building-workbench-v0.73.14.zip` 和同名 `.zip.sha256` 两份附件。将两者放在同一目录，在该目录打开 PowerShell：
 
 ```powershell
-Get-FileHash -LiteralPath .\building-workbench-v0.73.13.zip -Algorithm SHA256
-Get-Content -LiteralPath .\building-workbench-v0.73.13.zip.sha256 -Encoding UTF8
+Get-FileHash -LiteralPath .\building-workbench-v0.73.14.zip -Algorithm SHA256
+Get-Content -LiteralPath .\building-workbench-v0.73.14.zip.sha256 -Encoding UTF8
 ```
 
 第一条命令的 Hash 应与第二条输出开头的 64 位校验值完全相同，字母大小写可以不同。若不一致，重新下载同一版本，暂不使用该压缩包。

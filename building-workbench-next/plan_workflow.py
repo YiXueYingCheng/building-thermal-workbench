@@ -88,7 +88,7 @@ def build(record,saved,catalog,store,root=ROOT,batch_id=None,verify_results=Fals
         from calendar_library import prepare
         if not defer_branch:branches=calendar_branch(record,prepare(record,catalog,root))
     return dict(checked_at=now(),record_sha256=digest(record),saved_sha256=digest(saved),id=saved['id'],revision=saved['revision'],dirty=dirty,same_recipe=same_recipe,
-        nodes=nodes,branches=branches,selected_batch=selected['id'] if selected else None,batches=batches,verified=verified,preparations=pending,preparation_history=history,
+        nodes=nodes,branches=branches,calendar_status=cap.get('calendar_status',[]),selected_batch=selected['id'] if selected else None,batches=batches,verified=verified,preparations=pending,preparation_history=history,
         comparisons=activity['comparisons'],inputs=activity['inputs'],other_versions=activity['other_versions'],issues=activity['issues']+issues,
         scope_sites=len(record['factors']['scope']['site_ids']),new_simulations=0)
 
@@ -106,8 +106,7 @@ def calendar_branch(record,p):
     active=any(c.get('mode')=='calendar' for c in record['factors']['condition']['controls'])
     rows=p['rows'];ready=sum(r['ready'] for r in rows);total=len(record['factors']['scope']['site_ids'])
     applied=[x for x in p['bound'] if x['active'] and x['valid']]
-    ordinary=record['provenance']['adapter']=='ordinary_building_v1'
     return dict(optional=not active,ready=ready,total=total,issues=p['issues'],rows=[dict(city=r['city'],ready=r['ready'],issues=r['issues'],orientation_input=r.get('orientation_input',{}).get('note')) for r in rows],nodes=[
         dict(id='reference',title='原构造逐日参考',state='done' if total and ready==total else 'attention',label=f'{ready}/{total} 地点就绪',note='按本方案实际建筑、气象、温控和步长匹配。'),
         dict(id='calendar',title='日历版本',state='done' if applied else 'ready' if p['can_save'] else 'attention',label='已采用 · 条件匹配' if applied else '可预览 / 保存' if p['can_save'] else '参考需核对',note='独立保存不等于已采用到研究方案。'),
-        dict(id='orientation',title='翻面执行',state='ready' if p['can_apply'] or applied else 'attention',label='可继续核对' if p['can_apply'] or applied else '材料 / 条件需核对',note='；'.join(p['application_issues']) or '五层固定 R 翻面短期核查与统一队列已接通；采用后保存方案，再准备计算。' if ordinary else '；'.join(p['application_issues']) or '采用与保存方案仍需明确操作。')])
+        dict(id='orientation',title='表面光学切换执行',state='ready' if p['can_apply'] else 'attention',label=('已启用' if applied else '可采用并启用') if p['can_apply'] else '材料 / 条件需核对',note='；'.join(p['application_issues']) or ('当前方案已绑定日历，生成输入时按地点复查。' if applied else '采用日历后，保存方案即可准备计算。'))])

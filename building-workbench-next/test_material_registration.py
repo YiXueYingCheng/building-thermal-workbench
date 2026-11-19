@@ -12,7 +12,7 @@ class MaterialRegistrationTests(unittest.TestCase):
   data=inventory();self.assertEqual(len(data['modes']),3)
   for d in (template('film'),resistance_template()):
    self.assertFalse(describe(d)['storage']);self.assertIn('不能用于新版可调热阻',describe(d)['capability'])
-  self.assertTrue(describe(template('solid'))['storage']);self.assertIn('不自动获得',describe(template('variable'))['capability'])
+  self.assertTrue(describe(template('solid'))['storage']);self.assertIn('可在工况中启用统一热阻反馈',describe(template('variable'))['capability'])
  def test_blank_resistance_registration_roundtrips_without_physical_fields(self):
   d=resistance_template();d['name']='隔离验证热阻'
   d['states'][0]['resistance_m2K_W']=.3;d['states'][1]['resistance_m2K_W']=.06

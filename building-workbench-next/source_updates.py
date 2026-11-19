@@ -80,7 +80,7 @@ def preview(record,old_id,new_id,catalog):
     identity,raw=read_snapshot(actual['path'],site['weather']['sha256'])
     if raw is None:raise ValueError('新气象文件未通过身份核对：'+identity['status'])
     if record['factors']['condition'].get('reference_runs') or any(c.get('mode')=='calendar' for c in record['factors']['condition'].get('controls',[])):
-        raise ValueError('本方案绑定参考计算或朝向日历，换气象前须重新建立对应参考，不能沿用旧日历。')
+        raise ValueError('本方案绑定参考计算或光学切换日历，换气象前须重新建立对应参考，不能沿用旧日历。')
     out=copy.deepcopy(record);out['factors']['scope']['site_ids']=[new_id if i==old_id else i for i in out['factors']['scope']['site_ids']]
     from model_adapter import capability
     cap=capability(out,catalog)

@@ -61,7 +61,7 @@ def gather(record,catalog,root,transition_confirmations=None,basis=None):
     issues=list(inspected['issues'])
     for position,row in enumerate(inspected['rows']):
         from inspection_io import progress
-        progress('推导翻面日历',position,len(inspected['rows']),row['city'])
+        progress('推导光学切换日历',position,len(inspected['rows']),row['city'])
         item=dict(site_id=row['site_id'],city=row['city'],ready=False,issues=list(row['issues']),preview=None);rows.append(item)
         try:
             candidate,count=choose(row['candidates']);preview,entry=derive(candidate,row,root,reader)
@@ -101,30 +101,34 @@ def prepare(record,catalog,root,out,basis,transition_confirmations=None):
     from calendar_library import stable_numbers
     rows,entries,issues=gather(record,catalog,root,transition_confirmations,basis)
     out.update(phase='inspected',source_kind=ACCEPTANCE,rows=rows,issues=issues,
-        application_issues=['本建筑已接通日历预览和独立版本；材料朝向执行尚待适配，本轮不能启用翻面。'],
+        application_issues=['本建筑已接通日历预览和独立版本；表面光学切换尚待适配，本轮不能启用光学切换。'],
         acceptance_note='采用统一队列中已核验并接受的原构造逐日结果；保留原警告与具体接受依据。保存前会重新核对当前输入、结果文件和日历规则。',
-        rule_note='参考年首尾循环衔接；全年次要冷热需求占比低于 2% 时沿用全年固定朝向分支。这里没有增加建筑预热或追加天气年。')
+        rule_note='参考年首尾循环衔接；全年次要冷热需求占比低于 2% 时沿用全年固定光学参数组分支。这里没有增加建筑预热或追加天气年。')
     out['history'],out['parent_options']=history(dict(basis=basis),root)
     if not rows or len(entries)!=len(rows) or issues:return out
     content=stable_numbers(dict(schema_version=2,basis=basis,rule=cp.PARAMETERS,sites=sorted(entries,key=lambda r:r['site_id']),acceptance=ACCEPTANCE))
     versions,parents=history(content,root)
     out.update(can_save=True,content=content,content_sha256=digest(content),versions=[v for v in versions if v['matches_current']],history=versions,parent_options=parents)
-    if record['provenance']['adapter']=='global_frozen_v011':
+    from surface_materials import enabled as physical_surface
+    if physical_surface(record) or record['provenance']['adapter']=='global_frozen_v011':
         from calendar_library import with_reference,temporary_snapshot
         from model_adapter import compile_case
+        from inspection_io import progress
         candidate=with_reference(record,temporary_snapshot(content))
-        for row in rows:
+        for position,row in enumerate(rows):
+            progress('核对表面光学切换模型',position,len(rows),row['city'])
             try:
                 _,audit=compile_case(candidate,row['site_id'],catalog)
-                row['orientation_input']=dict(status='input_ready',note='Drawing26 日历、来源与输入核对通过。',calendar_sha256=audit['calendar_binding']['calendar_sha256'])
+                row['orientation_input']=dict(status='input_ready',note='本方案日历、材料作用范围与模型输入核对通过。',calendar_sha256=audit['calendar_binding']['calendar_sha256'])
             except (ValueError,KeyError,TypeError,OSError) as exc:row['orientation_input']=dict(status='blocked',note=str(exc))
+        progress('完成日历与输入核对',len(rows),len(rows),'')
         out['can_apply']=all(row['orientation_input']['status']=='input_ready' for row in rows)
         out['application_issues']=[row['orientation_input']['note'] for row in rows if row['orientation_input']['status']!='input_ready']
         return out
     from ordinary_orientation import inspect
     from inspection_io import progress
     for position,row in enumerate(rows):
-        progress('核对翻面模型',position,len(rows),row['city'])
+        progress('核对表面光学切换模型',position,len(rows),row['city'])
         row['orientation_input']=inspect(record,catalog,content,row['site_id'])
     progress('完成日历与输入核对',len(rows),len(rows),'')
     if all(row['orientation_input']['status']=='input_ready' for row in rows):

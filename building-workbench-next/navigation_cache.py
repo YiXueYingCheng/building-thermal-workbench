@@ -41,13 +41,26 @@ def activity_watch(root):
     for pattern in ('data/model-inputs/inputs_*/record.json','data/model-inputs/inputs_*/manifest.json','data/execution/reviews/review_*/plan.json','data/execution/reviews/review_*/record.json'):
         paths.extend(root.glob(pattern))
     return paths
-def live_queue(root):
+def live_queue(root, *, with_recalculations=False):
     path=Path(root)/'data/execution/queue.sqlite'
     if not path.exists():return [],[],[]
     with closing(sqlite3.connect(path.as_uri()+'?mode=ro',uri=True)) as db:
         db.row_factory=sqlite3.Row;db.execute('BEGIN')
         batches=[dict(r) for r in db.execute('SELECT id,review,checksum,mode,created FROM batches ORDER BY created DESC,rowid DESC')]
-        jobs=[dict(r) for r in db.execute('SELECT batch,idx,status,pid,attempt,error,updated FROM jobs ORDER BY idx')]
+        columns='batch,idx,status,pid,attempt,error,updated'
+        if with_recalculations:columns+=',manual_start'
+        jobs=[dict(r) for r in db.execute('SELECT '+columns+' FROM jobs ORDER BY idx')]
+        if with_recalculations:
+            history=defaultdict(list)
+            for link in db.execute(
+                'SELECT s.parent,s.idx,s.step,s.adopted,j.status FROM site_recalculations s '
+                'LEFT JOIN jobs j ON j.batch=s.child AND j.idx=0 ORDER BY s.rowid'
+            ):
+                history[link['parent'],link['idx']].append(dict(
+                    step=link['step'],adopted=link['adopted'] is not None,status=link['status']))
+            for job in jobs:
+                if job['status'] in ('failed','interrupted'):
+                    job['recalculations']=history.get((job['batch'],job['idx']),[])
         storage=[tuple(r) for r in db.execute('SELECT * FROM batch_storage ORDER BY batch')] if db.execute("SELECT 1 FROM sqlite_master WHERE name='batch_storage'").fetchone() else []
     return batches,jobs,storage
 def queue_identity(rows,storage):return [[{k:v for k,v in b.items() if k!='mode'} for b in rows],storage]
@@ -82,8 +95,9 @@ def queue_state(queue,root):
             ids=dict(db.execute("SELECT id,json_extract(plan,'$.record_id') FROM batches"))
         for b in value['batches']:b['record_id']=ids[b['id']]
         return value
-    rows,jobs,storage=live_queue(root)
+    rows,jobs,storage=live_queue(root,with_recalculations=True)
     value=cached(root,'queue',queue_identity(rows,storage),lambda:[],build)
     value=refresh_batches(value,rows,jobs)
     from worker_runtime import status
-    return dict(value,resources=queue.policy(),worker=status(root))
+    exclusive=next((dict(batch=j['batch'],index=j['idx']) for j in jobs if j.get('manual_start')=='exclusive'),None)
+    return dict(value,resources=queue.policy(),worker=status(root),exclusive_job=exclusive)

@@ -33,6 +33,7 @@ def tables(data,catalog,choices):
   site=catalog['sites'][sid];r=dict(site_id=sid,city=site['name'],climate=site.get('climate'),latitude=site.get('latitude'),longitude=site.get('longitude'))
   for role in member_roles(data):
    item=picks[role].get(sid)
+   r[role+'_step_minutes']=item.get('step_minutes') if item else None
    r[role+'_status']=item['acceptance'] if item else 'no_data'
    r[role+'_data_retention']=(item.get('data_retention') or {}).get('mode','full_evidence') if item else ''
    r[role+'_batch']=item['batch_id'] if item else ''

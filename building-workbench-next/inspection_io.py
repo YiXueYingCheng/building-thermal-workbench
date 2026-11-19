@@ -15,8 +15,8 @@ def identity(path):return os.path.abspath(path)
 class Reads:
     def __init__(self,progress=None,max_json_bytes=32*1024*1024):
         self.hashes={};self.json_values=OrderedDict();self.json_sizes={};self.max_json_bytes=max_json_bytes;self.paths={};self.memo={};self.values={};self.progress=progress
-    def watch_value(self,key,loader,expected):
-        if key not in self.values:self.values[key]=(loader,copy.deepcopy(expected))
+    def watch_value(self,key,loader,expected,changed_message='核对依据的登记信息已变化'):
+        if key not in self.values:self.values[key]=(loader,copy.deepcopy(expected),changed_message)
     def watch(self,path):
         p=identity(path)
         if p not in self.hashes:
@@ -43,14 +43,19 @@ class Reads:
         p=identity(path)
         if p not in self.paths:self.paths[p]=str(Path(p).resolve())
         return self.paths[p]
-    def valid(self):
+    def invalid_reason(self):
         try:
             for p,expected in self.hashes.items():
                 try:actual=raw_hash(p)
                 except FileNotFoundError:actual=None
-                if actual!=expected:return False
-            return all(str(Path(p).resolve())==resolved for p,resolved in self.paths.items()) and all(loader()==expected for loader,expected in self.values.values())
-        except Exception:return False
+                if actual!=expected:return '核对依据文件已变化：'+p
+            for p,resolved in self.paths.items():
+                if str(Path(p).resolve())!=resolved:return '核对依据的路径已变化：'+p
+            for loader,expected,changed_message in self.values.values():
+                if loader()!=expected:return changed_message
+            return ''
+        except Exception as exc:return '无法复查核对依据：'+str(exc)
+    def valid(self):return not self.invalid_reason()
     def evidence(self):
         out=Reads();out.hashes=self.hashes.copy();out.paths=self.paths.copy();out.values=self.values.copy();return out
 
@@ -61,7 +66,8 @@ def reading(progress=None):
     scope=Reads(progress);token=_current.set(scope)
     try:
         yield scope
-        if not scope.valid():raise ValueError('核对期间来源或结果登记改变，请重新核对。')
+        problem=scope.invalid_reason()
+        if problem:raise ValueError(problem+'。请重新核对。')
     finally:_current.reset(token)
 
 def resolve_path(path):return current().resolve(path) if current() else str(Path(path).resolve())

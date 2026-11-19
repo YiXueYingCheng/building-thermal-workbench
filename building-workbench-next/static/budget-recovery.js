@@ -28,7 +28,7 @@ function calculationBudgetView(){
  return `<div id="calculation-budget" class="well">${head}<p class="muted">核对于 ${esc(d.created)}${p.existing_batch?' · 原批次保持现状；以下按此输入再次提交估算':''}</p>
  <div class="metrics"><span><strong>${d.reusable}</strong>已核验可复用</span><span><strong>${d.needs_compute}</strong>仍需计算</span><span><strong>${d.invalid_cache}</strong>缓存未通过核验</span></div>
  <p>串行算例耗时合计：${budgetRange(d.serial_seconds,budgetTime)}。</p>
- <p>按并行上限 ${d.assumed_parallel} 路均分的理想耗时：${budgetRange(d.ideal_parallel_seconds,budgetTime)}。</p><p class="muted">未扣除 CPU 争用、内存等待等影响；CPU 控制开启后，实际派发路数可能更少，耗时可能更长。</p>${cpuBudgetMarkup(d.cpu)}
+ <p>按并行上限 ${d.assumed_parallel} 路均分的理想耗时：${budgetRange(d.ideal_parallel_seconds,budgetTime)}。</p><p class="muted">资源等待会延长实际耗时。</p>${d.cpu?.enabled?cpuBudgetMarkup(d.cpu):''}
  ${storageBudgetView(d)||`<p>预计新增保留量：${budgetRange(d.additional_retained_bytes,budgetBytes)}；运行期间新增磁盘峰值：${d.peak_extra_bytes===null?'尚无实测记录':budgetBytes(d.peak_extra_bytes)}。</p>`}
  <p class="muted">工作区可用 ${budgetBytes(d.machine.disk_free_gib*2**30)}，磁盘保留线 ${d.policy.disk_reserve_gib} GiB；当前保留内存 ${d.policy.reserve_gib} GiB，最多 ${d.policy.max_parallel} 路。设备投入在本页上方统一调整。${policyChanged?'设置已变化，请刷新预算。':''}${S.resourcesDirty?'尚未应用的设备投入不计入预算。':''}</p>
  ${d.additional_retained_bytes&&d.additional_retained_bytes.max>(d.storage?.available_after_reserve_bytes??(d.machine.disk_free_gib-d.policy.disk_reserve_gib)*2**30)?'<p class="warning">按历史保留量上沿估算，剩余磁盘不足以覆盖整批；请缩小批次或另行安排存储。</p>':''}

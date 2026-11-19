@@ -6,20 +6,22 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import traceback
 import re
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 class WorkbenchHTTPServer(ThreadingHTTPServer):
-    # Accept simultaneous cold-page feature requests without dropping assets.
+    # Multiple cold browser tabs request feature scripts at once. The default
+    # five-connection backlog can reject assets before a handler accepts them.
     request_queue_size = 64
 
 from urllib.parse import urlparse, unquote, parse_qs
 from foundation import ROOT, config, read_json, loads, write_json, now, owned
 from manage import current
 from record_store import Store, Conflict, preserve_numeric_representation
-from planner import preview, compare
+import planner
 from contracts import differences
 from input_pipeline import build_bundle
 from input_preparation_jobs import Jobs as InputJobs
@@ -30,6 +32,7 @@ import resources
 import comparison_results
 import comparison_library
 import navigation_cache
+from recent_batch_views import RecentBatches
 import storage_management
 import result_storage
 import result_availability
@@ -114,6 +117,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
     def cleanup_active():
         return bool(bulk_reviews.active) or bool(result_reviews.active) or any(j['state'] in ('queued','running') for j in list(input_jobs.jobs.values())) or any(not f.done() for f in list(set_runs.futures.values()))
     storage_requests=result_storage.Requests()
+    recent_batches=RecentBatches(root)
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
             super().setup()
@@ -127,13 +131,17 @@ def make_server(root=ROOT,port=None,start_workers=False):
 
         def send(self,status,value,mime='application/json; charset=utf-8'):
             data=json.dumps(value,ensure_ascii=False,allow_nan=False).encode('utf-8') if mime.startswith('application/json') else value
+            self.send_headers(status,mime,len(data))
+            self.wfile.write(data)
+
+        def send_headers(self,status,mime,size):
             self.send_response(status)
             self.send_header('Content-Type',mime)
-            self.send_header('Content-Length',str(len(data)))
+            self.send_header('Content-Length',str(size))
             self.send_header('Cache-Control','no-store')
             self.send_header('X-Content-Type-Options','nosniff')
             self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'")
-            self.end_headers();self.wfile.write(data)
+            self.end_headers()
 
         def error(self,status,message):self.send(status,dict(error=message))
 
@@ -146,12 +154,12 @@ def make_server(root=ROOT,port=None,start_workers=False):
             if not self.safe_host():return self.error(403,'访问主机不受支持。')
             url=urlparse(self.path);route=unquote(url.path);query=parse_qs(url.query)
             try:
-                if route in ('/bulk-result-review.js','/output-resolution.js','/result-series.js'):
+                if route in ('/bulk-result-review.js','/output-resolution.js','/result-series.js','/drawing-wall-scope.js'):
                     return self.send(200,(root/'static'/route[1:]).read_bytes(),'text/javascript; charset=utf-8')
                 match=re.fullmatch(r'/api/bulk-result-reviews/(bulk_[a-f0-9]{32})',route)
                 if match:return self.send(200,bulk_reviews.get(match[1]))
                 if route=='/api/result-timeline/series':
-                    return self.send(200,result_timeline.series(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0]),int(query.get('variable',['-1'])[0]),query.get('start',[''])[0],query.get('end',[''])[0]))
+                    return self.send(200,result_timeline.series(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0]),int(query.get('variable',['0'])[0]),query.get('start',[''])[0],query.get('end',[''])[0]))
                 if route=='/summary-retention.js':return self.send(200,(root/'static/summary-retention.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route in ('/result-timeline.js','/result-timeline.css'):
                     return self.send(200,(root/'static'/route[1:]).read_bytes(),'text/javascript; charset=utf-8' if route.endswith('.js') else 'text/css; charset=utf-8')
@@ -159,6 +167,9 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     from failed_result_diagnostics import collect
                     download=route.endswith('/download')
                     return self.send(200,collect(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0]),download),'application/zip' if download else 'application/json; charset=utf-8')
+                if route=='/api/warmup-trend':
+                    from warmup_trends import case_view
+                    return self.send(200,case_view(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0])))
                 if route=='/api/result-timeline/inventory':
                     return self.send(200,result_timeline.inventory(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0])))
                 if route=='/api/result-timeline/daily':
@@ -179,7 +190,11 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if match:return self.send(200,input_inspection.case_detail(root,match[1],int(match[2]),store))
                 if route=='/navigation-experience.js':return self.send(200,(root/'static/navigation-experience.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/output-storage.js':return self.send(200,(root/'static/output-storage.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route=='/solid-eca.js':return self.send(200,(root/'static/solid-eca.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/research-sets.js':return self.send(200,(root/'static/research-sets.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route=='/controlled-experiment.js':return self.send(200,(root/'static/controlled-experiment.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route=='/optical-terminology.js':return self.send(200,(root/'static/optical-terminology.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route=='/research-set-changes.js':return self.send(200,(root/'static/research-set-changes.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/api/research-sets':return self.send(200,Sets(catalog,root).all())
                 match=re.fullmatch(r'/api/research-set-exports/(set_export_[a-f0-9]{32})/([^/]+)',route)
                 if match:
@@ -200,7 +215,9 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if match:
                     revision=int(query['revision'][0]) if query.get('revision') else None
                     sets=Sets(catalog,root)
-                    return self.send(200,sets.results(match[1],revision) if match[2] else sets.describe(match[1],revision))
+                    if match[2]:
+                        return self.send(200,sets.results(match[1],revision,include_monthly=query.get('monthly')==['1']))
+                    return self.send(200,sets.describe(match[1],revision))
                 if route.startswith('/api/calendar-inspections/'):
                     return self.send(200,inspections.get(route.rsplit('/',1)[-1]))
                 if route=='/result-review.js':return self.send(200,(root/'static/result-review.js').read_bytes(),'text/javascript; charset=utf-8')
@@ -250,7 +267,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/material-catalog.js':return self.send(200,(root/'static/material-catalog.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/scope-results-viewer.js':return self.send(200,(root/'static/scope-results-viewer.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/input-workflow.js':return self.send(200,(root/'static/input-workflow.js').read_bytes(),'text/javascript; charset=utf-8')
-                if route in ('/material-types.js','/material-inputs.js','/material-registration.js','/reference-library.js','/weather-downloads.js','/weather-folder.js','/construction-library.js'):
+                if route in ('/material-types.js','/material-inputs.js','/material-registration.js','/material-transfer.js','/reference-library.js','/weather-downloads.js','/weather-folder.js','/construction-library.js'):
                     return self.send(200,(root/'static'/route[1:]).read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/api/reference-library':
                     import reference_library
@@ -322,18 +339,27 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     docs['result-timeline']='../docs/RESULT_TIMELINE.md'
                     name=docs.get(route.removeprefix('/api/workspace-docs/'))
                     if not name:return self.error(404,'没有该说明文件。')
+                    if not (root/name).is_file() and name.startswith('../docs/'):
+                        name='docs/'+Path(name).name
+                    if not (root/name).is_file() and name.startswith('../examples/'):
+                        name='assets/reference-library/'+name[3:]
                     if not (root/name).is_file():return self.error(404,'当前公开包不包含该历史说明，请查看工作区说明。')
                     return self.send(200,(root/name).read_bytes(),'text/plain; charset=utf-8')
                 if route=='/api/health':return self.send(200,dict(version=version,root=str(root),phase='unified_execution',execution_enabled=True,pid=os.getpid()))
                 if route=='/api/comparison-map':return self.send(200,result_exports.map_assets(root))
                 match=re.fullmatch(r'/api/execution/(batch_[a-f0-9]{32})/summary',route)
+                if match and query.get('view') in (['recent'],['refresh']):
+                    return self.send(200,recent_batches.get(match[1],catalog,force=query['view']==['refresh']))
                 if match:return self.send(200,batch_results.build(match[1],catalog,root))
                 match=re.fullmatch(r'/api/batch-exports/(batch_export_[a-f0-9]{32})/([^/]+)',route)
                 if match:
                     folder,receipt=batch_results.load_export(match[1],root);name=match[2]
                     if name not in receipt['files'] and name!='receipt.json':return self.error(404,'没有该导出文件。')
                     mime={'.json':'application/json; charset=utf-8','.csv':'text/csv; charset=utf-8','.txt':'text/plain; charset=utf-8','.zip':'application/zip'}.get(Path(name).suffix,'application/octet-stream')
-                    return self.send(200,read_json(folder/name) if name.endswith('.json') else (folder/name).read_bytes(),mime)
+                    with (folder/name).open('rb') as stream:
+                        self.send_headers(200,mime,os.fstat(stream.fileno()).st_size)
+                        shutil.copyfileobj(stream,self.wfile,1024*1024)
+                    return
                 match=re.fullmatch(r'/api/comparisons/(comparison_[a-f0-9]{32})/sources',route)
                 if match:return self.send(200,presentation.describe_sources(comparison_results.available(match[1],catalog,root),store,catalog,presentation.batch_index(root)))
                 match=re.fullmatch(r'/api/comparison-exports/(comparison_export_[a-f0-9]{32})/([^/]+)',route)
@@ -373,11 +399,12 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     from material_types import support_paths
                     from workspace_setup import status as setup_status
                     from version_notes import listing as note_listing
+                    from coverage_results import registry as coverage_registry
                     records=store.all();index=presentation.batch_index(root,compact=True);metadata=presentation.library_metadata(records,index);owners=store.member_owners()
                     proof_path=root/'verification/acceptance.json'
                     return self.send(200,dict(version=version,token=token,material_support=support_paths(),version_notes=note_listing(store),workspace=setup_status(root,catalog),records=[dict(summary(r),**metadata[r['id']],research_set=owners.get(r['id'])) for r in records],
                         capability_guide=capability_summary.factors(catalog),sites=catalog['sites'],ordinary_weather_sites={k:v['site']['id'] for k,v in catalog.get('ordinary_buildings',{}).items()},climate_classes=catalog['global_bundle']['classes'],imported_at=catalog['created'],source_summary=catalog['global_bundle']['summary'],
-                        comparisons=comparison_library.describe(store,index),verification=read_json(proof_path) if proof_path.exists() else None,
+                        comparisons=comparison_library.describe(store,index),coverage_comparisons=coverage_registry(root)['comparisons'],verification=read_json(proof_path) if proof_path.exists() else None,
                         model_verification=read_json(root/'verification/model-input-parity.json') if (root/'verification/model-input-parity.json').exists() else None,
                         control_policy={k:catalog.get('dynamic_registry',{}).get('policy',{})[k] for k in ('cold_C','hot_C','flux_deadband_W_m2','minimum_hold_minutes') if k in catalog.get('dynamic_registry',{}).get('policy',{})},
                         control_roles={r['id']:dict(positive=max(r['factors']['materials']['definitions'][0]['states'],key=lambda s:s['resistance_m2K_W'])['id'],negative=min(r['factors']['materials']['definitions'][0]['states'],key=lambda s:s['resistance_m2K_W'])['id']) for r in catalog['records'].values() if r['factors']['condition']['reference_runs']},
@@ -470,6 +497,10 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route in ('/api/research-sets/preview','/api/research-sets'):
                     sets=Sets(catalog,root)
                     return self.send(200,sets.create_preview(body['name'],body['sources']) if route.endswith('/preview') else sets.create(body['name'],body['sources'],body['preview_sha256']))
+                match=re.fullmatch(r'/api/research-sets/(set_[a-f0-9]{32})/experiment/(preview|save)',route)
+                if match:
+                    from controlled_experiment import handle
+                    return self.send(200,handle(Sets(catalog,root),match[1],match[2],body))
                 match=re.fullmatch(r'/api/research-sets/(set_[a-f0-9]{32})(/preview)?',route)
                 if match:
                     sets=Sets(catalog,root)
@@ -528,13 +559,20 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     if body.get('confirmed') is not True:raise ValueError('请先确认已查看结论及适用范围。')
                     return self.send(200,result_review.accept(root,body['id'],body['report_sha256'],body.get('decision')))
                 if route=='/api/storage-verify':return self.send(200,storage_recovery.check_backup(body['id'],root))
-                if route=='/api/batch-export':
+                if route in ('/api/batch-export','/api/batch-export/options'):
                     result=batch_results.build(body['id'],catalog,root)
                     if body.get('expected_dataset_sha256')!=result['dataset_sha256']:
                         return self.error(409,'批次结果已有变化，请刷新本批结果后再导出。')
-                    return self.send(201,batch_results.export(result,root))
+                    if route.endswith('/options'):
+                        from batch_timeseries import inspect
+                        return self.send(200,inspect(result,root))
+                    return self.send(201,batch_results.export(result,root,body.get('selection'),body.get('inventory_sha256')))
+                if route=='/api/comparison-site-step':
+                    from comparison_steps import choose
+                    return self.send(200,choose(root,catalog,body))
                 if route in ('/api/comparison-results','/api/comparison-export'):
-                    result=comparison_results.build(body['id'],body['left_source'],body['right_source'],body['mode'],catalog,root)
+                    result=comparison_results.build(body['id'],body['left_source'],body['right_source'],body['mode'],catalog,root,
+                                                    with_controls=route=='/api/comparison-results')
                     if route.endswith('-export') and body.get('expected_dataset_sha256')!=result['dataset_sha256']:
                         return self.error(409,'结果已有变化，请重新读取配对结果后再导出。')
                     return self.send(201 if route.endswith('-export') else 200,result_exports.export(result,root) if route.endswith('-export') else result)
@@ -578,6 +616,9 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     # Compatibility route; both entry points share validation,
                     # source preservation and duplicate-save rules.
                     return self.send(201,daily_library.copy_reference(root,body['id'],body['name'])['profile'])
+                if route=='/api/material-library/import-preview':
+                    from material_catalog import import_definition
+                    return self.send(200,import_definition(body))
                 if route=='/api/material-library/density-preview':
                     from material_types import density_preview
                     return self.send(200,density_preview(body['content'],body.get('source_state','R'),body.get('cp_rule','independent'),body.get('confirmed',False)))
@@ -585,11 +626,23 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     import surface_materials
                     from model_adapter import compile_case,VerifiedReader
                     record=store.update_payload(store.get(body['id'],body['revision']),body.get('changes',{}))
-                    if not surface_materials.enabled(record):raise ValueError('此核对入口用于新固定物性材料。')
+                    if not surface_materials.enabled(record):raise ValueError('此核对入口用于已采用的表面材料。')
                     base=surface_materials.baseline(record);reader=VerifiedReader(catalog)
                     model,_=compile_case(base,base['factors']['scope']['site_ids'][0],catalog,reader)
-                    audit=surface_materials.apply(model,record);reader.unchanged()
+                    from surface_controls import active, initial_application
+                    dynamic=active(record)
+                    audit=initial_application(model,record) if dynamic else surface_materials.apply(model,record)
+                    audit['initial_only']=dynamic
+                    reader.unchanged()
                     return self.send(200,audit)
+                if route in ('/api/material-library/wall-inventory','/api/material-library/wall-scope'):
+                    import drawing_wall_scope as ws
+                    record=store.update_payload(store.get(body['id'],body['revision']),body.get('changes',{}))
+                    walls=ws.rows(record,catalog)
+                    if route.endswith('/wall-inventory'):
+                        return self.send(200,walls)
+                    selected=ws.select(record,[w['id'] for w in walls],body['covered'],body['feedback'])
+                    return self.send(200,dict(materials=selected['factors']['materials'],controls=selected['factors']['condition']['controls'],numerics=selected['numerics']))
                 if route=='/api/material-library/targets':
                     import surface_materials
                     from model_adapter import compile_case, VerifiedReader
@@ -661,7 +714,12 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     return self.send(200,legacy_daily.build(record,catalog,root))
                 if route=='/api/calendar-preview':
                     if body!={'example':'beijing_w00'}:raise ValueError('本轮仅开放北京旧 W00 的独立规则预览。')
-                    return self.send(200,calendar_preview.build_example(catalog,root))
+                    # Saved calendar evidence pins the rule module byte for byte.
+                    preview=calendar_preview.build_example(catalog,root)
+                    preview['note']='色带表示每天采用的表面光学参数组。此示例使用既有规则，独立于当前方案。'
+                    preview['rule_explanation']=preview['rule_explanation'].replace('朝向','光学参数组')
+                    preview['year_boundary']=preview['year_boundary'].replace('起始朝向','起始光学参数组')
+                    return self.send(200,preview)
                 if route in ('/api/calendar-library/preview','/api/calendar-library/use','/api/calendar-library/status'):
                     record=store.update_payload(store.get(body['id'],body['revision']),body.get('changes',{}))
                     if route.endswith('/status'):return self.send(200,calendar_library.status(record,catalog))
@@ -671,10 +729,10 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     return self.send(200,calendar_library.save_or_apply(record,catalog,root,body['expected_sha256'],body.get('accept'),body['action'],body['record_sha256'],body.get('parent'),transition_confirmations=body.get('transition_confirmations')))
                 if route=='/api/preview':
                     record=store.get(body['id'],body.get('revision'));record=store.update_payload(record,body.get('changes',{}))
-                    return self.send(200,preview(record,catalog))
+                    return self.send(200,planner.preview(record,catalog))
                 if route=='/api/compare':
                     left=store.get(body['left'],body.get('left_revision'));right=store.get(body['right'],body.get('right_revision'))
-                    return self.send(200,dict(left=left,right=right,comparison=compare(left,right)))
+                    return self.send(200,dict(left=left,right=right,comparison=planner.compare(left,right)))
                 if route=='/api/model-inputs':
                     record=store.get(body['id'],body['revision'])
                     with preparation_slot(root):result=build_bundle(record,catalog,root)
@@ -692,6 +750,14 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/api/output-storage/browse':
                     from output_picker import browse
                     return self.send(200,browse(root,body.get('path','')))
+                if route=='/api/site-recalculation/submit':
+                    from site_recalculation import submit
+                    result=submit(queue,body['parent'],body['index'],body['attempt'],body['step_minutes'],body.get('purpose','recovery'))
+                    if start_workers:result['startup']=ensure_worker(root)
+                    return self.send(201,result)
+                if route=='/api/site-recalculation/adopt':
+                    from site_recalculation import adopt
+                    return self.send(200,adopt(queue,body['parent'],body['index'],body['child'],body['result_sha256']))
                 if route=='/api/execution/submit':
                     result=queue.submit(body['review_id'],body['plan_sha256'],body.get('destination'))
                     if start_workers and not result['reused_submission']:result['startup']=ensure_worker(root)
@@ -704,6 +770,14 @@ def make_server(root=ROOT,port=None,start_workers=False):
                         if not startup['ready']:return self.error(503,startup['error'])
                     result=queue.control(body['id'],body['action'])
                     return self.send(200,result)
+                if route=='/api/execution/job-control':
+                    action=body['action']
+                    if action=='force_one' and (body.get('confirmed') is not True or body.get('risk_acknowledged') is not True):
+                        return self.error(400,'请先阅读风险、勾选已充分了解可能后果，再确认强制启动。')
+                    if start_workers and action in ('force_one','requeue_cancelled'):
+                        startup=ensure_worker(root)
+                        if not startup['ready']:return self.error(503,startup['error'])
+                    return self.send(200,queue.control_job(body['id'],body['index'],action))
                 if route=='/api/execution/wake':
                     result=ensure_worker(root) if start_workers else dict(ready=False,error='此隔离界面未启用计算后台。')
                     return self.send(200,dict(requested=True,**result))
@@ -720,7 +794,10 @@ def make_server(root=ROOT,port=None,start_workers=False):
             except KeyError as error:return self.error(400,'缺少有效参数：'+str(error))
             except (ValueError,TypeError,AttributeError) as error:return self.error(400,str(error))
             except Exception:
-                traceback.print_exc();return self.error(500,'保存失败，已保存版本保持不变。')
+                traceback.print_exc()
+                if urlparse(self.path).path=='/api/preview':
+                    return self.error(500,'算例范围核对失败。可以重试；若再次失败，请查看工作区服务日志。')
+                return self.error(500,'工作区未能完成这次操作。请查看服务日志及当前记录。')
     server=WorkbenchHTTPServer(('127.0.0.1',port),Handler)
     server.daemon_threads=True
     if start_workers:

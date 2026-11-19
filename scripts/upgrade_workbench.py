@@ -190,9 +190,17 @@ def compatibility_plan(source,target,oldversion,incoming):
         if version not in baselines:fail('没有此旧版的结果读取兼容记录：'+oldversion)
         before=baselines[version]
         if not before or not after:fail('升级兼容清单不完整。')
-        for name,checksum in before.items():
-            if sha(child(target,'building-workbench-next/'+name))!=checksum:
-                fail('计算程序与已核对的 '+oldversion+' 升级基线不一致：'+name)
+        candidates=[before]
+        if version=='0.73.14-rc.9':
+            candidates.extend(contract[key]['from'] for key in ('schedule_sharing_update','scheduling_update'))
+        def matches(hashes):
+            for name,checksum in hashes.items():
+                path=child(target,'building-workbench-next/'+name)
+                if not path.is_file() or sha(path)!=checksum:
+                    return False
+            return True
+        if not any(matches(hashes) for hashes in candidates):
+            fail('计算程序与已核对的 '+oldversion+' 升级基线不一致。')
         for name,checksum in after.items():
             if incoming.get('building-workbench-next/'+name)!=checksum:
                 fail('新程序与结果读取兼容清单不一致：'+name)
@@ -232,7 +240,9 @@ def plan(source,target):
     if source==target or source.is_relative_to(target) or target.is_relative_to(source):fail('新包必须解压在旧平台之外的独立文件夹。')
     incoming=manifest(source);old=manifest(target,False)
     oldversion=(target/'building-workbench-next/VERSION').read_text('utf8').strip()
-    if oldversion.removeprefix('v') not in ('0.72.2','0.73.11','0.73.12'):fail('本工具支持 v0.72.2、v0.73.11 或 v0.73.12 原路径升级；检测到 '+oldversion)
+    supported = ('0.72.2', '0.73.11', '0.73.12', '0.73.13') + tuple(f'0.73.14-rc.{i}' for i in range(1, 10))
+    if oldversion.removeprefix('v') not in supported:
+        fail('本工具支持 v0.72.2、v0.73.11 至 v0.73.13，以及 v0.73.14-rc.1 至 rc.9 原路径升级。检测到 '+oldversion)
     if not (target/'building-workbench-next/config.json').is_file():fail('请选择含旧配置的完整平台包根目录。')
     if sha(source/'requirements-lock.txt')!=sha(target/'requirements-lock.txt'):fail('锁定依赖已变化，本版工具不自动升级 Python 环境。')
     writes=[];conflicts=[]

@@ -132,6 +132,12 @@ class RuntimeSettingsTests(unittest.TestCase):
         self.assertFalse((self.root / 'data').exists())
 
     def test_cli_check_and_normal_launch_return_clear_failure_without_data(self):
+        # Probe the isolated copy even when the user's normal service is online.
+        import socket
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1', 0))
+            self.value['port'] = listener.getsockname()[1]
+        self.save()
         # Actual entry points in a copy also exercise imports and CWD independence.
         for name in ('launch.py', 'foundation.py', 'inspection_io.py', 'runtime_settings.py', 'runtime_check.py'):
             shutil.copy2(ROOT / name, self.root / name)

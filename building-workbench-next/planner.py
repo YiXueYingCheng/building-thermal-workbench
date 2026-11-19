@@ -48,7 +48,7 @@ def preview(record,catalog):
             if control.get('mode')=='feedback' and len({s.get('resistance_m2K_W') for s in states})<len(states):
                 notes.append('两态热阻相同，仍以独立状态编号区分，可保留相应光学差异。')
         if control.get('channel')=='orientation' and app['position']=='between':
-            notes.append('材料位于构造内部，旧外表面朝向规则不能直接套用。')
+            notes.append('材料位于构造内部，原外表面光学切换规则不能直接套用。')
         elif control.get('channel')=='orientation':
             faces=[control.get('face_id')] if control.get('mode')=='fixed' else ['A','B']
             state_ids=set()
@@ -59,12 +59,12 @@ def preview(record,catalog):
                 for state in state_ids:
                     optical=material.get('optics',{}).get(str(face)+'_'+str(state),{})
                     if optical.get('solar_absorptance') is None or optical.get('emissivity') is None:
-                        requirements.append(material['name']+' / '+str(face)+' 面 / '+str(state)+' 态：缺少该朝向使用的光学参数。')
-            if app['position']=='interior':notes.append('内侧应用需要核对室内侧表面与控制方向，不能沿用外侧翻面执行映射。')
+                        requirements.append(material['name']+' / '+str(face)+' 组 / '+str(state)+' 态：缺少所选组的光学参数。')
+            if app['position']=='interior':notes.append('内侧应用需要核对室内侧表面与控制方向，不能沿用外侧表面光学切换执行映射。')
         if control.get('channel')=='orientation' and control.get('mode')=='calendar':
             references={r.get('id') for r in f['condition'].get('reference_runs',[])}
             if control.get('reference_id') not in references:
-                requirements.append('朝向日历规则需要绑定参考计算及其日历。')
+                requirements.append('光学切换日历规则需要绑定参考计算及其日历。')
         update=control.get('update',{})
         if update.get('kind')=='minutes' and update['minutes']%record['numerics']['step_minutes']:
             requirements.append('当前更新间隔不是求解步长的整数倍，需明确执行时序。')

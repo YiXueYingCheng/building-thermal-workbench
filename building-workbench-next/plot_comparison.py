@@ -13,6 +13,11 @@ from matplotlib.patches import Polygon, Patch
 from result_exports import color_limit,figure_kind,annual_site_rows
 
 
+def waiver_label(data):
+    count=sum(row.get('pairing_basis')=='跨步长豁免' for row in data['sites'])
+    return f' · {count} mixed-step waiver(s)' if count else ''
+
+
 def plot_site(folder,d):
     """One pinned site, absolute sensible demand; no climate extrapolation."""
     site=d['sites'][0];rows=annual_site_rows(d)
@@ -36,7 +41,7 @@ def plot_site(folder,d):
     bottom.axhline(0,color='#47565b',linewidth=.8);bottom.set_xticks(m,[str(r['month']) for r in monthly])
     bottom.set(ylabel='Reference − study (kWh)',xlabel='Month',title='(b) Monthly contributions to demand reduction')
     bottom.set_axisbelow(True);bottom.grid(axis='y',alpha=.18);bottom.legend(frameon=False,ncols=2,loc='upper right')
-    fig.suptitle(f"{period} sensible demand comparison · {d['step_minutes']} min",fontsize=13)
+    fig.suptitle(f"{period} sensible demand comparison · {d.get('step_label') or (str(d['step_minutes'])+' min')}" + waiver_label(d),fontsize=13)
     fig.get_layout_engine().set(rect=(0,.08,1,.90))
     fig.text(.075,.025,'Positive reduction: lower demand; negative: higher demand. Sensible demand, not equipment electricity.\n'+
         ('Twelve full months.' if d['annual'] else f'Selected dates only: {period}; partial-month totals.')+f" Dataset: {d['dataset_sha256'][:16]}",fontsize=8)
@@ -44,7 +49,7 @@ def plot_site(folder,d):
     if (folder/'user-review-notes.json').exists():fig.text(.99,.955,'User-reviewed warnings retained; see review notes',ha='right',va='top',fontsize=7,color='#805600')
     for ext in ('svg','pdf','png'):fig.savefig(folder/('figure.'+ext),dpi=300,facecolor='white')
     plt.close(fig)
-    (folder/'figure_caption.txt').write_text(f"{period} sensible heating and cooling demand at {site['city']} ({site['site_id']}). Panel (a) compares reference and study totals in kWh; panel (b) shows monthly reference-minus-study contributions, positive for reduced demand and negative for increased demand. The plotted period is {d['period']}; monthly values contain only selected dates. Reference: {d['records']['left']['name']} v{d['records']['left']['revision']}; study: {d['records']['right']['name']} v{d['records']['right']['revision']}. This single-site result is not a climate-type or global estimate. Timesteps: {d['step_minutes']} min. Dataset: {d['dataset_sha256']}. See dataset.json for pinned sources and scientific review evidence.",encoding='utf-8')
+    (folder/'figure_caption.txt').write_text(f"{period} sensible heating and cooling demand at {site['city']} ({site['site_id']}). Panel (a) compares reference and study totals in kWh; panel (b) shows monthly reference-minus-study contributions, positive for reduced demand and negative for increased demand. The plotted period is {d['period']}; monthly values contain only selected dates. Reference: {d['records']['left']['name']} v{d['records']['left']['revision']}; study: {d['records']['right']['name']} v{d['records']['right']['revision']}. This single-site result is not a climate-type or global estimate. Timesteps: {d.get('step_label') or (str(d['step_minutes'])+' min')}. Dataset: {d['dataset_sha256']}. See dataset.json for pinned sources and scientific review evidence.",encoding='utf-8')
 
 
 def plot(folder):
@@ -82,7 +87,7 @@ def plot(folder):
     ax.scatter(x[~valid],np.zeros((~valid).sum()),marker='x',color='#6b7280',label='No paired data')
     ax.axhline(0,color='#6b7280',linewidth=.7);ax.set_xticks(x,[c['climate']+'\n'+str(c['valid_sites']) for c in classes],fontsize=8)
     ax.set(ylabel='Demand reduction (MJ m⁻²)',xlabel='Köppen–Geiger climate type / paired sites (n)',title=f"{d['metric'].capitalize()} demand reduction: mean and site range")
-    fig.suptitle(f"Climate representative comparison · {d['step_minutes']} min · {d['paired_sites']} paired sites",fontsize=14)
+    fig.suptitle(f"Climate representative comparison · {d.get('step_label') or (str(d['step_minutes'])+' min')} · {d['paired_sites']} paired sites" + waiver_label(d),fontsize=14)
     fig.get_layout_engine().set(rect=(0,.105,1,.83))
     fig.text(.02,.068,f"Equal-site means; bars show site ranges, not confidence intervals. Grey / ×: no data.\nClimate-type mapping, not pixel simulations. Period: {period}; area: {d['conditioned_area_m2']:g} m². Dataset: {d['dataset_sha256'][:16]}",fontsize=8)
     attribution=('Climate: Beck et al. (2023), CC BY 4.0 (creativecommons.org/licenses/by/4.0/).\n'
@@ -93,7 +98,7 @@ def plot(folder):
     if (folder/'user-review-notes.json').exists():fig.text(.99,.955,'User-reviewed warnings retained; see review notes',ha='right',va='top',fontsize=7,color='#805600')
     for ext in ('svg','pdf','png'):fig.savefig(folder/('figure.'+ext),dpi=300,facecolor='white')
     plt.close(fig)
-    (folder/'figure_caption.txt').write_text(f"{period} sensible heating and cooling demand reduction for the selected reference and study schemes. Class values are equal-weight means of paired representative sites; vertical ranges show site minima and maxima, not confidence intervals. Results are normalized by {d['conditioned_area_m2']} m² of conditioned floor area. Climate-type values are mapped onto an existing 0.5° display grid and are not simulations at every grid cell. Missing results remain missing. The figure uses {d['paired_sites']} paired sites, {d['step_minutes']} min simulation timesteps, and dataset {d['dataset_sha256']}. See dataset.json for pinned scheme revisions, source batches, excluded sites and review notes. Climate map source: {a['manifest']['source'].get('classification_url','')}.\n"+attribution,encoding='utf-8')
+    (folder/'figure_caption.txt').write_text(f"{period} sensible heating and cooling demand reduction for the selected reference and study schemes. Class values are equal-weight means of paired representative sites; vertical ranges show site minima and maxima, not confidence intervals. Results are normalized by {d['conditioned_area_m2']} m² of conditioned floor area. Climate-type values are mapped onto an existing 0.5° display grid and are not simulations at every grid cell. Missing results remain missing. The figure uses {d['paired_sites']} paired sites, {d.get('step_label') or (str(d['step_minutes'])+' min')} simulation timesteps, and dataset {d['dataset_sha256']}. See dataset.json for pinned scheme revisions, source batches, excluded sites and review notes. Climate map source: {a['manifest']['source'].get('classification_url','')}.\n"+attribution,encoding='utf-8')
 
 
 if __name__=='__main__':plot(sys.argv[1])

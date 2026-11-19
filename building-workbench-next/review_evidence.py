@@ -12,7 +12,7 @@ LABELS = {
     'annual_warmup_sensitivity_assessment': '年度初始化敏感性与原警告复核',
     'corrected_five_storey_full_weather_function_replay': '修正基准核对与全年天气函数事件复核',
     'corrected_five_storey_exact_event_replay': '修正基准核对与同引擎湿球函数复核',
-    'five_storey_flip_exact_event_function_replay': '同引擎湿球函数重放与翻面输入核查',
+    'five_storey_flip_exact_event_function_replay': '同引擎湿球函数重放与表面光学切换输入核查',
     'full_year_boundary_intervention_pair': '全年原样与修正边界对照',
     'same_engine_full_year_function_replay_and_prior_weather_review': '全年数值函数复核与已审查气象核对',
 }

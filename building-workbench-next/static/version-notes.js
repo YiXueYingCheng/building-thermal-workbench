@@ -33,7 +33,11 @@ function openCopyDialog(){
  if(S.usageDirty)throw usagePendingError('另存方案');
  let d=document.getElementById('copy-plan-dialog');if(!d){d=document.createElement('dialog');d.id='copy-plan-dialog';document.body.append(d);d.addEventListener('cancel',e=>{if(copyDialogState?.pending)e.preventDefault();});}
  const c=changes();if(c.name===S.saved.name)c.name=(c.name+' · 新方案').slice(0,100);
- copyDialogState={source_id:S.id,base_revision:S.saved.revision,changes:copy(c),pending:false};
+ const edits={};
+ for(const field of ['factors','numerics','execution']){
+  if(JSON.stringify(c[field])!==JSON.stringify(S.saved[field]))edits[field]=copy(c[field]);
+ }
+ copyDialogState={source_id:S.id,base_revision:S.saved.revision,changes:edits,pending:false};
  d.innerHTML=`<header class="viewer-head"><h2>另存为研究方案</h2><button data-copy-close>关闭</button></header><div class="viewer-body"><label class="field">新方案名称<input id="copy-plan-name" maxlength="100" value="${esc(c.name)}"></label><p>确认后创建新方案 v1，包含当前四因素编辑。原方案和已有结果保留。</p><p id="copy-plan-feedback" role="status"></p></div><footer class="viewer-foot"><button data-copy-close>取消</button><button class="primary" data-copy-confirm>确认另存</button></footer>`;
  d.showModal();d.querySelector('input').focus();d.querySelector('input').select();
 }

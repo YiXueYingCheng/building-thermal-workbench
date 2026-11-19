@@ -6,8 +6,10 @@ at most 31 days. Hourly/state linkage requires separately validated outputs.
 from contextlib import contextmanager, closing
 from pathlib import Path
 import datetime as dt
+import calendar
 import json, math, sqlite3, time
 from foundation import now
+from schedule_sharing import display_dictionary
 from execution_results import HEAT, COOL
 from result_availability import jobs, check_file, path_checked, stamp
 from review_evidence import reviewed
@@ -91,6 +93,7 @@ def systems(rows):
 
 
 def signal(name):
+    if control_metric(name): return '材料控制状态'
     if name in (HEAT,COOL): return '显热需求'
     if name in ('Zone Mean Air Temperature','Zone Operative Temperature'): return '房间温度'
     if name=='Site Outdoor Air Drybulb Temperature': return '室外温度'
@@ -98,9 +101,84 @@ def signal(name):
     return '其他输出'
 
 
+# Output names and binary conventions defined by the material adapters.
+CONTROL_OUTPUTS = {
+    'NX_SC_StateOutput': ('compressed', 'Avg'),
+    'NX_SC_FaceOutput': ('face_a', 'Avg'),
+    'NX_FiveStorey_Flip_FaceOutput': ('face_a', 'Avg'),
+    'NX_Fb_StateOutput': ('compressed', 'Avg'),
+    'NX_Fb_ChangedOutput': ('switches', 'Sum'),
+}
+
+
+def control_metric(name):
+    if name in CONTROL_OUTPUTS:
+        return CONTROL_OUTPUTS[name][0]
+    parts = name.split()
+    if len(parts) == 3 and parts[0] == 'NX':
+        return {'State': 'compressed', 'Face': 'face_a'}.get(parts[2])
+    return None
+
+
+def period_points(db, env, raw, variable, start, end):
+    period = raw['period']
+    origin = dt.date(2025, *period[:2])
+    finish = dt.date(2025, *period[2:])
+    first = origin + dt.timedelta(days=day_number(start, period)-1)
+    last = origin + dt.timedelta(days=day_number(end, period)-1)
+    annual = variable['ReportingFrequency'] == 'Run Period'
+    ends = [finish] if annual else [
+        min(finish, dt.date(2025, m, calendar.monthrange(2025, m)[1]))
+        for m in range(first.month, last.month+1)]
+    expected_start = origin if annual else max(origin, first.replace(day=1))
+    require(ends and first == expected_start and last == ends[-1],
+            '请选择完整的已保存统计时段。')
+    rows = [dict(r) for r in db.execute('''SELECT t.TimeIndex,t.Year,t.Month,t.Day,t.Hour,t.Minute,t.Interval,
+        t.SimulationDays,r.Value FROM ReportData r JOIN Time t USING(TimeIndex)
+        WHERE r.ReportDataDictionaryIndex=? AND t.EnvironmentPeriodIndex=? AND t.IntervalType=?
+        AND COALESCE(t.WarmupFlag,0)=0 AND t.SimulationDays BETWEEN ? AND ? ORDER BY t.SimulationDays LIMIT 13''',
+        (variable['ReportDataDictionaryIndex'], env, 4 if annual else 3,
+         (first-origin).days+1, (last-origin).days+1))]
+    require(len(rows) == len(ends), '所选时段的统计值缺失或重复。')
+    for row, stop in zip(rows, ends):
+        require(row['SimulationDays'] == (stop-origin).days+1 and
+                (annual or row['Month'] == stop.month) and isinstance(row['Value'], (int,float)) and
+                math.isfinite(row['Value']), '统计时段或读数与登记不符。')
+        begin = origin if annual else max(origin, stop.replace(day=1))
+        row['label'] = f'{begin:%m-%d} 至 {stop:%m-%d}'
+    return rows
+
+
+def monthly_controls(db, env, raw, dictionary_rows):
+    result = {}
+    for name, (key, statistic) in CONTROL_OUTPUTS.items():
+        matches = [r for r in dictionary_rows if r['Name'] == name and r['KeyValue'] == 'EMS'
+                   and r['ReportingFrequency'] == 'Monthly' and not r['IsMeter']]
+        if not matches:
+            continue
+        try:
+            require(len(matches) == 1 and matches[0]['Type'] == statistic and not matches[0]['Units'],
+                    '控制输出的单位、统计方式或登记数量不符。')
+            period = raw['period']
+            rows = period_points(db, env, raw, matches[0], '%02d-%02d' % tuple(period[:2]),
+                                 '%02d-%02d' % tuple(period[2:]))
+            values = {}
+            for row in rows:
+                value = row['Value']
+                if key == 'switches':
+                    require(value >= 0 and value == round(value), '切换次数不符合非负整数。')
+                else:
+                    require(0 <= value <= 1, '状态占比超出有效范围。')
+                values[row['Month']] = value
+            result[key] = {'months': values}
+        except ValueError as exc:
+            result[key] = {'error': str(exc)}
+    return result
+
+
 def inventory(root,batch,index):
     with source(root,batch,index) as (db,raw,env,out):
-        rows=dictionary(db)
+        rows=display_dictionary(dictionary(db),raw)
         times=[dict(t) for t in db.execute('''SELECT IntervalType,MIN(Interval) AS min_minutes,MAX(Interval) AS max_minutes,
             COUNT(*) AS records,MIN(SimulationDays) AS first_day,MAX(SimulationDays) AS last_day
             FROM Time WHERE EnvironmentPeriodIndex=? AND (WarmupFlag=0 OR WarmupFlag IS NULL)
@@ -114,6 +192,8 @@ def inventory(root,batch,index):
         coverage=[dict(signal=k[0],frequency=k[1],items=v) for k,v in sorted(groups.items())]
         detailed=any(t['IntervalType'] in (-1,0,1) for t in times)
         daily=systems(rows) if any(t['IntervalType']==2 for t in times) else {}
+        out['monthly_loads'] = raw.get('monthly') or []
+        out['monthly_controls'] = monthly_controls(db, env, raw, rows)
         out.update(frequencies=times,coverage=coverage,dictionary=rows,systems=sorted(daily),
                    has_subdaily_time_records=detailed,max_days=MAX_DAYS,
                    hourly_note='发现小时／步级时间记录，可按原变量和对象读取有限日期范围；房间与表面位置不从对象名称自动推断。' if detailed else '本结果没有逐小时／逐步时间记录。求解步长不等于输出频率；月均室温和平均状态不能还原变化过程。',
@@ -122,12 +202,18 @@ def inventory(root,batch,index):
 
 
 def series(root,batch,index,variable,start,end):
-    """One raw series, at most 31 days / 12,000 points; no resampling."""
+    """One saved variable. Detailed series are bounded to 31 days / 12,000 points."""
     with source(root,batch,index) as (db,raw,env,out):
+        row=next((r for r in display_dictionary(dictionary(db),raw) if r['ReportDataDictionaryIndex']==variable),None)
+        require(row is not None,'输出项不存在。')
+        source_id=row.get('SourceDictionaryIndex',variable)
+        if row['ReportingFrequency'] in ('Monthly','Run Period'):
+            points = period_points(db, env, raw, dict(row, ReportDataDictionaryIndex=source_id), start, end)
+            out.update(variable=row,start=start,end=end,rows=points,
+                       note='读数对应所示模拟时段。Sum 为累积量，Avg 为均值。')
+            return out
         first=day_number(start,raw['period']);last=day_number(end,raw['period'])
         require(1<=last-first+1<=31,'每次请选择连续 1—31 天。')
-        row=next((r for r in dictionary(db) if r['ReportDataDictionaryIndex']==variable),None)
-        require(row is not None,'输出项不存在。')
         types={'Daily':(2,1440),'Hourly':(1,60),'Zone Timestep':(-1,raw['step_minutes'])}
         require(row['ReportingFrequency'] in types,'请选择逐日、逐时或区域步输出。')
         it,minutes=types[row['ReportingFrequency']];expected=(last-first+1)*1440//minutes
@@ -136,7 +222,7 @@ def series(root,batch,index,variable,start,end):
             FROM ReportData r JOIN Time t USING(TimeIndex)
             WHERE r.ReportDataDictionaryIndex=? AND t.EnvironmentPeriodIndex=? AND t.IntervalType=?
             AND COALESCE(t.WarmupFlag,0)=0 AND t.SimulationDays BETWEEN ? AND ? ORDER BY t.TimeIndex LIMIT 12001''',
-            (variable,env,it,first,last))]
+            (source_id,env,it,first,last))]
         require(len(points)==expected and len({p['TimeIndex'] for p in points})==expected,'所选范围的数据缺失或重复；未插值或补零。')
         origin=dt.date(2025,*raw['period'][:2]);slots=set()
         for p in points:

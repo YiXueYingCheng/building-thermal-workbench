@@ -111,7 +111,7 @@ def resolve(record,catalog,base):
   if override:room['hvac'].update(copy.deepcopy(override));validate_hvac(room['hvac'])
  changed=content!=base or bool(overrides)
  references={x['id']:x for x in f['condition'].get('reference_runs',[])}
- if changed and any(c['channel']=='orientation' and c['mode']=='calendar' and references.get(c.get('reference_id'),{}).get('kind')!='workspace_daily_calendar_v1' for c in f['condition']['controls']):raise ValueError('建筑使用或温控已改变，原翻面参考需重新核对；请先使用固定朝向，未自动生成新日历。')
+ if changed and any(c['channel']=='orientation' and c['mode']=='calendar' and references.get(c.get('reference_id'),{}).get('kind')!='workspace_daily_calendar_v1' for c in f['condition']['controls']):raise ValueError('建筑使用或温控已改变，原表面光学切换参考需重新核对；请先使用固定光学参数组，未自动生成新日历。')
  if op['mode'] not in ('controlled','natural','both'):raise ValueError('请选择明确运行模式。')
  shim=copy.deepcopy(record);shim['factors']['building']=b;shim['factors']['condition']['operation']=copy.deepcopy(catalog['records']['global_fixed']['factors']['condition']['operation'])
  return shim,effective
