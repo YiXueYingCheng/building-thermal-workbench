@@ -44,4 +44,6 @@ EP-EXAMPLE 的 8 个材料与 3 个构造已对照 [EnergyPlus 26.1.0 PurchAirTa
 
 新工作区自带参考数据，无需提供这些源 ACCDB/Excel。参考条目只读，可复制并保存自己的版本；不自动覆盖已有方案引用。构造引用、日计划别名、全年序列与房间配置关联均在候选中重新核对。原数据版本不因本次分发筛选更换，避免让已有日计划快照产生不必要的新身份。
 
-本清单适用于 v0.73.11 公开预览版。完整安装、升级及求解的既有验收范围见 [安装验收](LOCAL_INSTALL_ACCEPTANCE.md)；本次新增检查见 [参考库分发验收](REFERENCE_DISTRIBUTION_VALIDATION.json)。
+本清单记录 v0.73.11 的分发审阅。已比对两个发布标签，v0.73.14 的 `resources/reference-library/`、条目清单、来源摘要和分发验收记录均与 v0.73.11 一致。这次核对覆盖上列 1,028 项。后续新增或替换条目时，须另行核对其来源与分发条件。
+
+[参考库分发验收记录](REFERENCE_DISTRIBUTION_VALIDATION.json) · [既有安装、升级与求解验收](LOCAL_INSTALL_ACCEPTANCE.md)

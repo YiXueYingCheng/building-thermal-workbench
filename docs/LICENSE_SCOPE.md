@@ -20,7 +20,7 @@ Copyright (c) 2026 Zhao Bencheng。
 
 ## 公用参考库范围说明
 
-`resources/reference-library` 已按作者 2026-11-15 的授权收录作息与公用配置库，具体范围见 [随包清单](REFERENCE_DISTRIBUTION_REVIEW.md)。作者的整理、说明及自有修改按 CC BY 4.0；条目保留原来源，软件原有数据及 EnergyPlus 示例不改授本项目许可。源项目数据库、Excel 原文件和独立“用户研究材料_10mm”未新增收录。本说明适用于 v0.73.11 和 v0.73.12 公开预览版，许可与署名范围未改变。
+`resources/reference-library` 已按作者 2026-11-15 的授权收录作息与公用配置库，具体范围见 [随包清单](REFERENCE_DISTRIBUTION_REVIEW.md)。作者的整理、说明及自有修改按 CC BY 4.0；条目保留原来源，软件原有数据及 EnergyPlus 示例不改授本项目许可。源项目数据库、Excel 原文件和独立“用户研究材料_10mm”未新增收录。v0.73.14 收录的公用参考库与 v0.73.11 的已审阅清单一致。各条目的来源与分发范围见上方清单。
 
 ## 第三方例外
 
@@ -31,7 +31,7 @@ Copyright (c) 2026 Zhao Bencheng。
 
 ## 署名与引用
 
-推荐署名：**Zhao Bencheng (2026), 建筑热环境工作台 / Building Thermal Environment Workbench, v0.73.11**。数据或文档分享时标注 CC BY 4.0、附 [许可链接](https://creativecommons.org/licenses/by/4.0/)，并注明是否修改。对具体示例可补充 Drawing26、ECA 或结果文件名。项目公开网址为 [GitHub 仓库](https://github.com/YiXueYingCheng/building-thermal-workbench)；DOI 尚未注册。引用时请注明实际使用版本。
+引用时填写实际使用的版本号。使用 v0.73.14 时，可写作 **Zhao Bencheng (2026), 建筑热环境工作台 / Building Thermal Environment Workbench, v0.73.14**。数据或文档分享时标注 CC BY 4.0、附 [许可链接](https://creativecommons.org/licenses/by/4.0/)，并注明是否修改。对具体示例可补充 Drawing26、ECA 或结果文件名。项目公开网址为 [GitHub 仓库](https://github.com/YiXueYingCheng/building-thermal-workbench)；DOI 尚未注册。
 
 作者邮箱：benchengchem@163.com。所属信息：426 Team, School of chemistry and chemical engineering, Jiangsu University。所属信息不表示机构为共同版权人或为下游成果背书。
 
