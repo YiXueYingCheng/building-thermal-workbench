@@ -8,4 +8,4 @@ Copyright (c) 2026 Zhao Bencheng。
 
 本目录 Python 脚本采用 [MIT](../LICENSE)。天气来源表仅对本项目整理部分采用 CC BY 4.0，所链接的 EPW 数据沿用原提供方条件，不随包附带。完整例外见 [许可范围](../docs/LICENSE_SCOPE.md)。
 
-`drawing26-repaired` 为已授权 Drawing26 的独立修补副本，沿用原作者与许可；具体修改见其 repair.json，不替代原库或原结果。
+`drawing26-repaired` 为已授权 Drawing26 的独立修补副本，沿用原作者与许可；具体修改见 [repair.json](drawing26-repaired/repair.json)。

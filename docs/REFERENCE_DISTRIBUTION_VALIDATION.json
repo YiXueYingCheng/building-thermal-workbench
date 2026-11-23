@@ -23,10 +23,6 @@
   "daily_copy_and_persistence": true,
   "original_examples_and_licenses_unchanged": true,
   "calculation_and_ui_code_unchanged": 227,
-  "included_source_databases": [
-    "examples/drawing26/Drawing26.accdb",
-    "examples/drawing26-repaired/Drawing26_import_repaired.accdb"
-  ],
   "excluded_research_material_unselectable": true,
   "earlier_candidate_unchanged": true,
   "new_simulations": 0,

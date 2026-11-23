@@ -9,7 +9,7 @@ Copyright (c) 2026 Zhao Bencheng。
 | 自有 Python、JavaScript、CSS、HTML、PowerShell、CMD 脚本及测试，包括 examples 内的下载、登记脚本 | [MIT](../LICENSE) |
 | 程序配置、依赖清单、版本文件、Git 忽略规则 | MIT |
 | 根目录及 docs、examples、resources 中的自有说明，作者和引用元数据 | [CC BY 4.0](../LICENSES/CC-BY-4.0.txt) |
-| examples/drawing26-repaired 中的 Drawing26 独立修补副本及修改说明；examples/drawing26 中的数据库、固定模型模板、作息、记录与控制参数；examples/materials/ECA.json | CC BY 4.0 |
+| examples/drawing26-repaired 中的 Drawing26 独立修补副本及修改说明；examples/drawing26 中的固定模型模板、作息、记录与控制参数；examples/materials/ECA.json | CC BY 4.0 |
 | resources/starter-library 中由本项目原创的演示人数、得热与作息配置 | CC BY 4.0；演示值不代表规范推荐值 |
 | resources/import-reference 中来自 Drawing26 的门与材料参考记录 | CC BY 4.0 |
 | examples/weather 中由本项目整理的来源目录和说明 | CC BY 4.0，仅覆盖本项目整理内容；其中链接指向的天气原数据继续适用提供方条件 |

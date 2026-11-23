@@ -2,7 +2,7 @@
 
 > 当前版本为 v0.73.14 公开预览版。已有 v0.72.2、v0.73.11 至 v0.73.13 或 v0.73.14-rc.1 至 rc.9 用户请看 [升级与备份恢复](UPGRADE_TO_0_73_14.md)，使用新包中的 Upgrade Workbench.cmd；不要直接覆盖旧工作区。
 
-> v0.73.11 已加入：原公开模板与原始库继续保留；另有独立的 [Drawing26 门洞修补版普通导入示例](../examples/drawing26-repaired/README.md)，已验证普通导入及短期计算。请按文件版本区分，旧结果不自动替换。
+> 普通建筑导入可使用 [Drawing26 门洞修补版](../examples/drawing26-repaired/README.md)。
 
 已验证 Windows、64 位 CPython 3.12.7。本分发包沿用已完成的同机独立目录验收；第二台机器、全新 Windows 与不同 Office 组合尚未验证。
 
@@ -14,7 +14,7 @@
 
 ## 示例与计算引擎
 
-按 [示例说明](../examples/README.md) 下载长沙气象、登记 Drawing26 模板和 ECA。示例登记不读取 Access；导入自己的数据库时才需要 ODBC。
+按 [示例说明](../examples/README.md) 下载长沙气象、登记 Drawing26 模板和 ECA。模板登记可直接使用随包模型。通过“导入建筑模型”读取 ACCDB（含 Drawing26 修补版）需要 Access ODBC。
 
 从 [EnergyPlus 官方发布页](https://github.com/NatLabRockies/EnergyPlus/releases/tag/v26.2.0)取得 Windows 26.2.0。当前转换器绑定版本字符串 `26.2.0-4bd7a1f26f`；保留安装目录内完整引擎文件，在工作区设置选择 `energyplus.exe`。引擎登记会校验文件，登记本身不启动计算。
 

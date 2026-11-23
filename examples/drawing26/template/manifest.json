@@ -78,7 +78,6 @@
     "PCM": false,
     "wall_count": 14
   },
-  "authorized_building_sha256": "911ccc300f1af61f6a5fee686c2577ae8c1aff145aaf6249e4b5366eaa8d29fa",
   "applied_wall_ids": [
     "S_204",
     "S_265",

@@ -8,6 +8,19 @@ import subprocess
 import zipfile
 
 
+def check_drawing26(payload):
+    repair = json.loads(payload['examples/drawing26-repaired/repair.json'])
+    sample = json.loads(payload['examples/sample-manifest.json'])['building']
+    path = 'examples/drawing26-repaired/' + repair['file']
+    if ('examples/' + sample['file'] != path or sample['sha256'] != repair['sha256']
+            or hashlib.sha256(payload[path]).hexdigest() != sample['sha256']):
+        raise ValueError('Drawing26 import example does not match its repair record')
+    for name, data in payload.items():
+        if Path(name).suffix.lower() in {'.accdb', '.mdb'}:
+            if hashlib.sha256(data).hexdigest() == repair['original_sha256']:
+                raise ValueError(f'Retired Drawing26 database in release: {name}')
+
+
 def build(root, output):
     metadata = json.loads((root / 'RELEASE.json').read_text(encoding='utf-8'))
     version = metadata['version']
@@ -21,6 +34,7 @@ def build(root, output):
         if path.is_symlink() or not path.is_file():
             raise ValueError(f'Expected a regular publication file: {name}')
         payload[name] = path.read_bytes()
+    check_drawing26(payload)
     # Runtime configuration is intentionally ignored by Git; ship a clean copy only.
     payload['building-workbench-next/config.json'] = payload['building-workbench-next/config.example.json']
     digest = lambda data: hashlib.sha256(data).hexdigest()

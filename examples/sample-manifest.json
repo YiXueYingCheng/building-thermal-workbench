@@ -4,8 +4,9 @@
   "authorization": "Drawing26 example building and adjustable-resistance ECA example material",
   "date": "2026-11-13",
   "building": {
-    "file": "drawing26/Drawing26.accdb",
-    "sha256": "911ccc300f1af61f6a5fee686c2577ae8c1aff145aaf6249e4b5366eaa8d29fa"
+    "purpose": "Ordinary ACCDB import of the repaired geometry",
+    "file": "drawing26-repaired/Drawing26_import_repaired.accdb",
+    "sha256": "e8635e619eb353ec66d148e42781bc0f26227d8b2fa898845f487d9ab2995611"
   },
   "material": {
     "file": "materials/ECA.json",
@@ -19,8 +20,9 @@
   },
   "new_simulations": 8,
   "template": {
+    "purpose": "Frozen models and schedules used for the ECA example verification results",
     "file": "drawing26/template/manifest.json",
-    "sha256": "329ac8840b0f22289f0a099556fee9f14e4c34927877833fbac576c8cd67a103"
+    "sha256": "278f45ee4aadc1b5b684173083bf42180ba5a3e9378b3cbb2952eb51d6066aef"
   },
   "verified_settings": {
     "weather_id": "china34_430000",

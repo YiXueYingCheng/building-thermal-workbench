@@ -53,11 +53,14 @@ def register(root=ROOT,weather_path=None,engine_path=None):
     catalog=current(root)
     if catalog.get('catalog_kind')!='standalone_v1' or any(k in catalog['records'] for k in ('global_w00','global_fixed')):
         raise ValueError('请在独立新工作区登记示例，不覆盖已有旧平台来源。')
-    package=Path(__file__).resolve().parents[1]/'examples/drawing26/template'
-    manifest=read_json(package/'manifest.json');fingerprint=digest(manifest)
-    source_db=package.parent/'Drawing26.accdb'
-    if sha(source_db)!=manifest['authorized_building_sha256']:
-        raise ValueError('示例数据库与登记来源不一致。')
+    examples = Path(__file__).resolve().parents[1] / 'examples'
+    template = read_json(examples / 'sample-manifest.json')['template']
+    manifest_path = owned(examples / template['file'], examples)
+    if sha(manifest_path) != template['sha256']:
+        raise ValueError('Drawing26 示例模板清单与发布清单不一致。')
+    package = manifest_path.parent
+    manifest = read_json(manifest_path)
+    fingerprint = digest(manifest)
     for name,checksum in manifest['files'].items():
         path=owned(package/name,package)
         if sha(path)!=checksum:raise ValueError('示例模板文件已变化：'+name)
@@ -67,7 +70,7 @@ def register(root=ROOT,weather_path=None,engine_path=None):
     with setup_lock(root):
         if existing.exists():raise ValueError('另一个示例登记已完成，请重新运行以读取结果。')
         frozen=owned(root/'data/examples'/('drawing26_'+fingerprint[:16]),root)
-        source_refs=[ref(source_db)]
+        source_refs=[]
         for name,checksum in manifest['files'].items():
             dest=owned(frozen/'template'/name,frozen)
             dest.parent.mkdir(parents=True,exist_ok=True)

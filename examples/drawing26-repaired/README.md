@@ -1,6 +1,6 @@
 # Drawing26 门洞修补版：普通 ACCDB 导入
 
-这是一份独立的导入示例，文件为 [Drawing26_import_repaired.accdb](Drawing26_import_repaired.accdb)。原作者为 Zhao Bencheng；沿用 Drawing26 的 [CC BY 4.0](../../LICENSES/CC-BY-4.0.txt)，保留修改说明。原始数据库、冻结模板及原 ECA 结果继续保留在原目录，两者不能互换文件后沿用旧校验值。
+这是一份独立的导入示例，文件为 [Drawing26_import_repaired.accdb](Drawing26_import_repaired.accdb)。原作者为 Zhao Bencheng；沿用 Drawing26 的 [CC BY 4.0](../../LICENSES/CC-BY-4.0.txt)，保留修改说明。复现固定模板的 ECA 算例请见[示例说明](../README.md)。
 
 ## 改了什么
 
