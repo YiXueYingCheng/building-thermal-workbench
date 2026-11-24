@@ -62,11 +62,11 @@ def build(record,catalog,store,root=ROOT):
         sides=[side for side in ('left','right') if c[side]==dict(id=record['id'],revision=record['revision'])]
         if not sides:continue
         try:
-            names={side:store.get(c[side]['id'],c[side]['revision'])['name'] for side in ('left','right')}
+            names={side:store.comparison_input(c,side)[0]['name'] for side in ('left','right')}
             comparisons.append(dict(**c,names=names,roles=sides))
         except (ValueError,KeyError) as error:issues.append(f'比较关系 {c["name"]} 暂未纳入：{error}')
     history={h['revision']:h for h in store.history(record['id'])}
-    historical=record['id'] in ('global_w00','global_fixed') and record==catalog['records'][record['id']]
+    historical=record['id'] in ('global_w00','global_fixed') and record==catalog['records'].get(record['id'])
     return dict(record_id=record['id'],revision=record['revision'],record_sha256=checksum,created=now(),
         inputs=sorted(inputs,key=lambda x:x['created'],reverse=True),batches=batches,comparisons=comparisons,issues=issues,
         other_versions=[h for rev,h in history.items() if rev in other],historical=historical)

@@ -62,14 +62,14 @@ def capability(record,catalog):
   if enabled(r):
    numerics(r,s)
    if any(c.get('channel')=='orientation' and c.get('mode')=='calendar' for c in f['condition']['controls']) and not f['condition']['reference_runs']:raise ValueError('等待新版 1 min W00 逐日参考与日历；尚未生成或提交翻面输入。')
-  elif r['numerics']!=s['numerics']:raise ValueError('此建筑首轮沿用已验证的 5 min 步长与原计算引擎。')
+  elif {**r['numerics'],'step_minutes':s['numerics']['step_minutes']}!=s['numerics']:raise ValueError('普通建筑需要沿用已登记的引擎及数值设置。')
   if set(f['scope'])-{'site_ids','period','aggregation'}:raise ValueError('范围包含未支持字段。')
   if any(i!=s['site']['id'] and (catalog['sites'][i].get('source_kind') not in ('reviewed_global','imported_epw_v1') or not catalog['sites'][i].get('eligible')) for i in f['scope']['site_ids']):raise ValueError('所选地点没有可用的登记气象。')
   resolve(r,catalog,s['usage'])
   if f['building'].get('envelope_overrides'):
    from ordinary_envelope import validate_overrides
    validate_overrides(f['building']['envelope_overrides'],s['envelope'])
-  return dict(supported=True,reasons=[],case='ORDINARY_ECA_'+material['state']+'_A' if material else 'ORDINARY')
+  return dict(supported=True,reasons=[],case='ORDINARY_ECA_'+material['state']+'_'+material['face'] if material else 'ORDINARY')
  except (KeyError,ValueError,TypeError,AttributeError) as exc:return dict(supported=False,reasons=[str(exc)])
 
 def preview(record,catalog):
@@ -82,7 +82,7 @@ def preview(record,catalog):
   from ordinary_envelope import inventory
   apply(m,record);envelope=inventory(m)
  return dict(base=base,selected=record['factors']['building'].get('usage_profile',{}).get('content',base),walls=[],
-  source_model=job['model'],eligible=True,material_template=None,controls_template=[],usage_sources=s['usage_sources'],
+  source_model=job['model'],eligible=True,usage_sources=s['usage_sources'],
   gain_defaults=gain_defaults(m),envelope=envelope,source_notes=s['notes'])
 
 def compile_case(record,site_id,catalog,reader,operation_mode=None):
@@ -111,6 +111,8 @@ def compile_case(record,site_id,catalog,reader,operation_mode=None):
   from weather_import import apply_location
   adaptation=apply_location(m,site,location)
  elif any(not math.isclose(location[k],loc[k],abs_tol=1e-10) for k in location):raise ValueError('建筑地点与原气象位置不匹配。')
+ if len(m.get('Timestep',{}))!=1:raise ValueError('原建筑没有唯一的求解步长设置。')
+ next(iter(m['Timestep'].values()))['number_of_timesteps_per_hour']=60//record['numerics']['step_minutes']
  period=record['factors']['scope']['period'];rp=next(iter(m['RunPeriod'].values()))
  for k,v in zip(('begin_month','begin_day_of_month','end_month','end_day_of_month'),period):rp[k]=v
  days=(dt.date(2025,*period[:2])-dt.date(2025,1,1)).days

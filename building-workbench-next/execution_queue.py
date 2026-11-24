@@ -166,7 +166,7 @@ class Queue:
             if sha(path)!=r['checksum']:return None
             result=read_json(path)
             if result['status']!='passed' or result['identity']!=identity:return None
-            verify_artifacts(result);return str(path)
+            verify_artifacts(result,self.root);return str(path)
         except (OSError,KeyError,ValueError):return None
 
     def state(self):
@@ -197,7 +197,7 @@ class Queue:
             if not j['result_sha256'] or sha(p)!=j['result_sha256']:raise ValueError('结果汇总的校验记录缺失或文件变化，请核查。')
             r=read_json(p)
             if r['identity']!=j['identity']:raise ValueError('结果与任务身份不符。')
-            verify_artifacts(r);results.append(dict(index=j['idx'],**r))
+            verify_artifacts(r,self.root);results.append(dict(index=j['idx'],**r))
         return dict(id=ident,record_name=plan['record_name'],record_id=plan['record_id'],revision=plan['revision'],bundle_id=plan['bundle_id'],conditioned_area_m2=plan['conditioned_area_m2'],results=results)
 
 def ensure_worker(root=ROOT):

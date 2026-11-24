@@ -1,16 +1,16 @@
 # 从 GitHub 下载并完成首次试用
 
-> 当前版本为 v0.73.14 公开预览版。已有 v0.72.2、v0.73.11 至 v0.73.13 或 v0.73.14-rc.1 至 rc.9 用户请看 [升级与备份恢复](UPGRADE_TO_0_73_14.md)，使用新包中的 Upgrade Workbench.cmd；不要直接覆盖旧工作区。
+> 当前版本为 v0.73.15 公开预览版。已有 v0.72.2、v0.73.11 至 v0.73.14 或 v0.73.14-rc.1 至 rc.9 用户请看 [升级与备份恢复](UPGRADE_TO_0_73_15.md)，使用新包中的 Upgrade Workbench.cmd；不要直接覆盖旧工作区。
 
 > 普通建筑导入可使用 [Drawing26 门洞修补版](../examples/drawing26-repaired/README.md)。
 
-下文用于 v0.73.14 公开预览版的第三方试用；反馈时请注明使用版本。希望验证的完整流程是：从 GitHub 获取 → 安装 → 登记示例 → 计算 → 查看并导出结果。
+下文用于 v0.73.15 公开预览版的第三方试用；反馈时请注明使用版本。希望验证的完整流程是：从 GitHub 获取 → 安装 → 登记示例 → 计算 → 查看并导出结果。
 
 ## 1. 下载与解压
 
-打开 [v0.73.14 下载页](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.73.14)，在附件中下载 `building-workbench-v0.73.14.zip`，解压到较短、可写的目录，例如 `C:\Workbench\building-workbench-v0.73.14`。请认准附件名中的版本号，不要混用不同版本的包和校验文件。
+打开 [v0.73.15 下载页](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/tag/v0.73.15)，在附件中下载 `building-workbench-v0.73.15.zip`，解压到较短、可写的目录，例如 `C:\Workbench\building-workbench-v0.73.15`。请认准附件名中的版本号，不要混用不同版本的包和校验文件。
 
-也可以从 [v0.73.14 标签页](https://github.com/YiXueYingCheng/building-thermal-workbench/tree/v0.73.14) 通过 **Code → Download ZIP** 下载该版本源码；仓库 main 分支以后可能继续更新。自动生成的源码包不包含个人运行配置；按照下一步复制 `config.example.json` 即可。不要直接在 ZIP 内双击运行。
+也可以从 [v0.73.15 标签页](https://github.com/YiXueYingCheng/building-thermal-workbench/tree/v0.73.15) 通过 **Code → Download ZIP** 下载该版本源码；仓库 main 分支以后可能继续更新。自动生成的源码包不包含个人运行配置；按照下一步复制 `config.example.json` 即可。不要直接在 ZIP 内双击运行。
 
 Windows 是本版验证的平台。先安装 64 位 Python 3.12；稍后计算还需安装指定版本 EnergyPlus。软件环境和引擎不在源码包中。
 
@@ -72,11 +72,11 @@ if (-not (Test-Path .\building-workbench-next\config.json)) { Copy-Item .\buildi
 
 请优先反馈首次导入后是否能进入编辑、中文目录下能否准备输入、等待内存提示是否清楚，以及一月等非全年结果能否按实际时段核对。遇到警告请试读核查依据；需要采用时自行填写理由和用途范围，检查比较及导出是否保留说明。旧用户请先完成备份升级并核对原方案、结果和保存路径。反馈附版本、卡住步骤、报错文字及必要日志；避免公开个人原始项目和路径。
 
-## v0.73.14 本次重点试用
+## v0.73.15 本次重点试用
 
-新用户先按本文安装、登记引擎和气象，再导入修补版 Drawing26 或自己的建筑。旧用户先按 [升级入口](UPGRADE_TO_0_73_14.md) 备份升级，核对原方案、版本、结果和保存位置。
+新用户先按本文安装、登记引擎和气象，再导入修补版 Drawing26 或自己的建筑。旧用户先按 [升级入口](UPGRADE_TO_0_73_15.md) 备份升级，核对原方案、版本、结果和保存位置。
 
-请重点体验：房间作息未保存时提示是否醒目、能否直接返回处理及完成两步保存；同类型房间与墙面批量配置；文件夹气象导入及失败地点的 JRC 备用确认；选择输出频率、结果明细和批量复核；设备投入中开启 CPU 控制后是否说明等待原因、负载下降后是否继续。老设备请反馈 CPU 目标、并行数、内存余量、系统响应和实际耗时。CPU 默认关闭且不是硬性限速，不必为了试用强行增加负载。
+可以选同一建筑做两个工况，保存对照，然后关闭并重开结果。核对双方方案版本、月度负荷和已收录的地点。导入气象时可以选引用已有文件，再到气象库确认文件位置。使用逐日结果时，可以直接导出整栋建筑的供暖与制冷需求。
 
 反馈附版本、操作步骤、预期与实际现象、报错文字或截图。涉及结果请保留原日志；不要在公开 Issue 上传私有建筑、原始研究结果或个人路径。
 

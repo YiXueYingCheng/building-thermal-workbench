@@ -29,7 +29,7 @@ function libraryList(){
 function librarySidebar(){return `<aside class="sidebar"><h2>方案库</h2><p class="muted">当前方案与原来源分开展示。</p><label class="field">查找方案<input id="search" value="${esc(S.search)}" placeholder="名称或建筑"></label><label class="check"><input id="archived" type="checkbox"${S.archived?' checked':''}>包含已归档来源</label><div class="record-list">${libraryList()}</div></aside>`;}
 function comparisonCatalogControl(){return `<label class="field comparison-catalog">选择方案的范围<select id="comparison-catalog">${options([['workspace','本工作区方案'],['sources','原平台来源'],['archived','已归档来源'],['all','全部记录']],S.compareCatalog)}</select><small>改变此范围只筛选候选项，已选方案和保存版本保持。</small></label>`;}
 function comparisonPlanOptions(side){
- const selected=S[side],rows=S.boot.records.filter(r=>S.compareCatalog==='all'||recordGroup(r)===S.compareCatalog),outside=S.boot.records.find(r=>r.id===selected&&!rows.some(x=>x.id===r.id));
+ const selected=S[side],rows=S.boot.records.filter(r=>S.compareCatalog==='all'||recordGroup(r)===S.compareCatalog),outside=!rows.some(x=>x.id===selected)&&(S.boot.records.find(r=>r.id===selected)||[S.comparison?.left,S.comparison?.right].find(r=>r?.id===selected));
  return (outside?`<optgroup label="当前已选（保留）">${options([[outside.id,outside.name]],selected)}</optgroup>`:'')+['workspace','sources','archived'].map(key=>{
   const group=rows.filter(r=>recordGroup(r)===key);return group.length?`<optgroup label="${libraryTitles[key]}">${options(group.map(r=>[r.id,r.name]),selected)}</optgroup>`:'';
  }).join('');
@@ -58,7 +58,7 @@ async function alignResultComparison(data){
  try{
   S.left=c.left.id;S.right=c.right.id;S.compareVersions={left_revision:c.left.revision,right_revision:c.right.revision};
   S.planComparisonDraft={name:c.name,metric:c.metric};
-  if(!S.comparison||['left','right'].some(side=>S.comparison[side].id!==c[side].id||S.comparison[side].revision!==c[side].revision))await loadComparison();
+  if(!S.comparison||['left','right'].some(side=>S.comparison[side].id!==c[side].id||S.comparison[side].revision!==c[side].revision))await loadComparison(c.id);
  }catch(error){Object.assign(S,previous);throw error;}
 }
 document.addEventListener('toggle',event=>{const key=event.target.dataset?.libraryGroup;if(key&&!S.search)S.libraryGroups[key]=event.target.open;},true);

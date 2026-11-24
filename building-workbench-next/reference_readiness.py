@@ -135,7 +135,7 @@ def result_evidence(job, case, root):
     r = read_json(path)
     if any(r[k] != case[k] for k in ('identity','site_id','mode','period','step_minutes')) or r['status'] != 'passed':
         raise ValueError('结果身份或接受状态不符。')
-    verify_artifacts(r)
+    verify_artifacts(r,root)
     review = reviewed(r, root)
     return dict(accepted=True, status=job['status'], result_path=str(path), result_sha256=job['result_sha256'],
                 days=r.get('days'), loads=r.get('loads'), scientific_review=review)
@@ -202,7 +202,7 @@ def build(record, catalog, root=ROOT, accepted_only=False):
         site = catalog['sites'][sid];row=dict(site_id=sid, city=site['name'], candidates=[], historical=[], issues=[], status='missing')
         out['rows'].append(row)
         for job in catalog.get('global_bundle',{}).get('jobs',{}).values():
-            if job.get('site_id')==sid and job.get('case')=='W00' and f['building']['id']==catalog['records'].get('global_w00',{}).get('factors',{}).get('building',{}).get('id'):
+            if job.get('site_id')==sid and job.get('case')=='W00' and f['building']['id']==catalog['global_bundle'].get('building_source',{}).get('building',{}).get('id'):
                 row['historical'].append(dict(id=job['id'], step_minutes=15, status='unverified', note='原平台 W00 来源已登记；旧逐日来源通过底部独立按钮核对。'))
         if reference is None:row['status']='needs_definition';continue
         possibles=[(b,p,r,folder,c) for b,p,r,folder in available for c in p['cases'] if candidate(r,reference,c,sid)]

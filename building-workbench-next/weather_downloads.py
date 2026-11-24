@@ -195,7 +195,7 @@ def _run(root,ident,event):
             data=read_json(path(root,ident));data.update(state='failed',message=str(e));save(root,data)
 
 
-def register(root,ident,ids,catalog_data,reviewed=False):
+def register(root,ident,ids,catalog_data,reviewed=False,storage_mode='copy'):
     if reviewed is not True:raise ValueError('请先核对下载后的地点、来源和质量提示。')
     data=status(root,ident)
     if data['state'] in ('running','cancelling'):raise ValueError('请待批次停止后登记，避免与下载写入并发。')
@@ -210,7 +210,7 @@ def register(root,ident,ids,catalog_data,reviewed=False):
         note='来源：'+source['source_url']+'；数据集：'+source['dataset']+'；'+source.get('period','')+'。历史分类：'+source.get('climate_label_from_historical_table','未指定')+'；未进行选点代表性复核。'
         if data.get('kind')=='fallback':note+=' 已确认的备用数据，非原 TMYx 文件；原地点编号：'+source['original_id']+'。'+source.get('note','')
         try:
-            result=weather_import.register(root,row['result']['path'],row['result']['sha256'],dict(reviewed=True,name=source['name'],note=note[:1000]),catalog_data)
+            result=weather_import.register(root,row['result']['path'],row['result']['sha256'],dict(reviewed=True,name=source['name'],note=note[:1000],storage_mode=storage_mode),catalog_data)
             results.append(dict(id=key,status='registered',registration_id=result['registration']['id'],reused=result['reused']))
         except (ValueError,OSError) as e:results.append(dict(id=key,status='failed',error=str(e)))
     return dict(items=results,note='已登记地点可在范围中选择；没有改变任何方案或启动计算。')

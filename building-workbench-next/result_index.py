@@ -100,10 +100,8 @@ def build(catalog, store, root=ROOT):
         try:
             sides = {}
             for side in ('left', 'right'):
-                ref = comparison[side]
-                r = saved(ref['id'], ref['revision'])
+                r,historical = store.comparison_input(comparison,side)
                 side_batches = [b['id'] for b in batches if (b['record']['id'], b['record']['revision']) == (r['id'], r['revision'])]
-                historical = r['id'] in ('global_w00', 'global_fixed') and r == catalog['records'].get(r['id'])
                 sides[side] = dict(**label(r), batch_ids=side_batches, historical=historical)
             comparisons.append(dict(**comparison, kind='comparison', sides=sides))
         except (OSError, ValueError, KeyError, TypeError) as error:

@@ -240,9 +240,9 @@ def plan(source,target):
     if source==target or source.is_relative_to(target) or target.is_relative_to(source):fail('新包必须解压在旧平台之外的独立文件夹。')
     incoming=manifest(source);old=manifest(target,False)
     oldversion=(target/'building-workbench-next/VERSION').read_text('utf8').strip()
-    supported = ('0.72.2', '0.73.11', '0.73.12', '0.73.13') + tuple(f'0.73.14-rc.{i}' for i in range(1, 10))
+    supported = ('0.72.2', '0.73.11', '0.73.12', '0.73.13', '0.73.14') + tuple(f'0.73.14-rc.{i}' for i in range(1, 10))
     if oldversion.removeprefix('v') not in supported:
-        fail('本工具支持 v0.72.2、v0.73.11 至 v0.73.13，以及 v0.73.14-rc.1 至 rc.9 原路径升级。检测到 '+oldversion)
+        fail('本工具支持 v0.72.2、v0.73.11 至 v0.73.14，以及 v0.73.14-rc.1 至 rc.9 原路径升级。检测到 '+oldversion)
     if not (target/'building-workbench-next/config.json').is_file():fail('请选择含旧配置的完整平台包根目录。')
     if sha(source/'requirements-lock.txt')!=sha(target/'requirements-lock.txt'):fail('锁定依赖已变化，本版工具不自动升级 Python 环境。')
     writes=[];conflicts=[]

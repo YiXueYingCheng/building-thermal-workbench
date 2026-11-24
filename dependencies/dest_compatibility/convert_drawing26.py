@@ -21,17 +21,17 @@ from energyplus_runtime import ENGINE, MODEL_VERSION
 from door_mapping import inspect_doors, validate_confirmation, material_properties
 
 PROJECT=pathlib.Path(__file__).resolve().parents[1]
-WORKSPACE=PROJECT.parents[1]
+PACKAGE_ROOT=pathlib.Path(__file__).resolve().parents[2]
 parser=argparse.ArgumentParser()
-parser.add_argument('--tables',type=pathlib.Path,default=WORKSPACE/'outputs/01a0805a-fcec-7b73-9ee0-021b342ea2a4/drawing26-model-data/tables')
-parser.add_argument('--reference-tables',type=pathlib.Path,default=WORKSPACE/'work/dest-model-only/tables/TEST.accdb',help='Previously checked standard door and material rows; exact comparison remains required.')
-parser.add_argument('--destep-source',type=pathlib.Path,default=WORKSPACE/'work/third-party/destep-source.zip',help='Reviewed third-party source archive, read only for provenance hashing; not executed.')
-parser.add_argument('--source',type=pathlib.Path,default=WORKSPACE/'outputs/01a0805a-fcec-7b73-9ee0-021b342ea2a4/drawing26-model-data/source')
+parser.add_argument('--tables',type=pathlib.Path,required=True)
+parser.add_argument('--reference-tables',type=pathlib.Path,default=PACKAGE_ROOT/'resources/import-reference',help='Previously checked standard door and material rows; exact comparison remains required.')
+parser.add_argument('--destep-source',type=pathlib.Path,default=pathlib.Path(__file__).with_name('destep-source.zip'),help='Reviewed third-party source archive, read only for provenance hashing; not executed.')
+parser.add_argument('--source',type=pathlib.Path,required=True)
 parser.add_argument('--output',type=pathlib.Path,default=PROJECT/'projects/Drawing26/source-mapped')
 parser.add_argument('--confirmed-door-thickness-mm',type=float,default=25.3,help='Explicit Drawing26 door thickness assumption, based on the identical previously UI-checked standard door library record; not inferred from wall thickness.')
 parser.add_argument('--confirmed-door-mappings',type=pathlib.Path,help='Explicit per-type confirmation from source inspection; revalidated against these tables.')
 parser.add_argument('--model-only',action='store_true',default=True,help='Generate the EnergyPlus model without reading DeST result or shadow-calculation tables.')
-parser.add_argument('--source-original',type=pathlib.Path,default=WORKSPACE/'work/drawing26-extraction-20260917/source',help='Reference folder for source-copy hash verification; may be an immutable earlier snapshot.')
+parser.add_argument('--source-original',type=pathlib.Path,required=True,help='Reference folder for source-copy hash verification; may be an immutable earlier snapshot.')
 parser.add_argument('--project-id',default='Drawing26')
 parser.add_argument('--ignore-shading',action='store_true',help='Explicitly omit source shading after user authorization; retain an audit record.')
 parser.add_argument('--align-world-north',action='store_true',help='Rotate drawing coordinates into true-north world coordinates; preserve legacy defaults unless explicitly requested.')
@@ -310,7 +310,11 @@ if args.align_world_north:
             n=normal(item['vertices']); azimuth=math.degrees(math.atan2(n[0],n[1]))%360
             expected=SURF[item['source_id']]['AZIMUTH']
             angular_errors.append(abs((azimuth-expected+180)%360-180))
-    assert max(angular_errors,default=0)<1e-7
+            # DeST may store azimuths rounded to 0.001 degree; compare at the
+            # precision of those entries while keeping the vertices unchanged.
+            tolerance=0.0005001 if expected==round(expected,3) else 1e-7
+            if angular_errors[-1]>tolerance:
+                raise ValueError(f"Wall {item['source_id']}: geometric azimuth {azimuth:.8f} differs from source {expected} by {angular_errors[-1]:.8f} degrees.")
     next(iter(model['Building'].values()))['north_axis']=0
     issues.append(f'Drawing coordinates explicitly rotated clockwise {rotation:g} degrees into true-north World coordinates; Building north_axis is zero to avoid ignored or double rotation.')
     save('orientation-verification.json',{'passed':True,'rotation_clockwise_deg':rotation,'vertical_surfaces_checked':len(angular_errors),'maximum_source_azimuth_error_deg':max(angular_errors,default=0),'coordinate_system':'World','building_north_axis':0})

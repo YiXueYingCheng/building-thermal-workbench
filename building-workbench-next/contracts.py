@@ -36,7 +36,7 @@ def normalize(record):
                 item['solar_absorptance']=1-rho if finite_number(rho) else None
         if definition.get('optics_depend_on_state') is False:
             for face in ('A','B'):
-                if face+'_R' in optics and (definition.get('model') not in ('optical_surface_v1','solid_layer_v1','solid_variable_v1') or any(s.get('id')=='C' for s in definition.get('states',[]))):optics[face+'_C']=copy.deepcopy(optics[face+'_R'])
+                if face+'_R' in optics and (definition.get('model') not in ('optical_surface_v1','solid_layer_v1','solid_variable_v1','phase_change_layer_v1','spectral_exterior_v1') or any(s.get('id')=='C' for s in definition.get('states',[]))):optics[face+'_C']=copy.deepcopy(optics[face+'_R'])
     return record
 
 def validate(record, sites=None):

@@ -86,7 +86,7 @@ function compactFactor(r,key){
 }
 function comparisonView(){
  const c=S.comparison,rows=S.boot.records.map(r=>[r.id,r.name+(r.archived?'（归档）':'')]);
- return `<section class="section"><h1>对照总览</h1><p class="muted">先选择要比较的两份方案配置；保存比较后，到“结果与图表”选择已有计算批次。保存版本是四因素与计算设置的快照，不是一次计算结果。</p>${comparisonCatalogControl()}<div class="grid2 comparison-picks"><label class="field">基准方案<select data-compare="left">${comparisonPlanOptions("left")}</select></label><label class="field">研究方案<select data-compare="right">${comparisonPlanOptions("right")}</select></label></div>${c?`<div class="grid2 plan-version-picks">${planVersionPick("left")}${planVersionPick("right")}</div>${comparisonMatchView()}<div class="grid2">${versionNoteMarkup(c.left)}${versionNoteMarkup(c.right)}</div><div class="table-scroll"><table class="table"><thead><tr><th class="small-col">因素</th><th>${esc(c.left.name)}<small>${esc(planVersionLabel(c.left))}</small></th><th>${esc(c.right.name)}<small>${esc(planVersionLabel(c.right))}</small></th></tr></thead><tbody>${c.comparison.rows.map(row=>`<tr><th>${row.label}</th><td>${esc(compactFactor(c.left,row.key))}</td><td class="${row.equal?'':'changed'}">${esc(compactFactor(c.right,row.key))}${!row.equal?'<small>内容有差异</small>':''}</td></tr>`).join('')}</tbody></table></div>${planDifferencesView()}<p class="${c.comparison.shared_conditions?'muted':'warning'}">${esc(c.comparison.note)}</p><div class="grid2"><label class="field">比较名称<input id="comparison-name" value="${esc(S.planComparisonDraft?.name??(c.right.name+' 对照 '+c.left.name))}" maxlength="100"></label><label class="field">比较指标<select id="comparison-metric">${options([['total','总冷热负荷'],['heating','供暖负荷'],['cooling','制冷负荷'],['temperature','室温表现']],S.planComparisonDraft?.metric??(c.left.factors.condition.operation.mode==='natural'||c.right.factors.condition.operation.mode==='natural'?'temperature':'total'))}</select></label></div><div class="actions"><button data-edit-side="left">编辑基准方案</button><button data-edit-side="right">编辑研究方案</button><button class="primary" data-action="save-comparison">${exactComparisonMatch()?"复用已保存比较":"保存比较关系"}</button></div><p id="comparison-save-note" class="muted">${exactComparisonMatch()?"名称、双方版本和指标完全相同，将打开原比较，不新增记录。":"保存后固定双方版本；改变比较名称、任一版本或指标将另存一条记录。"}</p>`:'<p>正在读取对照…</p>'}</section>${comparisonLibraryView()}`;
+ return `<section class="section"><h1>对照总览</h1><p class="muted">先选择要比较的两份方案配置；保存比较后，到“结果与图表”选择已有计算批次。保存版本是四因素与计算设置的快照，不是一次计算结果。</p>${comparisonCatalogControl()}<div class="grid2 comparison-picks"><label class="field">基准方案<select data-compare="left">${comparisonPlanOptions("left")}</select></label><label class="field">研究方案<select data-compare="right">${comparisonPlanOptions("right")}</select></label></div>${c?`<div class="grid2 plan-version-picks">${planVersionPick("left")}${planVersionPick("right")}</div>${comparisonMatchView()}<div class="grid2">${versionNoteMarkup(c.left)}${versionNoteMarkup(c.right)}</div><div class="table-scroll"><table class="table"><thead><tr><th class="small-col">因素</th><th>${esc(c.left.name)}<small>${esc(planVersionLabel(c.left))}</small></th><th>${esc(c.right.name)}<small>${esc(planVersionLabel(c.right))}</small></th></tr></thead><tbody>${c.comparison.rows.map(row=>`<tr><th>${row.label}</th><td>${esc(compactFactor(c.left,row.key))}</td><td class="${row.equal?'':'changed'}">${esc(compactFactor(c.right,row.key))}${!row.equal?'<small>内容有差异</small>':''}</td></tr>`).join('')}</tbody></table></div>${planDifferencesView()}<p class="${c.comparison.shared_conditions?'muted':'warning'}">${esc(c.comparison.note)}</p><div class="grid2"><label class="field">比较名称<input id="comparison-name" value="${esc(S.planComparisonDraft?.name??(c.right.name+' 对照 '+c.left.name))}" maxlength="100"></label><label class="field">比较指标<select id="comparison-metric">${options([['total','总冷热负荷'],['heating','供暖负荷'],['cooling','制冷负荷'],['temperature','室温表现']],S.planComparisonDraft?.metric??(c.left.factors.condition.operation.mode==='natural'||c.right.factors.condition.operation.mode==='natural'?'temperature':'total'))}</select></label></div><div class="actions"><button data-edit-side="left"${S.boot.records.some(r=>r.id===c.left.id)?'':' disabled title="当前比较保留了方案快照，原方案已移出方案库"'}>编辑基准方案</button><button data-edit-side="right"${S.boot.records.some(r=>r.id===c.right.id)?'':' disabled title="当前比较保留了方案快照，原方案已移出方案库"'}>编辑研究方案</button><button class="primary" data-action="save-comparison">${exactComparisonMatch()?"复用已保存比较":"保存比较关系"}</button></div><p id="comparison-save-note" class="muted">${exactComparisonMatch()?"名称、双方版本和指标完全相同，将打开原比较，不新增记录。":"保存后固定双方版本；改变比较名称、任一版本或指标将另存一条记录。"}</p>`:'<p>正在读取对照…</p>'}</section>${comparisonLibraryView()}`;
 }
 function resultsView(){
  const d=S.results;if(!d)return '<p>正在读取正式历史结果…</p>';
@@ -113,9 +113,10 @@ async function loadRecord(id,revision,accept=()=>true){
  return true;
 }
 let comparisonEpoch=0;
-async function loadComparison(){
+async function loadComparison(savedId){
  const epoch=++comparisonEpoch;
- const values=await Promise.allSettled([api('/api/compare',{left:S.left,right:S.right,...S.compareVersions}),api('/api/history/'+encodeURIComponent(S.left)),api('/api/history/'+encodeURIComponent(S.right))]);
+ const relation=savedId||S.boot?.comparisons?.find(c=>['left','right'].every(k=>c[k].id===S[k]&&c[k].revision===S.compareVersions?.[k+'_revision']))?.id;
+ const values=await Promise.allSettled([api('/api/compare',{left:S.left,right:S.right,...S.compareVersions,comparison:relation}),api('/api/history/'+encodeURIComponent(S.left)),api('/api/history/'+encodeURIComponent(S.right))]);
  const failed=values.find(v=>v.status==='rejected');if(failed)throw failed.reason;
  if(epoch===comparisonEpoch){S.comparison=values[0].value;S.planHistories={left:values[1].value,right:values[2].value};S.compareVersions={left_revision:S.comparison.left.revision,right_revision:S.comparison.right.revision};clearUnmatchedResultComparison();}
 }
@@ -127,7 +128,12 @@ async function action(button){
  if(await exportHistoryAction(button)){render();return;}
  const reviewed=await inputReviewAction(button);if(reviewed){if(reviewed!=='local'){render();if(button.dataset.inspectInput)document.getElementById('input-inspection')?.scrollIntoView({block:'start'});}return;}
  if(await versionHistoryAction(button)){render();if(button.dataset.action==='history')document.getElementById('version-history')?.scrollIntoView({block:'start'});return;}
- if(await comparisonLibraryAction(button)){render();if(button.dataset.matchedResults)document.getElementById("comparison-results")?.scrollIntoView({block:"start"});return;}
+ if(await comparisonLibraryAction(button)){
+  render();
+  const target=button.dataset.matchedResults?document.getElementById('comparison-results'):app.querySelector('.comparison-page-tabs');
+  target?.scrollIntoView({block:'start'});
+  return;
+ }
  if(await planActivityAction(button)){render();const target=button.dataset.activityBatch?'execution-results':button.dataset.activityQueue?'batch-'+button.dataset.activityQueue:null;if(target)document.getElementById(target)?.scrollIntoView({block:'start'});return;}
  if(await comparisonResultAction(button)){render();return;}
  if(await executionAction(button)){render();return;}
@@ -156,7 +162,7 @@ async function action(button){
  }
  render();
 }
-document.addEventListener('click',async event=>{const button=event.target.closest('button');if(!button||button.disabled||S.busy)return;S.busy=true;app.inert=true;nav.inert=true;notice();try{await action(button);}catch(error){notice(error.message);}finally{S.busy=false;app.inert=false;nav.inert=false;}});
+document.addEventListener('click',async event=>{const button=event.target.closest('button');if(!button||button.disabled||S.busy)return;if(button.closest('.map-preview-dialog')||handleMapPreview(button))return;S.busy=true;app.inert=true;nav.inert=true;notice();try{await action(button);}catch(error){notice(error.message);}finally{S.busy=false;app.inert=false;nav.inert=false;}});
 document.addEventListener('change',async event=>{
  const t=event.target;try{
    if(t.id==='archived'){S.archived=t.checked;render();return;}

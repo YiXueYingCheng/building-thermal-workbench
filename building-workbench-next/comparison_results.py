@@ -29,27 +29,43 @@ def batch_rows(root, ident=None):
         return [dict(r) for r in db.execute('SELECT * FROM batches'+(' WHERE id=?' if ident else '')+' ORDER BY created DESC,rowid DESC',(ident,) if ident else ())]
 
 
-def choices(record, catalog, root):
-    result = list(coverage_results.sources(record, root))
-    if catalog.get('global_bundle',{}).get('historical') and record['id'] in ('global_w00', 'global_fixed') and record == catalog['records'][record['id']]:
+def choice_index(root, record_ids=None):
+    """One request can look up several saved versions while scanning each batch plan once."""
+    batches = {}
+    with Queue(root).db() as db:
+        for batch in db.execute('SELECT id,created,mode,plan FROM batches ORDER BY created DESC,rowid DESC'):
+            plan = loads(batch['plan'])
+            if plan.get('site_recalculation') or (record_ids is not None and plan['record_id'] not in record_ids):
+                continue
+            key = (plan['record_id'],plan['revision'],plan['record_sha256'])
+            batches.setdefault(key,[]).append(dict(id=batch['id'],name=f"{plan['record_name']} · {batch['created']} · {batch['mode']}",
+                                                   modes=sorted({case['mode'] for case in plan['cases']})))
+    return coverage_results.registry(root)['sources'],batches
+
+
+def choices(record, catalog, root, index=None, *, historical_bound=None):
+    observed,batches = choice_index(root,{record['id']}) if index is None else index
+    checksum = digest(record)
+    result = list(observed.get(checksum,[]))
+    if historical_bound is None:
+        historical_bound = bool(catalog.get('global_bundle',{}).get('historical') and record['id'] in ('global_w00','global_fixed') and record == catalog['records'].get(record['id']))
+    if historical_bound:
         result.append(dict(id='historical', name='原正式全球批次 · 15 min · 已复核历史来源', modes=['controlled']))
-    for b in batch_rows(root):
-        p = loads(b['plan'])
-        if p.get('site_recalculation'):continue
-        if (p['record_id'], p['revision'], p['record_sha256']) == (record['id'], record['revision'], digest(record)):
-            result.append(dict(id=b['id'], name=f"{p['record_name']} · {b['created']} · {b['mode']}",
-                               modes=sorted({c['mode'] for c in p['cases']})))
+    result.extend(batches.get((record['id'], record.get('revision'), checksum),[]))
     return result
 
 
 def available(ident, catalog, root=ROOT):
     store = Store(catalog, root); rel = comparison(store, ident)
-    return dict(comparison=rel, **{side:choices(store.get(**dict(ident=rel[side]['id'], revision=rel[side]['revision'])), catalog, root)
-                                  for side in ('left', 'right')})
+    data = dict(comparison=rel)
+    for side in ('left','right'):
+        record,bound = store.comparison_input(rel,side)
+        data[side] = choices(record,catalog,root,historical_bound=bound)
+    return data
 
 
-def historical(record, catalog):
-    reader = VerifiedReader(); source = catalog['global_bundle']['historical']['source']
+def historical(record, catalog, root=ROOT):
+    reader = VerifiedReader(catalog,history_root=root); source = catalog['global_bundle']['historical']['source']
     reader.check(source)
     values = {}; case = record['provenance']['case']
     for job in catalog['global_bundle']['jobs'].values():
@@ -80,7 +96,7 @@ def execution(record, ident, mode, root):
     if p['conditioned_area_m2'] != record['factors']['building'].get('conditioned_area_m2'):
         raise ValueError('批次面积与方案版本不一致。')
     # Source verification is independent of whether the current executor may resume an old plan.
-    reader = VerifiedReader()
+    reader = VerifiedReader(history_root=root)
     bundle_dir = owned(Path(root)/'data/model-inputs'/p['bundle_id'], root)
     manifest_ref = dict(path=str(bundle_dir/'manifest.json'), sha256=p['bundle_sha256'])
     reader.check(manifest_ref)
@@ -141,10 +157,31 @@ def execution(record, ident, mode, root):
     return dict(id=ident,kind='execution',record_sha256=digest(record),plan_sha256=b['checksum'],cases=values,site_recalculation=followup)
 
 
+def room_usage_contrast(a,b):
+    """Recognize a controlled single-factor change on the same building snapshot."""
+    from component_library import verify
+    left,right=a['factors'],b['factors']
+    if a['numerics']!=b['numerics'] or {k:v for k,v in left.items() if k!='building'}!={k:v for k,v in right.items() if k!='building'}:
+        return False
+    first,second=dict(left['building']),dict(right['building'])
+    profiles=(first.pop('usage_profile',None),second.pop('usage_profile',None))
+    if first!=second or profiles[0]==profiles[1]:return False
+    for key in ('adapter','snapshot_id'):
+        origin=a.get('provenance',{}).get(key)
+        if not origin or origin!=b.get('provenance',{}).get(key):return False
+    bases=set()
+    for profile in profiles:
+        if profile is not None:
+            content=verify(profile,'usage')['content']
+            if content['building_id']!=first['id']:return False
+            bases.add(content['baseline_sha256'])
+    return len(bases)==1
+
+
 def compatible(a, b, mode, metric):
     issues = []
-    for key, label in [('building','建筑')]:
-        if a['factors'][key] != b['factors'][key]: issues.append(label+'定义不同')
+    if a['factors']['building']!=b['factors']['building'] and not room_usage_contrast(a,b):
+        issues.append('建筑定义不同')
     for r in (a,b):
         if r['factors']['condition']['operation']['mode'] not in (mode,'both'):
             issues.append('所选运行模式不属于双方共同模式')
@@ -287,6 +324,11 @@ def assemble(rel, a, b, left, right, catalog, mode, *, waivers=None):
         note=NOTE if metric!='temperature' else '逐房间显示研究减参考的温差；不将房间温度任意平均为气候类型指标。极值差不是同一时刻温差。',
         energy_basis='建筑显热需求，非设备电耗',difference='参考减研究；正值表示需求降低，负值表示增加' if metric!='temperature' else '研究减参考，单位 °C',
         paired_sites=sum(s['status']=='paired' for s in sites),selected_sites=len(sites),sites=sites,classes=groups,monthly=monthly,rooms=rooms)
+    if not issues and room_usage_contrast(a,b):
+        result['contrast_factor']='room_usage'
+        result['difference']='房间使用配置对照 · '+result['difference']
+    if all(len(r['factors']['materials']['definitions'])==1 and r['factors']['materials']['definitions'][0]['model'] in ('phase_change_layer_v1','spectral_exterior_v1') for r in (a,b)):
+        result['material_response_available']=True
     if wall_scopes:
         result['wall_scopes'] = wall_scopes
     strict=[dict(s,status='excluded') if s['pairing_basis']=='跨步长豁免' else s for s in sites]
@@ -306,14 +348,14 @@ def read_sources(ident, left_source, right_source, mode, catalog, root):
     if mode not in ('controlled','natural'): raise ValueError('请选择温控或自然室温模式。')
     store=Store(catalog,root);rel=comparison(store,ident);records=[];sources=[]
     for side,selected in [('left',left_source),('right',right_source)]:
-        record=store.get(rel[side]['id'],rel[side]['revision']);records.append(record)
-        allowed=choices(record,catalog,root)
+        record,bound=store.comparison_input(rel,side);records.append(record)
+        allowed=choices(record,catalog,root,historical_bound=bound)
         if not any(x['id']==selected and mode in x['modes'] for x in allowed):
             raise ValueError('请选择绑定该侧方案版本及运行模式的结果来源。')
         if selected.startswith('observed_'):
             sources.append(coverage_results.observed(record,selected,root))
         else:
-            sources.append(historical(record,catalog) if selected=='historical' else execution(record,selected,mode,root))
+            sources.append(historical(record,catalog,root) if selected=='historical' else execution(record,selected,mode,root))
     return rel,records,sources
 
 

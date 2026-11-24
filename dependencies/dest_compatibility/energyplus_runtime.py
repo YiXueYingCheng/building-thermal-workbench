@@ -8,7 +8,6 @@ ROOT = Path(__file__).resolve().parents[3]
 MODEL_VERSION = '26.2'
 BUILD = '26.2.0-4bd7a1f26f'
 ENGINE = ROOT / f'work/runtime/EnergyPlus-{BUILD}-Windows-x86_64/energyplus.exe'
-VALIDATION = ROOT / 'outputs/01a0805a-fcec-7b73-9ee0-021b342ea2a4/drawing26-inputs/版本验证/EnergyPlus_26.2_BASE01_20261009'
 
 
 def read(path):
@@ -52,15 +51,16 @@ def use_current_version(model):
     return model
 
 
-def baseline_engine_record(baseline, executable=ENGINE):
+def baseline_engine_record(baseline, executable=ENGINE, validation=None):
     """Allow the sealed BASE01 via its existing, successful annual comparison."""
     baseline = Path(baseline).resolve()
     source = read(baseline / 'baseline.json')['engine']
     actual = engine_record(executable)
     if actual['executable_sha256'] == source['executable_sha256']:
         return actual
-    evidence = read(VALIDATION / 'validation-state.json')
-    comparison = read(VALIDATION / 'version-comparison.json')
+    validation = Path(validation) if validation is not None else baseline / 'validation'
+    evidence = read(validation / 'validation-state.json')
+    comparison = read(validation / 'version-comparison.json')
     if not (baseline == Path(evidence['baseline']).resolve()
             and evidence['status'] == 'validated'
             and evidence['old_engine_sha256'] == source['executable_sha256']
@@ -68,4 +68,4 @@ def baseline_engine_record(baseline, executable=ENGINE):
             and comparison['numerical_reproduction']):
         raise ValueError('当前引擎与封存基准之间没有匹配的已验证版本迁移记录。')
     return dict(actual, baseline_engine=source,
-                migration_validation=str(VALIDATION / 'version-comparison.json'))
+                migration_validation=str(validation / 'version-comparison.json'))

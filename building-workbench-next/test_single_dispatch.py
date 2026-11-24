@@ -104,12 +104,21 @@ class SingleDispatchTests(unittest.TestCase):
                 with self.assertRaises(HTTPError) as err:post('force_one',**flags)
                 self.assertEqual(err.exception.code,400)
                 self.assertFalse(self.q.next_pending()['exclusive'])
-            post('force_one',confirmed=True,risk_acknowledged=True)
+            with self.assertRaises(HTTPError) as err:post('force_one',confirmed=True,risk_acknowledged=True)
+            self.assertEqual(err.exception.code,409)
+            self.assertFalse(self.q.next_pending()['exclusive'])
+            # Exercise the normal route with an isolated ready worker, without dispatching a simulator.
+            server.shutdown();server.server_close();thread.join(5)
+            server=make_server(root,0,start_workers=True)
+            thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+            with patch('server.ensure_worker',return_value=dict(ready=True)):
+                post('force_one',confirmed=True,risk_acknowledged=True)
             self.assertTrue(self.q.next_pending()['exclusive'])
             post('release_force')
             self.assertFalse(self.q.next_pending()['exclusive'])
         finally:
             server.shutdown();server.server_close();thread.join(5)
+            if server.disk_observer:server.disk_observer.stop()
 
     def test_forced_budget_still_requires_real_resources(self):
         p=settings(dict(profile='custom',max_parallel=1,reserve_gib=2))

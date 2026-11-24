@@ -5,6 +5,25 @@ from foundation import ROOT,read_json,digest,now
 import result_exports
 import batch_results
 
+
+def set_version_exports(group,root):
+    from comparison_reading import verified_export
+    from research_exports import load_export
+    rows=[];issues=[]
+    for folder in (Path(root)/'data/research-set-exports').glob('set_export_*'):
+        if not re.fullmatch(r'set_export_[a-f0-9]{32}',folder.name) or not folder.is_dir():continue
+        try:
+            meta=read_json(folder/'receipt.json')
+            if (meta['set_id'],meta['revision'])!=(group['id'],group['revision']):continue
+            folder,receipt=load_export(folder.name,root)
+            verified_export(folder,receipt,group)
+            if not {'comparison.csv','comparison.zip'}<=receipt['files'].keys():
+                raise ValueError('缺少原导出表或压缩包。')
+            rows.append(dict(id=folder.name,created=receipt['created']))
+        except (OSError,ValueError,KeyError,TypeError,AttributeError) as error:
+            issues.append(dict(id=folder.name,message=str(error)))
+    return dict(exports=sorted(rows,key=lambda r:(r['created'],r['id']),reverse=True),issues=issues)
+
 def listing(kind,ident,root=ROOT):
     if kind not in ('comparison','batch') or not re.fullmatch(kind+r'_[a-f0-9]{32}',str(ident)):
         raise ValueError('请选择有效的比较或批次编号。')
@@ -36,6 +55,9 @@ def listing(kind,ident,root=ROOT):
                     mode=data['mode'],metric=data['metric'],paired_sites=data['paired_sites'],selected_sites=data['selected_sites'],
                     unit='°C' if data['metric']=='temperature' else 'MJ/m²' if data.get('normalized') else 'kWh' if 'normalized' in data else '见包内说明')
                 if r.get('figure_kind')=='site':row['unit']='图表 kWh；数据表另含 MJ/m²' if data.get('normalized') else 'kWh'
+                if r.get('map_view'):
+                    row['map_view']=r['map_view']
+                    if r['map_view']['style']=='pair':row['unit']='% 和 kWh/m²'
             else:
                 if r['batch_id']!=ident or r['counts']!=data['counts']:raise ValueError('导出批次或计数不一致。')
                 row.update(name=data['record_name'],record=dict(id=data['record_id'],revision=data['revision']),counts=data['counts'],modes=data['modes'],selection=r.get('selection',[]))

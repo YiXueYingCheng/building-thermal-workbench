@@ -47,7 +47,7 @@ def audit(record,catalog,root=None):
     external=[]
     for ident in record['factors']['scope']['site_ids']:
         site=catalog['sites'][ident];ref=site.get('source_file')
-        if ref:external.append(dict(path=ref['path'],expected_sha256=ref['sha256'],roles=['导入时原文件'],name=site['name']))
+        if ref and site.get('storage_mode') != 'reference':external.append(dict(path=ref['path'],expected_sha256=ref['sha256'],roles=['导入时原文件'],name=site['name']))
     from source_locations import resolve,listing,key
     for r in rows:
         actual,location=resolve(r,catalog)

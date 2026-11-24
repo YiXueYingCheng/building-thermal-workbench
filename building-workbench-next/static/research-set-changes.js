@@ -2,6 +2,20 @@
 const rsChangeMetrics = ['heating_kWh', 'cooling_kWh', 'total_kWh'];
 const rsChangeHeadings = '<th scope="col">供暖</th><th scope="col">制冷</th><th scope="col">合计</th>';
 
+function rsMissingResult(data, selected, site, key) {
+  const batches = data.members[key] || [];
+  const picked = selected[key];
+  if (!picked && batches.filter(b => b.usable).length > 1) return rsRoles[key] + '有多个可用批次，请在结果来源中选择';
+  const results = (picked ? [picked] : batches).flatMap(b => b.results || []).filter(r => r.site_id === site);
+  const statuses = [...new Set(results.filter(r => r.mode === 'controlled' && !r.accepted).map(r => r.status_label || rsStatus[r.status]).filter(Boolean))];
+  let reason = '此版本在该地点尚无温控结果';
+  if (statuses.length) reason = statuses.join('、');
+  else if (results.length && results.every(r => r.mode !== 'controlled')) reason = '此地点只有其他运行模式的结果';
+  else if (!picked && batches.some(b => b.waiting)) reason = '已有批次，尚无通过核验的温控结果';
+  else if (!picked && batches.some(b => b.reason)) reason = '已有来源未通过核对，详见结果来源';
+  return rsRoles[key] + ' · ' + reason;
+}
+
 function rsChangePair(data, selected, site, role) {
   const order = Object.keys(rsRoles).filter(key => Object.hasOwn(data.members, key));
   const index = order.indexOf(role);
@@ -10,13 +24,15 @@ function rsChangePair(data, selected, site, role) {
   function member(key) {
     const batch = selected[key];
     const row = batch?.results.find(item => item.accepted && item.site_id === site && item.mode === 'controlled');
-    return {row, batchId:row?.batch_id || batch?.batch_id};
+    return {row, batchId:row?.batch_id || batch?.batch_id, archived:row?.archived || batch?.archived};
   }
   const left = member(reference), right = member(role);
   const title = rsRoles[reference] + ' → ' + rsRoles[role];
   let reason = '';
-  if (!data.audit.consistent || S.boot.sites[site]?.eligible === false) reason = '共同条件或地点待核对';
-  else if (!left.row || !right.row) reason = '缺少已选且通过核验的温控结果，请查看结果来源';
+  if (!data.audit.consistent) reason = '本组版本的共同条件待核对';
+  else if (S.boot.sites[site]?.eligible === false) reason = '该地点的结果待核对';
+  else if (!left.row || !right.row) reason = [[reference,left],[role,right]].filter(([,side]) => !side.row)
+    .map(([key]) => rsMissingResult(data, selected, site, key)).join('；');
   else if (![reference, role].every(key => key === 'baseline' || rsPair(data, selected, key, site, 'controlled'))) {
     reason = '尚未与同条件 W00 完成配对';
   } else if (![left, right].every(side => rsChangeMetrics.every(key => Number.isFinite(side.row.loads?.[key])))) {
@@ -48,6 +64,8 @@ function rsChangesView(data, selected) {
   const selector = sites.length > 1
     ? `<label class="field">地点<select id="rs-change-site">${options(sites.map(id => [id, city(id)]), site)}</select></label>`
     : `<strong>${esc(city(site))}</strong>`;
+  const issues = data.audit.consistent ? '' : '<p class="warning">'+esc(data.audit.issues.join('；'))+
+    '。各成员已保存的原值可在下方「各工况需求、结果来源与复核」查看。</p>';
   const modes = [['baseline','相对 W00'], ['adjacent','相邻工况']].map(([key,label]) =>
     `<button type="button" data-rs-change-mode="${key}" aria-pressed="${RS.changeMode === key}">${label}</button>`).join('');
   const rows = Object.keys(rsRoles).filter(role => role !== 'baseline' && data.members[role]).map(role => {
@@ -58,7 +76,7 @@ function rsChangesView(data, selected) {
     return `<tr><th scope="row">${esc(pair.title)}${action}</th>${values}</tr>`;
   }).join('');
   return `<section class="rs-changes" aria-label="显热需求变化"><div class="rs-changes-head"><h3>显热需求变化</h3><div class="rs-change-modes" role="group" aria-label="比较方式">${modes}</div></div>
-    <div class="rs-change-place">${selector}<span>${esc(periodLabel(data.scope.period))} · kWh</span></div>
+    <div class="rs-change-place">${selector}<span>${esc(periodLabel(data.scope.period))} · kWh</span></div>${issues}
     <p class="muted">箭头左侧是参考工况，右侧是研究工况。各项降低或增加的百分比以左侧对应需求为基数。</p>
     <div class="rs-delta-scroll"><table class="table rs-delta-table"><thead><tr><th scope="col">比较工况</th>${rsChangeHeadings}</tr></thead><tbody>${rows}</tbody></table></div></section>`;
 }
@@ -86,7 +104,8 @@ function rsShowMonths(trigger) {
   const monthLabel = month => `<th scope="row">${month} 月</th>`;
   for (let m=startMonth; m<=endMonth; m++) {
     const a=left.get(m), b=right.get(m);
-    changes += `<tr><th scope="row"><button class="rs-month-inspect" data-rs-inspect-month="${m}" aria-label="查看 ${m} 月控制与时序">${m} 月 ↗</button></th>${rsChangeMetrics.map(key => rsChangeCell(a?.[key], b?.[key], false)).join('')}</tr>`;
+    const monthCell=pair.left.archived||pair.right.archived?monthLabel(m):`<th scope="row"><button class="rs-month-inspect" data-rs-inspect-month="${m}" aria-label="查看 ${m} 月控制与时序">${m} 月 ↗</button></th>`;
+    changes += `<tr>${monthCell}${rsChangeMetrics.map(key => rsChangeCell(a?.[key], b?.[key], false)).join('')}</tr>`;
     raw += `<tr>${monthLabel(m)}${[a,b].map(row => rsChangeMetrics.map(key =>
       `<td>${Number.isFinite(row?.[key]) ? format(row[key]) : '无数据'}</td>`).join('')).join('')}</tr>`;
   }
@@ -94,11 +113,14 @@ function rsShowMonths(trigger) {
   const city = S.boot.sites[site]?.name || site;
   const missing = !left.size || !right.size;
   dialog.innerHTML = `<header class="viewer-head"><div><p class="muted">${esc(city)} · ${esc(periodLabel(pair.left.row.period))} · kWh</p><h2 id="rs-month-title">月度差异</h2></div><button type="button" data-rs-month-back autofocus>返回对比结果</button></header>
-    <div class="rs-month-body"><h3>${esc(pair.title)}</h3><p class="muted">增减均相对左侧工况。点月份查看该月已保存的控制与时序。</p>
+    <div class="rs-month-body"><h3>${esc(pair.title)}</h3><p class="muted">增减均相对左侧工况。${pair.left.archived||pair.right.archived?'本表采用已归档的月度需求。':'点月份查看该月已保存的控制与时序。'}</p>
     ${missing ? '<p role="status">有工况缺少已保存的月度需求，只展示可核对的数值。</p>' : ''}
     <div class="rs-delta-scroll"><table class="table rs-delta-table"><thead><tr><th scope="col">月份</th>${rsChangeHeadings}</tr></thead><tbody>${changes}</tbody><tfoot><tr><th scope="row">整个时段</th>${totals}</tr></tfoot></table></div>
     <details class="rs-month-raw"><summary>查看两侧月度需求原值 / kWh</summary><div class="rs-delta-scroll"><table class="table"><thead><tr><th rowspan="2">月份</th><th colspan="3" scope="colgroup">${esc(rsRoles[pair.reference])}</th><th colspan="3" scope="colgroup">${esc(rsRoles[pair.role])}</th></tr><tr>${rsChangeHeadings}${rsChangeHeadings}</tr></thead><tbody>${raw}</tbody></table></div></details></div>`;
-  dialog.querySelector('[data-rs-month-back]').addEventListener('click', () => dialog.close());
+  dialog.querySelector('[data-rs-month-back]').addEventListener('click', event => {
+    event.stopPropagation();
+    dialog.close();
+  });
   dialog.addEventListener('click', event => {
     const button = event.target.closest('[data-rs-inspect-month]');
     if (!button) return;

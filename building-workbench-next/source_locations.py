@@ -37,6 +37,20 @@ def latest(rows):
 
 
 def attach(catalog, root):
+    from history_locations import locations
+    catalog.pop('_migrated_workspace',None)
+    if locations(root):
+        catalog['_migrated_workspace']=str(Path(root).resolve())
+    catalog.pop('_import_copies', None)
+    origins = locations(root).get('import_roots', {})
+    if origins:
+        base = Path(root)/'data/building-imports'
+        copies = {}
+        for origin, ident in origins.items():
+            if not re.fullmatch(r'import_[a-zA-Z0-9_-]+', ident) or Path(origin).name != ident:
+                raise ValueError('导入建筑位置登记无效。')
+            copies[origin] = str(base/ident)
+        catalog['_import_copies'] = copies
     catalog.pop('_source_locations', None)
     active = {k: r for k, r in latest(listing(root)).items() if r['action'] == 'register'}
     if active:catalog['_source_locations'] = active
@@ -44,9 +58,31 @@ def attach(catalog, root):
 
 
 def resolve(ref, catalog):
-    row = (catalog or {}).get('_source_locations', {}).get(key(ref))
-    if not row:return copy.deepcopy(ref), None
+    from foundation import owned
+    catalog = catalog or {}
+    ident = key(ref)
+    row = catalog.get('_source_locations', {}).get(ident)
     checksum = ref.get('expected_sha256') or ref.get('sha256')
+    if not row:
+        path = Path(ref['path'])
+        for origin, local in catalog.get('_import_copies', {}).items():
+            if path.is_relative_to(origin):
+                copied = owned(Path(local)/path.relative_to(origin), local)
+                row = dict(key=ident, kind='verified_import_copy', candidate=dict(path=str(copied), sha256=checksum))
+                break
+    migrated=catalog.get('_migrated_workspace')
+    if migrated:
+        from history_locations import locations, workspace_path, input_path
+        actual = row['candidate']['path'] if row else ref['path']
+        if row and row['candidate']['sha256'] != checksum:
+            raise ValueError('来源位置与原内容身份不一致。')
+        table = locations(migrated)
+        original_key = ident if actual == ref['path'] else key(dict(path=actual,sha256=checksum))
+        local = (input_path(migrated,actual,checksum) if original_key in table.get('reference_keys',{})
+                 else workspace_path(migrated,actual))
+        if local != Path(actual):
+            row={**(row or dict(key=ident,kind='verified_workspace_copy')), 'candidate':dict(path=str(local),sha256=checksum)}
+    if not row:return copy.deepcopy(ref), None
     if row['candidate']['sha256'] != checksum:raise ValueError('来源位置与原内容身份不一致。')
     return {**ref, 'path': row['candidate']['path'], 'sha256': checksum, 'expected_sha256': checksum}, row
 

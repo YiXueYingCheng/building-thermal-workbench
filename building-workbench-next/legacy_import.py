@@ -237,6 +237,8 @@ class Importer:
         self.global_bundle=dict(catalog_sha256=catalog['sha256'],source=source,source_refs=refs,jobs=jobs,
             classes=data['classes'],summary=data['summary'],historical=historical,protocol=protocol)
 
+        self.global_bundle['building_source']=building_descriptor(self.records['global_w00'])
+
     def run(self):
         # Protect source code without copying inputs or outputs.
         for p in sorted(self.old.glob('*.py')):
@@ -259,6 +261,11 @@ class Importer:
             global_bundle=self.global_bundle,issues=self.issues,roundtrips=roundtrips,
             protection=self.sources.observed,import_scope='configuration_mapping_and_historical_results',
             numerical_equivalence='not_claimed_no_new_simulation')
+
+def building_descriptor(record):
+    return {key:copy.deepcopy(value) for key,value in (
+        ('building',record['factors']['building']),('operation',record['factors']['condition']['operation']),
+        ('numerics',record['numerics']))}
 
 def to_legacy_record(record):
     if record['provenance']['adapter']!='legacy_plan_v011':

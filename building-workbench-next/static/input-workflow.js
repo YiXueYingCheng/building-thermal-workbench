@@ -43,11 +43,17 @@ function inputFlowDialog(){
  d.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;e.stopPropagation();if(b.disabled)return;void inputFlowButton(b).catch(x=>{const m=inputFlowWindow?.model;if(m){m.error=x.message;renderInputFlow();}});});
  return d;
 }
-function closeInputFlow(){const v=inputFlowWindow;if(!v)return;inputFlowWindow=null;inputFlowDialog().close();S.planningOpen=false;requestAnimationFrame(()=>{scrollTo({top:v.y,behavior:'instant'});document.querySelector('[data-action="preview"]')?.focus({preventScroll:true});});}
-function openInputFlow(autoPreview=true){
- const m=inputFlowState();if(!inputFlowWindow)inputFlowWindow={model:m,y:scrollY,detail:false,originView:S.view};else inputFlowWindow.model=m;
+function closeInputFlow(returnToOrigin=true){
+ const v=inputFlowWindow;if(!v)return;
+ inputFlowWindow=null;inputFlowDialog().close();S.planningOpen=false;
+ if(!returnToOrigin)return;
+ if(v.design){resumeCalculationDesign(v.design);return;}
+ requestAnimationFrame(()=>{scrollTo({top:v.y,behavior:'instant'});document.querySelector('[data-action="preview"]')?.focus({preventScroll:true});});
+}
+function openInputFlow(autoPreview=true,design=null){
+ const m=inputFlowState();if(!inputFlowWindow)inputFlowWindow={model:m,y:scrollY,detail:false,originView:S.view,design};else inputFlowWindow.model=m;
  S.planningOpen=true;renderInputFlow();
- if(!m.checkedJob){m.checkedJob=true;m.recovering=true;renderInputFlow();void recoverInputFlow(m).finally(()=>{m.recovering=false;renderInputFlow();if(autoPreview&&!m.generated&&!m.pending&&m.previewKey!==capabilityKey())void readInputFlowPreview(m);});}
+ if(!m.checkedJob){m.checkedJob=true;m.recovering=true;renderInputFlow();void recoverInputFlow(m).finally(()=>{m.recovering=false;renderInputFlow();if(inputFlowWindow?.model===m&&autoPreview&&!m.generated&&!m.pending&&m.previewKey!==capabilityKey())void readInputFlowPreview(m);});}
  else if(autoPreview&&!m.generated&&!m.pending&&m.previewKey!==capabilityKey())void readInputFlowPreview(m);
  return m;
 }
@@ -90,13 +96,14 @@ async function showInputFlowBudget(m){
   const p=m.prepared,[execution,budget]=await Promise.all([api('/api/execution'),api('/api/calculation-budget',{review_id:p.id,plan_sha256:p.plan_sha256})]);
   // Closing or switching while reading must not navigate the user later.
   if(inputFlowWindow?.model!==m||!inputFlowCurrent(m)||S.dirty){m.message='预算已读取；再次打开后可前往计算队列。';return;}
-  closeInputFlow();S.execution=execution;if(!S.resourcesDirty)S.resourceDraft=copy(execution.resources);S.executionReview=p;S.calculationBudget=budget;S.budgetError='';S.executionResults=null;resetBatchResults();S.view='execution';render();
+  rememberDesignBudget(inputFlowWindow.design?{...inputFlowWindow.design,reviewId:p.id}:null);
+  closeInputFlow(false);S.execution=execution;if(!S.resourcesDirty)S.resourceDraft=copy(execution.resources);S.executionReview=p;S.calculationBudget=budget;S.budgetError='';S.executionResults=null;resetBatchResults();S.view='execution';render();
   requestAnimationFrame(()=>document.getElementById('execution-review')?.scrollIntoView({block:'start'}));notice('请核对预算与清单。尚未提交计算。');
  });
 }
 function renderInputFlow(){
  const v=inputFlowWindow;if(!v)return;const m=v.model;
- if(!inputFlowCurrent(m)){closeInputFlow();return;}
+ if(!inputFlowCurrent(m)){closeInputFlow(false);return;}
  const d=inputFlowDialog(),oldY=d.querySelector('.input-flow-body')?.scrollTop||0;
  const p=m.previewKey===capabilityKey()?m.preview:null,g=!S.dirty?m.generated:null;
  if(p)S.preview=p;if(g)S.generated=g;
@@ -104,6 +111,7 @@ function renderInputFlow(){
  if(v.detail&&m.inspection){S.inputInspection=m.inspection;body=inputFlowInspectionMarkup().replace('<button data-action="close-input-inspection">收起输入核对</button>','<button data-input-flow="back">← 返回输入摘要</button>');}
  else{
   body=`<details class="input-flow-settings"><summary>计算设置 · ${S.record.numerics.step_minutes} min · ${esc(periodLabel(S.record.factors.scope.period))}</summary>${select('求解步长 / min','numerics.step_minutes',[1,2,5,10,15,30,60].map(x=>[x,String(x)]),S.record.numerics.step_minutes)}<p>修改步长后需返回方案保存版本。设备投入在计算队列中统一管理。</p>${ordinaryTimeBasis()}</details>`;
+  if(v.design)body='<p class="muted">'+esc(v.design.label)+' · '+esc(periodLabel(S.saved.factors.scope.period))+' · '+esc(S.saved.numerics.step_minutes)+' min</p>';
   body+=outputResolutionMarkup(m);
   if(S.dirty)body+='<p class="warning">当前有未保存修改，请先返回方案保存版本。已有模型仍属于原保存版本。</p>';
   if(g){body+=`<section class="input-flow-result"><h3>模型输入已就绪</h3><p>${g.case_count} 个算例 · 已保存 v${m.revision} · 尚未由此操作提交计算。</p><p class="muted">下表为已生成模型；变化数相对源模型，不是相对上一次编辑，也不是错误数量。</p>${caseListView('generated')}<button data-input-flow="inspect"${m.pending?' disabled':''}>查看模型差异与实际参数</button><details><summary>来源与完整记录</summary><a href="/api/model-inputs/${esc(g.id)}/manifest.json" target="_blank" rel="noopener">差异与来源清单 ↗</a> · <a href="/api/model-inputs/${esc(g.id)}/record.json" target="_blank" rel="noopener">绑定方案版本 ↗</a><p><button data-input-flow="generate"${m.pending?' disabled':''}>重新核对并生成输入</button></p></details></section>`;}
@@ -114,6 +122,7 @@ function renderInputFlow(){
  const phase=m.prepared||m.job?.kind==='prepare'?3:g||m.job?.kind==='generate'?2:1;
  const next=m.prepared?'budget':g?'prepare':'generate',label={budget:m.prepared?.existing_batch?'查看已有计算批次':'前往预算与提交',prepare:'准备计算清单（不计算）',generate:'生成模型输入（不计算）'}[next];
  d.innerHTML=`<header class="viewer-head"><div><p class="muted">${esc(m.name)} · 已保存 v${m.revision}</p><h2 id="input-workflow-title">计算安排与输入核对</h2></div><button data-input-flow="close">返回方案</button></header><div class="input-flow-steps" aria-label="输入准备进度"><span class="${phase===1?'current':''}">1 核对算例</span><span class="${phase===2?'current':''}">2 生成与检查输入</span><span class="${phase===3?'current':''}">3 预算与提交</span></div><div class="input-flow-body">${v.detail&&m.inspection?(m.inspection.record.id===S.saved.id&&m.inspection.record.revision===S.saved.revision?materialControlSummary(S.saved):''):materialControlSummary(S.record,S.dirty)}${body}</div><footer class="viewer-foot input-flow-footer"><div id="input-flow-status" role="status" aria-live="polite" class="${m.error?'warning':m.pending?'input-flow-pending':''}"><strong>${esc(m.error||m.message||'生成输入与准备清单均不启动计算。')}</strong><div id="input-flow-progress">${inputProgressMarkup(m)}</div>${m.pending?'<p>可翻页、关闭后返回；生成完成后仍需明确提交计算。</p>':''}</div><div class="actions">${v.detail?'<button data-input-flow="back">返回输入摘要</button>':`<button class="primary" data-input-flow="${next}"${m.pending||m.recovering||S.dirty||(!g&&!p?.generation?.supported)?' disabled':''}>${label}</button>`}<button data-input-flow="close">返回方案</button></div></footer>`;
+ if(v.design)d.querySelectorAll('[data-input-flow="close"]').forEach(button=>button.textContent='返回对照设计');
  if(!d.open)d.showModal();d.querySelector('.input-flow-body').scrollTop=oldY;
 }
 async function inputFlowButton(b){

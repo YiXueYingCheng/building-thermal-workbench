@@ -112,7 +112,9 @@ def verify(folder,case,returncode,elapsed):
     if contract in output_resolution.CONTRACTS:result.update(output_contract=contract,time_detail=time_detail)
     return result
 
-def verify_artifacts(result):
+def verify_artifacts(result,root=None):
+    from history_locations import workspace_path
     for path,checksum in result['artifacts'].items():
-        if sha(path)!=checksum:raise ValueError('已完成结果文件变化，不能复用：'+path)
+        actual=workspace_path(root,path) if root is not None else path
+        if sha(actual)!=checksum:raise ValueError('已完成结果文件变化，不能复用：'+path)
     return result

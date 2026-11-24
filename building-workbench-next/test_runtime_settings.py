@@ -114,7 +114,7 @@ class RuntimeSettingsTests(unittest.TestCase):
         self.assertIn('门窗与材料参考表', missing)
 
     def test_optional_import_gaps_do_not_block_an_existing_catalog(self):
-        catalog = dict(records={'global_w00': {}, 'global_fixed': {}}, global_bundle={})
+        catalog = dict(records={}, sites={}, global_bundle={})
         write_json(self.root / 'data/catalog.json', catalog, self.root)
         write_json(self.root / 'data/current.json', dict(catalog='data/catalog.json', sha256=digest(catalog)), self.root)
         report = runtime_check.check(self.root)

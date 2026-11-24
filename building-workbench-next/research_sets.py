@@ -102,6 +102,19 @@ class Sets:
         require(row is not None,'未找到该对比集版本。');value=loads(row[0]);h=value.pop('sha256')
         require(digest(value)==h,'对比集记录校验失败。');value['sha256']=h;return value
 
+    def evidence_version(self,ident,revision):
+        # Evidence always names a revision. Editing, new runs and listings use live sets.
+        with self.store.connect() as db:
+            if db.execute('SELECT 1 FROM research_sets WHERE id=? AND revision=?',(ident,revision)).fetchone():
+                return self.get(ident,revision,db)
+            row=None
+            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='dissolved_set_snapshots'").fetchone():
+                row=db.execute('SELECT payload FROM dissolved_set_snapshots WHERE id=? AND revision=?',(ident,revision)).fetchone()
+            require(row is not None,'未找到导出或准备记录绑定的对比集版本。')
+            value=loads(row[0]);checksum=value.pop('sha256')
+            require(digest(value)==checksum and value['id']==ident and value['revision']==revision,'历史对比集记录校验失败。')
+            return dict(value,sha256=checksum)
+
     def records(self,value):
         records={}
         for role,m in value['members'].items():
@@ -231,12 +244,55 @@ class Sets:
         from inspection_io import reading
         with reading():return self._results(ident,revision,include_monthly=include_monthly)
 
+    def _observed_batches(self, record, registered, occupied, monthly):
+        """Read registered result snapshots for this exact saved member version."""
+        from coverage_results import observed
+        rows = []
+        for option in registered.get(digest(record), []):
+            ident = option['id']
+            if not ident.startswith('observed_'):
+                continue
+            try:
+                snapshot = observed(record, ident, self.root)
+                batch = snapshot.get('source', {}).get('batch_id') or ident
+                if batch in occupied:
+                    continue
+                results = []
+                months = {}
+                for i, (site, case) in enumerate(snapshot['cases'].items()):
+                    if site not in record['factors']['scope']['site_ids'] or case['mode'] != 'controlled':
+                        continue
+                    evidence = case.get('evidence') or {}
+                    if evidence.get('batch_id'):
+                        require(evidence['batch_id'] == batch, '历史结果批次与附件记录不符。')
+                    accepted = case['status'] in ('passed','reused') and not case.get('pending_warnings')
+                    index = evidence.get('index', i)
+                    row = {k:v for k,v in case.items() if k != 'monthly'}
+                    row.update(index=index, site_id=site, city=self.catalog['sites'][site]['name'],
+                               accepted=accepted, acceptance='reviewed' if evidence.get('scientific_review') else case['status'])
+                    results.append(row)
+                    if monthly is not None and accepted and case.get('monthly'):
+                        months[index] = case['monthly']
+                if results:
+                    count = sum(r['accepted'] for r in results)
+                    rows.append(dict(batch_id=batch, usable=bool(count), archived=True, snapshot_id=ident,
+                                     reason='', reused_source=True, counts=dict(accepted=count,total=len(results)),
+                                     source=dict(name=record['name'], **ref(record)), results=results))
+                    occupied.add(batch)
+                    if monthly is not None:
+                        monthly[batch] = months
+            except (KeyError, ValueError, OSError) as error:
+                rows.append(dict(batch_id=ident, usable=False, archived=True, reason=str(error)))
+        return rows
+
     def _results(self,ident,revision=None,*,include_monthly=False,only_roles=None):
         s=self.get(ident,revision);records=self.records(s);out=dict(id=ident,revision=s['revision'],set_sha256=s['sha256'],name=s['name'],members={},audit=compatible(records),scope=records['baseline']['factors']['scope'],records={role:ref(r) for role,r in records.items()})
         from batch_results import build
         from execution_queue import Queue
         with Queue(self.root).db() as db:
             completed={r['batch']:r['accepted'] for r in db.execute("SELECT batch,SUM(status IN ('passed','reused')) AS accepted FROM jobs GROUP BY batch")}
+        from coverage_results import registry
+        registered = registry(self.root)['sources']
         sources={}
         monthly={}
         for role,m in s['members'].items():
@@ -266,6 +322,8 @@ class Sets:
                                           if r['accepted'] and r['mode']=='controlled' and r.get('monthly')}
                     row.update(usable=d['counts']['accepted']>0,counts=d['counts'],results=[{k:r.get(k) for k in ('index','site_id','city','accepted','acceptance','status','status_label','loads','days','period','mode','step_minutes','weather_sha256','evidence','pending_warnings','data_retention')} for r in d['results']],source=dict(name=source['name'],**candidate['source']))
                 except (ValueError,KeyError,OSError) as e:row['reason']=str(e)
+            occupied = set(completed) | {r['batch_id'] for r in rows if r['usable']}
+            rows.extend(self._observed_batches(records[role], registered, occupied, monthly if include_monthly else None))
             out['members'][role]=rows
         out['dataset_sha256']=digest(out);out['checked_at']=now()
         # Monthly rows come from the same verified result bytes as the totals.

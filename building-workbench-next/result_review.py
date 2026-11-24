@@ -107,7 +107,7 @@ def export_review(root,ident):
     p=folder(root,ident);job=read_json(p/'job.json');bound=job['binding']
     raw_path=output_storage.checked_path(bound['result'],root)
     require(sha(raw_path)==bound['result_sha256'],'原结果变化，暂不导出。')
-    raw=read_json(raw_path);verify_artifacts(raw)
+    raw=read_json(raw_path);verify_artifacts(raw,root)
     data=io.BytesIO()
     with zipfile.ZipFile(data,'w',zipfile.ZIP_DEFLATED) as z:
         z.writestr('说明.txt','复核资料，不是计算输入包。未接受的报告不能作为有效结果。\n原日志和数值保持；来源路径及校验值见 JSON。\n批次：'+job['batch']+'\n算例序号：'+str(job['index']+1))
@@ -147,7 +147,7 @@ def analyse_specialist(root,ident):
         require(ok,label+'未通过。'+detail);checks.append(dict(label=label,passed=True,detail=detail))
     b,j,raw=target(root,job['batch'],job['index'])
     check('本次结果与待复核记录一致',j['status']=='review' and binding(j)==job['binding'])
-    verify_artifacts(raw);check('原始输入、日志和结果文件完整',True)
+    verify_artifacts(raw,root);check('原始输入、日志和结果文件完整',True)
     plan=load_review(root,b['review'],b['checksum'],historical=True);case=plan['cases'][j['idx']]
     check('复核绑定本次算例',case['identity']==j['identity'])
     record=read_json(root/'data/execution/reviews'/b['review']/'record.json')
@@ -172,7 +172,8 @@ def analyse_specialist(root,ident):
     ns=dict(math=math,struct=struct,dt=dt);exec(compile(ast.Module(body=nodes,type_ignores=[]),str(source),'exec'),ns)
     warnings=[w for w in ns['blocks'](err) if 'PsyPsatFnTemp' in w[0]]
     expected=[w for w in prior['review_conclusions'][0]['warnings'] if 'PsyPsatFnTemp' in w[0]]
-    weather=Path(case['weather']);engine=Path(plan['engine']).parent
+    from history_locations import input_path
+    weather=input_path(root,case['weather'],case['dependencies'][case['weather']]);engine=Path(plan['engine']).parent
     beijing=sha(weather)==prior['weather_sha256']
     require(step==5 or beijing,'1 min 的其他气象需按实际步长扩展全年函数复核，不套用五分钟扫描。')
     weather_source=None;cache_source=None
@@ -180,7 +181,7 @@ def analyse_specialist(root,ident):
         engine_source_refs=read_json(source.parent/'source/exact-commit-sources.json');weather_source=next(x for x in engine_source_refs if Path(x['path']).name=='WeatherManager.cc')
         check('天气插值与相对湿度处理源码匹配本次引擎',sha(weather_source['path'])==weather_source['sha256'],'保留引擎读取的相对湿度；原气象不截断、不修改。')
     if beijing:check('事件时刻、次数及试算值完全匹配',warnings==expected and len(warnings)==2,'1 月 2 日 19:04–19:05，发生 1 次；首次提示和末尾汇总为同一事件。')
-    check('冻结气象与已验证引擎匹配',sha(weather)==case['dependencies'][str(weather)] and sha(engine/'energyplusapi.dll')==prior['engine_dll_sha256'])
+    check('冻结气象与已验证引擎匹配',sha(weather)==case['dependencies'][case['weather']] and sha(engine/'energyplusapi.dll')==prior['engine_dll_sha256'])
     check('建筑与研究范围匹配',record['factors']['building']['id']=='building2_5f_verified' and len(model['Zone'])==75 and len(model['ZoneHVAC:IdealLoadsAirSystem'])==50)
     from manage import current
     from ordinary_materials import validate,targets
@@ -240,7 +241,7 @@ def analyse_specialist(root,ident):
             check('所有越界事件独立有界求根一致',True,'各事件最终湿球温度与有界根误差均小于 1e-7 °C；极端值只出现在中间试算。')
     finally:api.state_manager.delete_state(s)
     # No report can be adopted if any input/result changes during analysis.
-    _,fresh,_=target(root,j['batch'],j['idx']);verify_artifacts(raw)
+    _,fresh,_=target(root,j['batch'],j['idx']);verify_artifacts(raw,root)
     check('复核期间结果保持不变',binding(fresh)==binding(j))
     scope=f"{plan['record_name']} v{plan['revision']}，本次冻结输入与{case['city']}气象，135 面外墙基材内外两侧反射率 0.45／发射率 0.85；{step} min、原预热、全年温控显热冷热需求"+('及逐日参考' if raw.get('daily_reference') else '')+'。仅接受本次已重放、最终收敛且与原日志匹配的湿球函数事件。'
     if step==1:scope+='本次明确保存的外墙 CondFD／1 min 配置已核对；没有沿用旧 5 min 的计算结果或日历。'
@@ -283,7 +284,8 @@ def _accept(root,ident,expected,decision=None):
         from user_result_review import prepare_decision
         prepare_decision(root,ident,report,job,decision)
     evidence=read_json(p/'outcome.json');require(evidence['passed'] is True and sha(p/'outcome.json')==(read_json(p/'decision.json')['evidence_sha256'] if report['recommendation']=='user_decision' else report['evidence_sha256']),'复核依据不完整。')
-    for ref in evidence['verified_sources']:require(sha(ref['path'])==ref['sha256'],'复核引用资料发生变化，请重新检查。')
+    from history_locations import input_path
+    for ref in evidence['verified_sources']:require(sha(input_path(root,ref['path'],ref['sha256']))==ref['sha256'],'复核引用资料发生变化，请重新检查。')
     b,j,raw=target(root,job['batch'],job['index'])
     if j['status']=='passed' and raw.get('scientific_review',{}).get('id')==ident:
         reviewed(raw,root)
@@ -295,13 +297,13 @@ def _accept(root,ident,expected,decision=None):
         require(j['status']=='passed' and j['result_sha256']==done['result_sha256'],'已采用的结果记录发生变化。')
         reviewed(raw,root);return done
     require(j['status']=='review' and binding(j)==job['binding'],'待复核结果已变化，请重新检查。')
-    load_review(root,b['review'],b['checksum'],historical=True);verify_artifacts(raw)
+    load_review(root,b['review'],b['checksum'],historical=True);verify_artifacts(raw,root)
     c=evidence['review_conclusions'][0]
     require(len(evidence['review_conclusions'])==1 and c['identity']==j['identity'] and c['original_result_sha256']==j['result_sha256'] and c['batch']==j['batch'] and c['index']==j['idx'],'依据未绑定本次结果。')
     at=now();result=copy.deepcopy(raw)
     result.update(status='passed',pending_warnings=[],reviewed_warnings=raw['pending_warnings'],scientific_review=dict(id=ident,decision=c['decision'],reviewed_at=at,original_result=j['result'],original_result_sha256=j['result_sha256'],evidence=str(p/'outcome.json'),evidence_sha256=sha(p/'outcome.json'),scope=c['scientific_scope'],evidence_kind=c['evidence_kind']))
     result_path=owned(root/'data/execution/scientific-reviews'/ident/('result_'+digest(result)[:24]+'.json'),root)
-    write_json(result_path,result,root);reviewed(result,root);verify_artifacts(result);h=sha(result_path)
+    write_json(result_path,result,root);reviewed(result,root);verify_artifacts(result,root);h=sha(result_path)
     q=Queue(root)
     with q.db() as db:
         cur=db.execute("update jobs set status='passed',result=?,result_sha256=?,updated=? where batch=? and idx=? and attempt=? and identity=? and status='review' and result=? and result_sha256=?",(str(result_path),h,at,j['batch'],j['idx'],j['attempt'],j['identity'],j['result'],j['result_sha256']))

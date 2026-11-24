@@ -4,6 +4,53 @@ import re
 from foundation import owned,read_json,sha,digest,now
 from preparation_recovery import saved_input,submitted
 
+
+def wall_model(root, ident, index, store, expected):
+    """Return only case choices or the wall stacks of one verified saved input."""
+    manifest, _, _ = saved_input(root, ident, store, expected)
+    cases = manifest['cases']
+    if index is None:
+        fields = ('city', 'site_id', 'mode', 'period', 'step_minutes')
+        return {'cases': [{k: c.get(k) for k in fields} for c in cases]}
+    if not 0 <= index < len(cases):
+        raise ValueError('该输入包没有所选算例。')
+    case = cases[index]
+    if not re.fullmatch(r'[0-9]{3,}\.epJSON', case['model_file']):
+        raise ValueError('输入模型文件名无效。')
+    folder = owned(Path(root)/'data/model-inputs'/ident, root)
+    path = owned(folder / case['model_file'], folder)
+    if sha(path) != case['model_sha256']:
+        raise ValueError('算例模型校验失败，请在输入核对中检查该文件。')
+    model = read_json(path)
+    if digest(model) != case['generated_model_digest']:
+        raise ValueError('模型与生成时的记录不一致。')
+    walls = {name: row['construction_name'] for name, row in model['BuildingSurface:Detailed'].items()
+             if row['surface_type'].lower() == 'wall'}
+    stacks = {}
+    for name in set(walls.values()):
+        construction = model.get('Construction', {}).get(name, {})
+        if 'outside_layer' in construction:
+            layers = sorted((k for k in construction if re.fullmatch(r'layer_\d+', k)),
+                            key=lambda k: int(k[6:]))
+            stacks[name] = [construction['outside_layer'], *(construction[k] for k in layers)]
+    insulation = {}
+    for item in model.get('SurfaceControl:MovableInsulation', {}).values():
+        insulation.setdefault(item['surface_name'], []).append(item)
+    exterior_heat_sources = {item['surface_name']: item['outside_face_heat_source_term_schedule_name']
+                             for item in model.get('SurfaceProperty:HeatBalanceSourceTerm', {}).values()
+                             if item.get('outside_face_heat_source_term_schedule_name')}
+    names = {stack[0] for stack in stacks.values()}
+    names.update(item['material_name'] for group in insulation.values() for item in group)
+    fields = ('solar_absorptance', 'thermal_absorptance', 'visible_absorptance')
+    layer_optics = {
+        name: {k: values[k] for k in fields if k in values}
+        for kind in ('Material', 'Material:NoMass')
+        for name, values in model.get(kind, {}).items() if name in names
+    }
+    return dict(walls=walls, stacks=stacks, insulation=insulation, layer_optics=layer_optics,
+                exterior_heat_sources=exterior_heat_sources, file=path.name,
+                model_sha256=case['model_sha256'])
+
 def inspect(root,ident,store):
     root=Path(root).resolve();m,r,checksum=saved_input(root,ident,store)
     folder=owned(root/'data/model-inputs'/ident,root)

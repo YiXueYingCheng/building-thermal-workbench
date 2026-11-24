@@ -1,11 +1,11 @@
-"""Explicit local EPW registration. Immutable copies and metadata, never an in-place replacement."""
+"""Register screened EPWs by content, in workspace storage or at a user-selected path."""
 from pathlib import Path
 import copy
 import os
 import stat
 import shutil
 import threading
-from foundation import ROOT, owned, read_json, write_json, digest, now, sha
+from foundation import ROOT, owned, read_json, write_json, digest, now
 import weather_quality
 
 LOCK = threading.RLock()
@@ -48,19 +48,30 @@ def register_folder_item(root,path,expected_sha256,metadata,catalog):
     """Skip verified identical content, including another item registered concurrently."""
     if not isinstance(metadata,dict) or metadata.get('reviewed') is not True:
         raise ValueError('请先核对所选地点与质量说明。')
+    mode = storage_mode(metadata)
     with LOCK:
         checked,_=inspect(path)
         if checked['sha256']!=expected_sha256:raise ValueError('检查后的气象文件已改变，请重新检查再登记。')
         if not checked['can_register']:raise ValueError('逐时气象存在需修复项，不能登记。')
-        sites=list(catalog.get('sites',{}).values())+[r['site'] for r in listing(root)]
-        for site in sites:
-            weather=site.get('weather') or {}
-            if weather.get('sha256')==expected_sha256 and weather.get('path'):
-                existing=Path(weather['path'])
-                if existing.is_file() and sha(existing)==expected_sha256:
-                    return dict(reused=True,existing_id=site['id'],name=site['name'])
+        from source_locations import resolve
+        for row in listing(root):
+            site = row['site']
+            weather = site['weather']
+            if weather['sha256'] != expected_sha256 or storage_mode(site) != mode:
+                continue
+            actual, _ = resolve(weather, catalog)
+            if mode == 'reference' and Path(actual['path']) != Path(checked['path']):
+                continue
+            if weather_quality.read_snapshot(actual['path'], expected_sha256)[0]['status'] == 'matches':
+                return dict(reused=True, existing_id=site['id'], name=site['name'])
         # Folder imports add locations, never change a previous source or assign a climate class.
-        return register(root,path,expected_sha256,dict(reviewed=True,name=metadata.get('name',''),note='由用户选定文件夹导入；已核对地点与逐时质量说明，气候分类暂未指定。'),catalog)
+        return register(root,path,expected_sha256,dict(reviewed=True,name=metadata.get('name',''),storage_mode=mode,note='由用户选定文件夹导入；已核对地点与逐时质量说明，气候分类暂未指定。'),catalog)
+
+def storage_mode(metadata):
+    mode = metadata.get('storage_mode', 'copy')
+    if mode not in ('copy', 'reference'):
+        raise ValueError('请选择保存工作区副本或仅引用原文件。')
+    return mode
 
 def inspect(path):
     if not isinstance(path,str) or not path.strip() or len(path)>32768:raise ValueError('请选择本机 EPW 文件。')
@@ -83,6 +94,37 @@ def listing(root=ROOT):
         if digest(row['data'])!=row['sha256'] or p.stem!=row['data']['id']:raise ValueError('气象登记内容校验失败。')
         rows.append(row['data'])
     return rows
+
+def inventory(root, catalog, verify_id=None):
+    """Opening the library checks file metadata only. Hash an entry on explicit request."""
+    from source_locations import resolve
+    entries = []
+    for row in listing(root):
+        if verify_id is not None and row['id'] != verify_id:
+            continue
+        site = row['site']
+        weather = site['weather']
+        actual, _ = resolve(weather, catalog)
+        path = Path(actual['path'])
+        if verify_id is not None:
+            status = weather_quality.read_snapshot(path, weather['sha256'])[0]['status']
+        else:
+            try:
+                info = path.stat()
+                status = ('unreadable' if not stat.S_ISREG(info.st_mode) else
+                          'mismatch' if info.st_size != weather['bytes'] else 'present')
+            except FileNotFoundError:
+                status = 'missing'
+            except OSError:
+                status = 'unreadable'
+        entries.append(dict(id=row['id'], name=site['name'], climate=site.get('climate'),
+                            country=site.get('country'), station=row['quality']['header'].get('station'),
+                            created=row['created'], storage_mode=storage_mode(site), path=str(path),
+                            source_path=row['source_path'], sha256=weather['sha256'],
+                            bytes=weather['bytes'], status=status))
+    if verify_id is not None and not entries:
+        raise ValueError('找不到这项气象登记，请刷新气象管理。')
+    return sorted(entries, key=lambda row: (row['created'], row['id']), reverse=True)
 
 def merge(catalog,root=ROOT):
     for row in listing(root):
@@ -108,25 +150,39 @@ def register(root,path,expected_sha256,metadata,catalog):
         if parent and not catalog['sites'].get(parent,{}).get('weather'):raise ValueError('要更新的原气象来源不存在。')
         if parent and catalog['sites'][parent]['weather']['sha256']==expected_sha256:raise ValueError('新旧气象内容完全相同，无需作为来源更新；如需独立登记，请选择新增地点。')
         spec=dict(sha256=expected_sha256,name=name,note=note,climate=climate or None,climate_basis=basis,supersedes=parent or None)
-        ident='weather_'+digest(spec)[:32];folder=owned(Path(root)/'data/weather-files'/expected_sha256,root);dest=folder/'weather.epw'
+        mode = storage_mode(metadata)
+        if mode == 'reference':
+            dest = Path(checked['path'])
+            spec.update(storage_mode=mode, reference_path=os.path.normcase(str(dest)))
+        else:
+            dest = owned(Path(root)/'data/weather-files'/expected_sha256/'weather.epw',root)
+        ident='weather_'+digest(spec)[:32]
         registry=owned(Path(root)/'data/weather-registry'/(ident+'.json'),root)
         if registry.exists():
             result=next(r for r in listing(root) if r['id']==ident)
-            if sha(dest)!=expected_sha256:raise ValueError('已登记的内部气象副本发生变化，请先核查来源。')
+            if weather_quality.read_snapshot(dest,expected_sha256)[0]['status']!='matches':
+                raise ValueError('已登记的气象文件缺失或发生变化，请在气象管理中核对。')
             return dict(registration=result,reused=True)
-        if shutil.disk_usage(root).free < len(raw)+50*1024*1024:raise ValueError('可用磁盘不足以保存气象副本和登记记录。')
-        folder.mkdir(parents=True,exist_ok=True)
-        if dest.exists():
-            if sha(dest)!=expected_sha256:raise ValueError('同标识气象副本发生变化，拒绝覆盖。')
-        else:
-            with dest.open('xb') as stream:stream.write(raw)
-        if sha(dest)!=expected_sha256:raise ValueError('气象副本校验失败，未登记。')
+        if mode == 'copy' and not dest.exists():
+            if shutil.disk_usage(root).free < len(raw)+50*1024*1024:raise ValueError('可用磁盘不足以保存气象副本和登记记录。')
+            dest.parent.mkdir(parents=True,exist_ok=True)
+            with dest.open('xb') as stream:
+                try:
+                    stream.write(raw)
+                except OSError:
+                    stream.close()
+                    dest.unlink(missing_ok=True)
+                    raise
+        if weather_quality.read_snapshot(dest,expected_sha256)[0]['status']!='matches':
+            raise ValueError('气象文件与检查时的内容不一致，未登记。请核对读取位置。')
         weather=dict(path=str(dest),sha256=expected_sha256,expected_sha256=expected_sha256,bytes=len(raw),status='verified')
         site=dict(id=ident,name=name,climate=climate or None,country=h['country'],eligible=True,
             site_kind='导入气象站点',source_kind=KIND,latitude=float(h['latitude']),longitude=float(h['longitude']),timezone=float(h['timezone']),elevation=float(h['elevation']),
             source_file=dict(path=checked['path'],sha256=expected_sha256),
             weather=weather,review_note=note or '用户确认主要逐时检查说明；区域代表性及太阳时序未自动判定。',
             climate_basis=basis,classification_status='user_declared' if climate else 'unclassified',supersedes=parent or None)
+        if mode == 'reference':
+            site['storage_mode'] = mode
         row=dict(id=ident,created=now(),spec=spec,site=site,source_path=checked['path'],quality=checked['quality'])
         write_json(registry,dict(data=row,sha256=digest(row)),root)
         return dict(registration=row,reused=False)
@@ -137,7 +193,8 @@ def job(catalog,site_id,case):
     if exact:return exact
     site=catalog['sites'][site_id]
     if site.get('source_kind')!=KIND or not site.get('eligible'):raise ValueError('地点没有可用的模型来源。')
-    anchor=catalog['records']['global_w00']['factors']['scope']['site_ids'][0]
+    anchor=next((j['site_id'] for j in catalog['global_bundle']['jobs'].values() if j['case']==case),None)
+    if anchor is None:raise ValueError('当前气象没有对应的建筑输入来源。')
     source=catalog['global_bundle']['jobs'][anchor+'|'+case]
     return {**source,'site_id':site_id,'weather':site['weather'],'weather_adaptation':dict(template_site=anchor,target_site=site_id)}
 

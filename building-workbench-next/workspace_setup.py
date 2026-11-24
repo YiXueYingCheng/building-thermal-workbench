@@ -77,16 +77,16 @@ def register_engine(root,path):
 def engine_files(record,catalog):
     # Use the record's frozen binding; later registration cannot rebind an old scheme.
     files=record.get('numerics',{}).get('engine_files')
-    if files is None:files=catalog.get('records',{}).get('global_fixed',{}).get('numerics',{}).get('engine_files')
+    if files is None:files=catalog.get('global_bundle',{}).get('building_source',{}).get('numerics',{}).get('engine_files')
     if not isinstance(files,dict) or not files:raise ValueError('方案缺少计算引擎绑定，请先登记引擎并重新导入建筑。')
     return copy.deepcopy(files)
 
 def import_numerics(catalog):
     engine=catalog.get('workspace_runtime')
     if engine:return dict(step_minutes=5,engine=Path(engine['executable']).name,engine_files=copy.deepcopy(engine['engine_files']))
-    original=catalog.get('records',{}).get('global_w00')
+    original=catalog.get('global_bundle',{}).get('building_source',{}).get('numerics')
     if original:
-        result=copy.deepcopy(original['numerics']);result['step_minutes']=5;return result
+        result=copy.deepcopy(original);result['step_minutes']=5;return result
     raise ValueError('请先在工作区设置中登记计算引擎，再转换建筑。')
 
 def status(root,catalog):

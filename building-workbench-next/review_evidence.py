@@ -31,7 +31,8 @@ def reviewed(result, root=ROOT):
         return None
     try:
         original = output_storage.checked_path(review['original_result'], root)
-        evidence_path = owned(review['evidence'], Path(root)/'verification')
+        from history_locations import workspace_path
+        evidence_path = owned(workspace_path(root,review['evidence']), Path(root)/'verification')
         if sha(original) != review['original_result_sha256'] or sha(evidence_path) != review['evidence_sha256']:
             raise ValueError('原结果或复核依据内容发生变化')
         raw, evidence = read_json(original), read_json(evidence_path)
@@ -44,7 +45,7 @@ def reviewed(result, root=ROOT):
                 raise ValueError('复核副本改变了原结果内容')
         matches = [r for r in evidence.get('review_conclusions', [])
                    if r.get('identity') == result['identity'] and r.get('site_id') == result['site_id']
-                   and Path(r.get('original_result', '')).resolve() == original
+                   and workspace_path(root,r.get('original_result', '')).resolve() == original
                    and r.get('original_result_sha256') == review['original_result_sha256']]
         if evidence.get('passed') is not True or len(matches) != 1:
             raise ValueError('依据中没有该结果的唯一接受结论')

@@ -1,10 +1,12 @@
 /* Physical categories keep the original ECA editor available for old snapshots. */
 
-function mtPhysical(d){return ['optical_surface_v1','solid_layer_v1','solid_variable_v1'].includes(d?.model);}
+function mtPhysical(d){return ['optical_surface_v1','solid_layer_v1','solid_variable_v1','phase_change_layer_v1','spectral_exterior_v1'].includes(d?.model);}
 
 const mtSelections=new Map();
 
-function mtSelection(r){const key=r.id+':'+r.revision;if(!mtSelections.has(key))mtSelections.set(key,{state:'R',face:'A',target:'walls'});return mtSelections.get(key);}
+function mtSelectionKey(r){return JSON.stringify([S.id,S.saved.revision,r.id,r.revision]);}
+
+function mtSelection(r){const key=mtSelectionKey(r);if(!mtSelections.has(key))mtSelections.set(key,{state:'R',face:'A',target:'walls'});return mtSelections.get(key);}
 
 const mtNames={film:'薄膜／涂层',solid:'固定实体材料',variable:'可调实体材料'};
 
@@ -48,7 +50,12 @@ document.addEventListener('change',e=>{const t=e.target,d=mc().draft;if(!mtPhysi
 
 const mtOldDetails=mcDetails;
 
-mcDetails=function(){const r=mcRow();if(mc().draft||mc().tab==='sources'||!mtPhysical(r?.content))return mtOldDetails();const d=r.content,choice=mtSelection(r);return `<h2>${esc(r.name)} · v${r.revision}</h2><p>${esc(mtNames[d.category])} · ${esc(mtModel(d))}</p>${mcTable(d)}<p>物性依据：${esc(d.property_source.note||'待补')}</p><p>${esc(d.source_note)}</p><div class="actions"><button data-mc="edit">编辑并保存新版本</button><button data-mc="clone">复制为新材料</button></div><h3>固定计算选用</h3><div class="grid2"><label class="field">固定状态<select id="mt-adopt-state">${options(d.states.map(s=>[s.id,s.name]),choice.state)}</select></label><label class="field">外表面光学参数组<select id="mt-adopt-face">${options(d.faces.map(f=>[f,f+' 组']),choice.face)}</select></label><label class="field">应用表面<select id="mt-adopt-target">${options([['walls','全部不透明外墙'],...(wallScopeSource()?[['conditioned','空调房外墙']]:[]),['roofs','全部屋面'],['both','全部外墙与屋面']],choice.target)}</select></label></div><button class="primary" data-mc="preview"${readonly()?' disabled':''}>预览选入当前方案</button><p>先核对范围和参数，再确认加入草稿。可在方案的材料与工况页继续设置。</p>${mcVersionDiff(r)}`;};
+mcDetails=function(){const r=mcRow();if(mc().draft||mc().tab==='sources'||!mtPhysical(r?.content))return mtOldDetails();const d=r.content;return `<h2>${esc(r.name)} · v${r.revision}</h2><p>${esc(mtNames[d.category])} · ${esc(mtModel(d))}</p>${mcTable(d)}<p>物性依据：${esc(d.property_source.note||'待补')}</p><p>${esc(d.source_note)}</p><div class="actions"><button data-mc="edit">编辑并保存新版本</button><button data-mc="clone">复制为新材料</button></div>${mcForScheme()?mtSchemeFields(r):''}${mcVersionDiff(r)}`;};
+
+function mtSchemeFields(r){
+ const d=r.content,choice=mtSelection(r);
+ return `<h3>固定计算选用</h3><div class="grid2"><label class="field">固定状态<select id="mt-adopt-state">${options(d.states.map(s=>[s.id,s.name]),choice.state)}</select></label><label class="field">外表面光学参数组<select id="mt-adopt-face">${options(d.faces.map(f=>[f,f+' 组']),choice.face)}</select></label><label class="field">应用表面<select id="mt-adopt-target">${options([['walls','全部不透明外墙'],...(wallScopeSource()?[['conditioned','空调房外墙']]:[]),['roofs','全部屋面'],['both','全部外墙与屋面']],choice.target)}</select></label></div><button class="primary" data-mc="preview"${readonly()?' disabled':''}>预览选入当前方案</button><p>先核对范围和参数，再确认加入草稿。可在方案的材料与工况页继续设置。</p>`;
+}
 
 const mtOldList=mcList;
 
@@ -56,7 +63,7 @@ mcList=function(){let html=mtOldList();if(mc().tab==='sources')return html;const
 
 const mtOldAction=mcAction;
 
-mcAction=async function(b){const r=mcRow();if(b.dataset.mc!=='preview'||!mtPhysical(r?.content))return mtOldAction(b);const v=mc();if(v.pending)return;v.error='';try{mcCheckDraft();if(readonly())throw Error('请先另存为研究方案。');if(S.usageDirty)throw Error('请先保存或撤销建筑配置编辑。');const state_id=document.getElementById('mt-adopt-state').value,face=document.getElementById('mt-adopt-face').value,kind=document.getElementById('mt-adopt-target').value,stamp=JSON.stringify([S.id,S.saved.revision,changes()]);mtSelections.set(r.id+':'+r.revision,{state:state_id,face,target:kind});v.pending=true;render();const payload={id:S.id,revision:S.saved.revision,changes:changes()};const available=await api('/api/material-library/targets',payload);const targets=kind==='conditioned'?await drawingConditionedTargets(available):available.filter(t=>kind==='both'||t.type===(kind==='walls'?'Wall':'Roof')).map(t=>t.id);const data=await api('/api/material-library/adoption-preview',{...payload,target:{id:r.id,revision:r.revision,sha256:r.sha256},selection:{state_id,face,targets}});if(stamp!==JSON.stringify([S.id,S.saved.revision,changes()]))throw Error('方案已变化，请重新预览。');v.preview={data,stamp};mcShowAdoption();}catch(e){v.error=e.message;}finally{v.pending=false;render();}};
+mcAction=async function(b){const r=mcRow();if(b.dataset.mc!=='preview'||!mtPhysical(r?.content))return mtOldAction(b);const v=mc();if(v.pending||!mcForScheme())return;v.error='';try{mcCheckDraft();if(readonly())throw Error('请先另存为研究方案。');if(S.usageDirty)throw Error('请先保存或撤销建筑配置编辑。');const state_id=document.getElementById('mt-adopt-state').value,face=document.getElementById('mt-adopt-face').value,kind=document.getElementById('mt-adopt-target').value,context=v.schemeContext,stamp=mcPreviewStamp();mtSelections.set(mtSelectionKey(r),{state:state_id,face,target:kind});v.pending=true;render();const payload={id:S.id,revision:S.saved.revision,changes:changes()};const available=await api('/api/material-library/targets',payload);const targets=kind==='conditioned'?await drawingConditionedTargets(available):available.filter(t=>kind==='both'||t.type===(kind==='walls'?'Wall':'Roof')).map(t=>t.id);const data=await api('/api/material-library/adoption-preview',{...payload,target:{id:r.id,revision:r.revision,sha256:r.sha256},selection:{state_id,face,targets}});if(context!==v.schemeContext||stamp!==mcPreviewStamp())throw Error('方案已变化，请重新预览。');v.preview={data,stamp};mcShowAdoption();}catch(e){v.error=e.message;}finally{v.pending=false;render();}};
 
 const mtOldCanEdit=materialViewerCanEdit;
 

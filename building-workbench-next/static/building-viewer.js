@@ -15,6 +15,7 @@ function buildingViewerDialog(){
    if(typeof roomViewerAction==='function'&&await roomViewerAction(b,node))return;
    if(node){viewerSelect(node.dataset.geometryNode,node.dataset.geometryId);return;}
    const op=b.dataset.viewer||b.dataset.geometry;
+   if(op==='wall-input'){await loadWallInput(v);return;}
    if(op==='back'){v.view='plan';renderBuildingViewer();return;}
    if(op==='wall-config'||op==='material-config'){rememberViewerPlan();v.view='wall';v.wall=geometryState().wall;v.message='';renderBuildingViewer();return;}
    if(op==='edit'){const row=viewerWall().row;if(!viewerCanEdit(row))throw Error('此面当前只读，请从可编辑方案或相邻修改侧操作。');v.undo[row.id]??={before:copy(S.record.factors.building.envelope_overrides?.[row.id]||null),after:null};v.view='edit';renderBuildingViewer();return;}
@@ -32,6 +33,8 @@ function buildingViewerDialog(){
   const v=buildingViewerCurrent();if(!v)return;if(typeof roomViewerActive==='function'&&roomViewerActive()){roomViewerChange(e);return;}e.stopPropagation();if(v.pending)return;
   if(typeof wallOpticsChange==='function'&&wallOpticsChange(e.target))return;
   const m=geometryState(),id=e.target.id;
+  if(id==='wall-input-bundle'){void loadWallInput(v,e.target.value);return;}
+  if(id==='wall-input-case'){void loadWallInput(v,v.wallInput.bundle,Number(e.target.value));return;}
   if(id==='geometry-floor'){rememberViewerPlan();m.floor=Number(e.target.value);m.room=null;m.wall=null;v.planScroll={top:0,left:0};renderBuildingViewer();}
   if(id==='geometry-room')viewerSelect('room',e.target.value);
   if(id==='geometry-wall'){if(e.target.value)viewerSelect('wall',e.target.value);else{m.wall=null;renderBuildingViewer();}}
@@ -59,11 +62,12 @@ function viewerR(layer){const x=layer.values;if(x.thermal_resistance!=null)retur
 function viewerMaterial(wall){
  const apps=S.record.factors.materials.applications.filter(a=>a.target_ids.includes(wall));if(!apps.length)return '<p>此面没有新增研究材料层。</p>';
  return apps.map(a=>{
-  const d=S.record.factors.materials.definitions.find(d=>d.id===a.material_id),controls=S.record.factors.condition.controls.filter(c=>c.target_ids.includes(wall));
+  const d=S.record.factors.materials.definitions.find(d=>d.id===a.material_id),controls=S.record.factors.condition.controls.filter(c=>c.application_id===a.id && c.target_ids.includes(wall));
   if(!d)return '<p class="warning">材料定义缺失，请回到方案核对。</p>';
   const thermal=controls.find(c=>c.channel==='thermal'),optical=controls.find(c=>c.channel==='orientation');
   const stateLabel=thermal?.mode==='fixed'?'固定 '+(d.states.find(s=>s.id===thermal.state_id)?.name||thermal.state_id):thermal?.mode==='feedback'?'热学状态按反馈切换':'热学状态尚未明确';
   const faceLabel=optical?.mode==='fixed'?'固定 '+optical.face_id:optical?.mode==='calendar'?'按日历切换表面光学参数':'外表面光学参数组尚未明确';
+  if(d.spectral)return '<article><h4>'+esc(d.name)+'</h4><p>'+esc(stateLabel+' · '+faceLabel)+'</p>'+wallMaterialOptics(d,controls)+'</article>';
   const rows=d.states.flatMap(s=>['A','B'].filter(face=>d.optics[face+'_'+s.id]).map(face=>{
    const o=d.optics[face+'_'+s.id],R=s.thermal_input==='conductivity_thickness'?(s.conductivity_W_mK>0&&s.thickness_mm!=null?s.thickness_mm/1000/s.conductivity_W_mK:null):s.resistance_m2K_W;
    const alpha=o.input_basis==='opaque_reflectance'?(o.reflectance==null?null:1-o.reflectance):o.solar_absorptance;
@@ -104,7 +108,7 @@ function renderBuildingViewer(){
  if(v.view==='plan'){d.querySelector('.viewer-body').scrollTop=v.planScroll?.top||0;const canvas=d.querySelector('.geometry-canvas');if(canvas)canvas.scrollLeft=v.planScroll?.left||0;}
 }
 async function refreshBuildingViewer(v){
- rememberViewerPlan();v.pending=true;v.message='';renderBuildingViewer();
+ rememberViewerPlan();v.wallInput=null;v.pending=true;v.message='';renderBuildingViewer();
  try{
   if(S.configuration?.key!==v.key){const data=await api('/api/configuration/'+encodeURIComponent(S.id)+'?revision='+encodeURIComponent(S.saved.revision));if(buildingViewerCurrent()!==v)return;S.configuration={key:v.key,data};resetUsageDraft();}
   await loadGeometry(geometryState());if(buildingViewerCurrent()!==v)return;v.message=geometryState().error;

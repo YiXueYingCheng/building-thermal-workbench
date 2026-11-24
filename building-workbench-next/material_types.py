@@ -1,5 +1,6 @@
 """Physical material input is independent of the calibrated ECA control adapter."""
 import math,copy
+import research_materials as research
 from foundation import digest
 
 MODELS = {'optical_surface_v1', 'solid_layer_v1', 'solid_variable_v1'}
@@ -7,6 +8,7 @@ CATEGORIES = {'film':'薄膜／涂层', 'solid':'固定实体材料', 'variable'
 
 
 def template(category='solid', include_thermal=False):
+    if category in research.TYPES.values():return research.template(category)
     if category not in CATEGORIES: raise ValueError('请选择材料类别。')
     thermal = category != 'film' or include_thermal
     states = []
@@ -21,10 +23,11 @@ def template(category='solid', include_thermal=False):
 
 
 def supported(definition):
-    return definition.get('model') in MODELS
+    return definition.get('model') in MODELS or definition.get('model') in research.TYPES
 
 
 def validate(definition, complete=False):
+    if definition.get('model') in research.TYPES:return research.validate(definition,complete)
     d=definition; errors=[]
     allowed={'id','name','kind','model','category','state_identity','states','faces','optics_depend_on_state','optics','property_source','source_note','state_relationship'}
     if set(d)-allowed: errors.append('材料含尚未适配的字段。')
@@ -133,6 +136,8 @@ def support_paths():
     return [dict(id='optical_surface_v1',name='仅表面光学',scope='贴覆不透明外墙／屋面的外表面',inputs='覆盖后的太阳吸收率与长波发射率；可见光可明确覆盖或按目标继承',control='固定光学参数组；原构造热阻与蓄热保留',status='过渡版已接入'),
         dict(id='solid_layer_v1',name='固定实体层',scope='不透明外墙／屋面外侧附加层',inputs='厚度、导热率、密度、比热及表面光学',control='一次计算固定一个状态；计入该层蓄热',status='过渡版已接入'),
         dict(id='solid_variable_v1',name='通用多状态实体',scope='方案所选不透明外墙／屋面',inputs='各态独立物性；可明确选用质量／面积不变推算辅助',control='固定态对照；面质量与比热守恒时支持反馈。双面实体可按日历切换表面光学参数。',status='本地候选版'),
+        dict(id=research.PCM,name='相变层',scope='所选室外不透明墙外侧',inputs='实体物性、相变区间及有效潜热',control='固定层序，有限差分焓法',status='研究端已接入'),
+        dict(id=research.SPECTRAL,name='辐射解耦与宽带对照',scope='所选室外不透明墙外侧',inputs='载体热物性、PE 热阻与分波段光学参数',control='固定光学与固定热阻，逐墙解表面热平衡',status='研究端已接入'),
         dict(id='legacy_eca',name='旧 ECA 示例路线',scope='已适配建筑、目标墙及原接法',inputs='原等效热阻和双面光学定义',control='按原示例支持固定、反馈或逐日光学切换；忽略等效层自身蓄热',status='保留旧模型含义'),
         dict(id='development_solid_eca',name='特定实体 ECA 动态研究',scope='开发版北京五层既定 135 面外墙',inputs='指定试件及校准物性、引擎和控制规则',control='北京特定四工况全年已验证；不推广为任意材料算法',status='开发版历史验证记录')]
 

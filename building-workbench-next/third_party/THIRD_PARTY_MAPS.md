@@ -18,4 +18,6 @@
 
 ## 再次分发与导出
 
+国家／地区图使用 Natural Earth 的 [1:50m Admin 0 – Map Units](https://www.naturalearthdata.com/downloads/50m-cultural-vectors/50m-admin-0-map-units/)，数据属公有领域。`static/map/regions.json` 按 ISO 地图单元整理名称与别名，简化边界并将经纬度保留至 0.001°。具有单独地区码的地图单元分别着色。
+
 随程序分发地图时一并保留本说明、atlas MIT 许可和 `static/map/manifest.json` 中的来源及修改信息。单独分享气候地图或论文图时，应在图注或随附说明中标明 Beck 等（2023）、CC BY 4.0、数据链接及本项目的显示缩减。项目自身代码许可证不会替换这些地图许可。

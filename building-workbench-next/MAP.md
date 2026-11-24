@@ -20,6 +20,8 @@
 | --- | --- | --- | --- |
 | 启动检查与工作区初始化 | [工作区设置](static/workspace-setup.js) | [启动入口](launch.py) · [运行依赖诊断](runtime_check.py) · [工作区设置](workspace_setup.py) | [首次使用与接口](test_workspace_setup.py) |
 | 导入 ACCDB，给房间选配置来源 | [建筑导入](static/accdb-import.js) | [导入检查与登记](accdb_import.py) · [数据库转换](accdb_conversion.py) · [起始配置库](starter_library.py) | [导入用的起始配置](test_starter_library.py) |
+| EPW 仅引用原文件、查看已导入地点 | [气象导入与管理](static/weather-import.js) | [登记与文件核对](weather_import.py) | [跨工作区引用与副本](test_weather_reference.py) |
+| 重开批次或两两比较时重复读取 | [浏览器缓存](static/recent-views.js) | [最近核验结果及失效检查](recent_batch_views.py) | [批次](test_site_recalculation.py) · [对照](test_comparison_steps.py) |
 | 预设气象下载失败、切换来源 | [气象下载](static/weather-downloads.js) | [下载批次](weather_downloads.py) · [取回与校验文件](weather_fetch.py) | [下载](test_weather_downloads.py) · [备用来源](test_weather_fallbacks.py) |
 | 登记材料，选择铺设墙与热阻反馈范围 | [材料登记](static/material-registration.js) · [逐墙选择](static/drawing-wall-scope.js) | [材料登记](material_registration.py) · [墙段范围](drawing_wall_scope.py) · [表面控制](surface_controls.py) | [材料登记](test_material_registration.py) · [表面控制与选墙](test_surface_controls.py) |
 | 准备输入，减少重复作息带来的内存占用 | [输入准备](static/input-workflow.js) | [输入准备流程](input_pipeline.py) · [计算清单](execution_inputs.py) · [合并等价只读作息](schedule_sharing.py) | [作息共享及独立控制例外](test_schedule_sharing.py) |

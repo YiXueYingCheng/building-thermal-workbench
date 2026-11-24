@@ -42,7 +42,7 @@ def library_metadata(records,index):
 def describe_sources(data,store,catalog,index):
  data['record_details']={}
  for side in ('left','right'):
-  ref=data['comparison'][side];r=store.get(ref['id'],ref['revision']);f=r['factors']
+  r,_=store.comparison_input(data['comparison'],side);f=r['factors']
   data['record_details'][side]=dict(id=r['id'],name=r['name'],revision=r['revision'],period=f['scope']['period'],step_minutes=r['numerics']['step_minutes'],site_count=len(f['scope']['site_ids']))
   for choice in data[side]:
    if choice['id']=='historical':

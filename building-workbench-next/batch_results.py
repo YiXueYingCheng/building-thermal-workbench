@@ -109,10 +109,10 @@ def _build(ident, catalog, root=ROOT):
     return result
 
 
-def tables(data):
+def tables(data, daily_by_case=None):
     from research_input_notes import export_text
     note=data.get('research_input_note')
-    sites=[];monthly=[];temperatures=[];systems=[];reviews=[]
+    sites=[];monthly=[];daily=[];temperatures=[];systems=[];reviews=[]
     for r in data['results']:
         common={k:r[k] for k in ('index','site_id','city','climate','site_kind','mode','status','acceptance','accepted')}
         from review_annotations import summary
@@ -128,10 +128,12 @@ def tables(data):
             **{k:r.get('loads_MJ_m2',{}).get(k) if r.get('loads_MJ_m2') is not None else None for k in ('heating_MJ_m2','cooling_MJ_m2','total_MJ_m2')},
             pending_warnings='；'.join(r['pending_warnings']),excluded_reason='' if r['accepted'] else r['error'] or r['status_label']))
         for m in r.get('monthly',[]):monthly.append(dict(common,**m))
+        if daily_by_case:
+            daily.extend(dict(common,**day) for day in daily_by_case.get(r['index'],()))
         for t in r.get('temperatures',[]):temperatures.append(dict(common,**t))
         for s in r.get('rooms',[]):systems.append(dict(common,**s))
         if r['review_info']:reviews.append(dict(common,**r['review_info']))
-    return dict(sites=sites,monthly=monthly,room_temperatures=temperatures,system_loads=systems,climates=data['classes']),reviews
+    return dict(sites=sites,monthly=monthly,daily=daily,room_temperatures=temperatures,system_loads=systems,climates=data['classes']),reviews
 
 
 def load_export(ident, root=ROOT):
@@ -151,23 +153,24 @@ def export(data, root=ROOT, selection=None, inventory_sha256=None):
     with tempfile.TemporaryDirectory(prefix='prep-',dir=parent) as temp:
         stage=Path(temp)/'package'
         stage.mkdir()
+        daily_by_case={}
         if pairs:
-            inventory=inspect(data,root,pairs,stage)
+            inventory=inspect(data,root,pairs,stage,daily_by_case)
             if inventory_sha256!=inventory['inventory_sha256']:
                 raise ValueError('可导出的时序资料已变化，请重新打开导出选项。')
             available={(r['group'],r['frequency']) for r in inventory['choices']}
             if not set(pairs)<=available:raise ValueError('所选指标缺少对应频率的原始数据。')
             write_json(stage/'series-index.json',dict(selection=pairs,**inventory),root)
-        return _publish(data,root,stage,pairs,inventory_sha256 if pairs else None)
+        return _publish(data,root,stage,pairs,inventory_sha256 if pairs else None,daily_by_case)
 
 
-def _publish(data,root,stage,pairs,inventory_sha256):
+def _publish(data,root,stage,pairs,inventory_sha256,daily_by_case):
     key=digest(dict(annotations=sha(ROOT/'review_annotations.py'),dataset=data['dataset_sha256'],exporter=sha(ROOT/'batch_results.py'),reviewer=sha(ROOT/'review_evidence.py'),csv_writer=sha(ROOT/'result_exports.py'),
                     selection=pairs,inventory=inventory_sha256,series=sha(ROOT/'batch_timeseries.py'),reader=sha(ROOT/'result_timeline.py')))
     ident='batch_export_'+key[:32];folder=owned(Path(root)/'data/batch-exports'/ident,root)
     if folder.exists():return load_export(ident,root)[1]
     write_json(stage/'dataset.json',data,root)
-    outputs,reviews=tables(data)
+    outputs,reviews=tables(data,daily_by_case)
     from review_annotations import annotate,export_notes
     export_notes(stage,data,root)
     for name,rows in outputs.items():
@@ -230,7 +233,9 @@ def detail_note(pairs):
         return '本次选择了基础汇总。'
     from batch_timeseries import GROUPS
     chosen='、'.join(GROUPS[g]+' / '+f for g,f in pairs)
-    return (f'本次时序选择为 {chosen}。case-*.csv 按算例保存正式模拟的实际读数。'
+    daily_note=('请先打开 daily.csv 查看整栋建筑每日的供暖、制冷及合计（kWh），每个地点的每个算例每天一行。'
+                '仅列有完整系统逐日读数的算例，缺项原因见 series-index.json。\n') if ('loads','Daily') in pairs else ''
+    return (daily_note+f'本次时序选择为 {chosen}。case-*.csv 按算例保存正式模拟的实际读数。'
             'series-index.json 列出各地点的可用频率、明细文件、行数及缺失原因。\n'
             '选择作息数值后，共享作息的读数保存一次。用同一算例的 *-schedule-names.csv 将原作息名对应到时序 CSV 的对象列。\n'
             '时间为模拟当地的区间结束时刻。负荷原单位 J，除以 3600000 得 kWh。'

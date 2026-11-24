@@ -29,6 +29,21 @@ def current(root=ROOT):
     from workspace_setup import registration
     from example_setup import merge as merge_example
     value=merge_example(value,root)
+    bundle=value.get('global_bundle',{})
+    if bundle.get('jobs') and 'building_source' not in bundle:
+        # Old catalogues kept these import-time fields in the reference recipe.
+        # Isolate the building metadata before any editable records are loaded.
+        frozen=root/'data/frozen-building-source.json'
+        if frozen.is_file():
+            descriptor=read_json(frozen)
+            if descriptor['catalog_sha256']!=bundle['catalog_sha256'] or digest(descriptor['content'])!=descriptor['sha256']:
+                raise ValueError('冻结建筑来源与当前导入目录不一致。')
+            bundle['building_source']=descriptor['content']
+        elif 'global_w00' in value['records']:
+            from legacy_import import building_descriptor
+            bundle['building_source']=building_descriptor(value['records']['global_w00'])
+        else:
+            raise ValueError('冻结建筑来源描述缺失，请从该建筑的已校验导入资料恢复。')
     from example_controls import merge as merge_controls
     value=merge_controls(value,root)
     runtime=registration(root)
@@ -36,6 +51,13 @@ def current(root=ROOT):
     from weather_import import merge
     from source_locations import attach
     return attach(merge(value,root),root)
+
+def persist_building_source(root, catalog):
+    bundle = catalog.get('global_bundle') or {}
+    frozen = Path(root)/'data/frozen-building-source.json'
+    if bundle.get('jobs') and not frozen.exists():
+        content = bundle['building_source']
+        write_json(frozen, dict(catalog_sha256=bundle['catalog_sha256'], content=content, sha256=digest(content)), root)
 
 def import_sources(root=ROOT):
     from legacy_import import Importer

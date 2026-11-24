@@ -2,12 +2,16 @@
 import copy
 
 MODELS={
+ 'phase_change_layer_v1':'pcm',
+ 'spectral_exterior_v1':'spectral',
  'optical_surface_v1':'optical',
  'solid_layer_v1':'storage',
  'solid_variable_v1':'storage',
  'equivalent_resistance_no_layer_storage':'resistance',
 }
 MODES=[
+ dict(id='pcm',name='相变材料 PCM',storage=True,resistance=True,description='表面光学层覆盖相变层，向内连接原墙体。',inputs='有效热物性、固液相线、有效潜热或含量。',capability='外墙固定相变层，逐步计算焓与温度。'),
+ dict(id='spectral',name='辐射界面解耦与对照',storage=True,resistance=True,description='分别计算 PE 外层、发射层与天空的分波段换热。',inputs='载体热物性、PE 热阻、短波及长波窗口参数。',capability='室外不透明墙，可比较覆盖层、裸层和常规宽带面。'),
  dict(id='optical',name='仅表面光学',storage=False,resistance=False,
       description='忽略新增材料自身的热阻和蓄热，只改变覆盖后的表面光学；原墙体继续传热和储热。限贴覆不透明墙面／屋面。',
       inputs='覆盖后的太阳吸收率或反射率、长波发射率；可见光参数按需填写。',
@@ -19,7 +23,7 @@ MODES=[
  dict(id='resistance',name='仅计热阻，不计自身蓄热',storage=False,resistance=True,
       description='用等效热阻表示新增材料层，忽略该层蓄热；原墙体蓄热仍保留。热阻可直接填写或由厚度和导热率计算。',
       inputs='现有等效热阻路线的两个状态及 A/B 两组光学参数；不填写密度、比热。',
-      capability='当前不能用于新版可调热阻工况。固定态及固定热阻下的表面光学切换仍受建筑和接法限制，采用时核对；不自动作为任意建筑的通用层。'),
+      capability='当前不能用于新版可调热阻工况。固定态可按建筑实际外墙选择铺设范围、热阻状态和朝外光学组。'),
 ]
 
 def mode(definition):return MODELS.get(definition.get('model'))

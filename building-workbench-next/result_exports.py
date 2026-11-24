@@ -5,6 +5,7 @@ import json
 import math
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import uuid
 import zipfile
@@ -60,17 +61,40 @@ def load_export(ident,root=ROOT):
     return folder,receipt
 
 
-def export(data, root=ROOT):
+def export(data, root=ROOT, map_view=None):
     root=Path(root).resolve()
     if data['blocked'] or not data['paired_sites']:raise ValueError('当前没有可导出的有效配对，请先检查结果来源和排除原因。')
-    kind=figure_kind(data);assets=map_assets(root) if kind=='climate' else None
+    if map_view is not None and not isinstance(map_view,dict):
+        raise ValueError('请选择有效的地图分区和样式。')
+    view=map_view or {}
+    division=view.get('division','climate');style=view.get('style','standard');metric=view.get('metric',data['metric'])
+    if division not in ('climate','country') or style not in ('standard','pair') or (view and metric not in ('heating','cooling','total')):
+        raise ValueError('未知的地图分区或样式。')
+    custom=division=='country' or style=='pair' or bool(view and figure_kind(data)!='climate')
+    if custom and (data['metric']=='temperature' or not data.get('normalized') or metric not in ('total','heating','cooling')):
+        raise ValueError('分区需求图需要已核实温控面积及配对的冷热需求。')
+    if custom and division=='climate' and not any(c['valid_sites'] for c in data['classes']):
+        raise ValueError('所选结果中没有可映射的气候类型。')
+    kind='regional' if custom else figure_kind(data)
+    assets=map_assets(root) if kind=='climate' or (custom and division=='climate') else None
     notices={'MAP_ATTRIBUTION.md':ROOT/'third_party/THIRD_PARTY_MAPS.md','atlas-LICENSE.txt':ROOT/'third_party/atlas-LICENSE.txt'} if assets else {}
-    key=digest(dict(annotations=sha(ROOT/'review_annotations.py'),dataset=data['dataset_sha256'],map=assets['manifest'] if assets else None,notices={k:sha(v) for k,v in notices.items()},figure=kind,exporter=sha(ROOT/'result_exports.py'),plotter=sha(ROOT/'plot_comparison.py')))
+    saved_view=dict(division=division,style=style,metric=metric) if view else {}
+    regional_options=saved_view.copy()
+    if custom:
+        from runtime_settings import figure_font
+        font=figure_font(root)
+        regional_options=dict(division=division,style=style,metric=metric,font=sha(font),renderer=sha(ROOT/'plot_regional.py'))
+        if division=='country':
+            regions=ROOT/'static/map/regions.json'
+            regional_options['regions_sha256']=sha(regions)
+            notices['MAP_ATTRIBUTION.md']=ROOT/'third_party/THIRD_PARTY_MAPS.md'
+    key=digest(dict(annotations=sha(ROOT/'review_annotations.py'),dataset=data['dataset_sha256'],map=assets['manifest'] if assets else None,notices={k:sha(v) for k,v in notices.items()},figure=kind,exporter=sha(ROOT/'result_exports.py'),plotter=sha(ROOT/'plot_comparison.py'),**regional_options))
     ident='comparison_export_'+key[:32];folder=owned(root/'data/comparison-exports'/ident,root)
     if folder.exists():return load_export(ident,root)[1]
     stage=folder.parent/('.preparing_'+uuid.uuid4().hex);stage.mkdir(parents=True)
     write_json(stage/'dataset.json',data,root)
     if assets:write_json(stage/'map.json',assets,root)
+    if custom and division=='country':shutil.copyfile(regions,stage/'map-regions.json')
     for name,source in notices.items():
         (stage/name).write_bytes(source.read_bytes())
     summaries=data.get('pairing_summaries')
@@ -163,19 +187,33 @@ dataset.json 保留原始数据标识、方案版本、来源批次及复核证�
 left 为参考、right 为研究；saved 为参考减研究。空白保留为缺失。
 本包保留逐地点数据与来源，不生成全灰地图或地图矩阵。
 '''
+    if custom:
+        readme=readme.split('Origin 编辑：')[0]+'''分区地图
+map-sites.csv 记录有效配对站点及匹配的分区；空分区表示未纳入地图。
+map-groups.csv 中的 sites 和 percent_sites 分别表示单位面积降低量、降低率采用的站点数。
+按分区对地点等权平均；参考需求为零的站点保留绝对降低量，降低率留空。
+percent 为百分比，kWh_m2 与 MJ_m2 是所选时段单位温控面积降低量。短时段不作年度外推。
+figure.svg、figure.pdf、figure.png 对应页面所选地图。绘图数据来自同一份 dataset.json。
+'''
     from research_input_notes import export_text
     notes=[('参考' if side=='left' else '研究')+'：'+export_text(note) for side,note in data.get('research_input_notes',{}).items() if note]
     if notes:readme='研究输入适用性\n'+'\n'.join(notes)+'\n数值警告接受与研究输入是否符合约定分别核对。\n\n'+readme
-    if assets:readme+='\n地图署名与许可见 MAP_ATTRIBUTION.md 和 atlas-LICENSE.txt。单独分享或修改地图时应保留来源、许可链接与修改说明。\n'
+    if notices:readme+='\n地图来源与许可见 MAP_ATTRIBUTION.md。\n'
     if wall_rows:
         readme+='\nwall-coverage.csv 逐地点列出两侧的墙号、房间、净面积和材料状态。left 为参考，right 为研究。covered 为是否铺设，thermal 为反馈或固定；未铺墙保留基准构造。sites.csv 的 covered_m2 和 feedback_m2 分别为铺设、反馈净面积。\n'
     (stage/'编辑说明.txt').write_text(readme,encoding='utf-8-sig')
     if kind:
         from runtime_settings import plotting_python
         python=plotting_python(root)
-        run=subprocess.run([str(python),'-X','utf8',str(ROOT/'plot_comparison.py'),str(stage)],capture_output=True,text=True,encoding='utf-8',
-            timeout=90,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-        if run.returncode:raise ValueError('论文图导出失败：'+run.stderr[-600:])
+        args=[str(python),'-X','utf8',str(ROOT/'plot_comparison.py'),str(stage)]
+        if custom:args.extend([division,style,metric,str(font)])
+        elif view:args.append(metric)
+        try:
+            run=subprocess.run(args,capture_output=True,text=True,encoding='utf-8',timeout=90,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            if run.returncode:raise ValueError('论文图导出失败：'+run.stderr[-600:])
+        except (OSError,subprocess.SubprocessError,ValueError):
+            shutil.rmtree(stage)
+            raise
     if summaries:
         with (stage/'编辑说明.txt').open('a',encoding='utf-8') as handle:
             handle.write('\n配对口径：pairing-summary.csv 并列严格配对与含已确认豁免的汇总。负荷列为有效配对地点的等权均值（kWh/地点）。'
@@ -186,9 +224,10 @@ left 为参考、right 为研究；saved 为参考减研究。空白保留为缺
     with zipfile.ZipFile(stage/'comparison.zip','w',zipfile.ZIP_DEFLATED) as archive:
         for p in sorted(stage.iterdir()):
             if p.name!='comparison.zip':archive.write(p,p.name)
-        archive.writestr('receipt.json',json.dumps(dict(dataset_sha256=data['dataset_sha256'],files={p.name:sha(p) for p in stage.iterdir() if p.name!='comparison.zip'},new_simulations=0),ensure_ascii=False,indent=2))
+        archive.writestr('receipt.json',json.dumps(dict(dataset_sha256=data['dataset_sha256'],files={p.name:sha(p) for p in stage.iterdir() if p.name!='comparison.zip'},map_view=saved_view,new_simulations=0),ensure_ascii=False,indent=2))
     receipt=dict(id=ident,created=now(),dataset_sha256=data['dataset_sha256'],paired_sites=data['paired_sites'],figure_kind=kind,
         files={p.name:sha(p) for p in stage.iterdir()},new_simulations=0,source_results_modified=False)
+    if saved_view:receipt['map_view']=saved_view
     write_json(stage/'receipt.json',receipt,root)
     # Same snapshot exported concurrently may already have been atomically published.
     try:stage.rename(folder)

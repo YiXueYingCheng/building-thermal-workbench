@@ -75,7 +75,22 @@ function syncPageSections(){
 }
 function schedulePageSections(){if(!sectionFrame)sectionFrame=requestAnimationFrame(syncPageSections);}
 const renderBeforePageNavigation=render;
-render=function(){renderBeforePageNavigation();syncPageSections();};
+render=function(){
+ const rail=S.view==='editor'?app.querySelector('.sidebar .record-list'):null;
+ const sidebar=rail?.closest('.sidebar');
+ const saved=sidebar?{sidebar:sidebar.scrollTop,list:rail.scrollTop,page:window.scrollY,
+  focused:sidebar.contains(document.activeElement)?document.activeElement.dataset.record:null}:null;
+ renderBeforePageNavigation();
+ syncPageSections();
+ if(saved){
+  const list=app.querySelector('.sidebar .record-list'),side=list?.closest('.sidebar');
+  if(side){
+   if(saved.focused)Array.from(list.querySelectorAll('[data-record]')).find(b=>b.dataset.record===saved.focused)?.focus({preventScroll:true});
+   list.scrollTop=saved.list;side.scrollTop=saved.sidebar;
+   if(window.scrollY!==saved.page)window.scrollTo({top:saved.page,behavior:'instant'});
+  }
+ }
+};
 const actionBeforePageNavigation=action;
 action=async function(button){const previous=S.view;await actionBeforePageNavigation(button);if(button.dataset.view&&S.view!==previous){window.scrollTo({top:0,behavior:'instant'});syncPageSections();}};
 document.addEventListener('click',event=>{

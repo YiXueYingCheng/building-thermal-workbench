@@ -7,7 +7,8 @@ from collections import Counter
 from foundation import digest
 from manage import current
 from record_store import Store
-from result_timeline import HEAT, COOL, control_metric, dictionary, require, source
+from result_timeline import (HEAT, COOL, building_daily_issue, check_daily_months, control_metric,
+                             daily_points, day_number, dictionary, require, source, systems)
 from schedule_sharing import aliases_by_source
 
 
@@ -135,7 +136,7 @@ def write_schedule_names(raw, variables, path):
                 writer.writerows((csv_text(name),csv_text(source)) for name in aliases[source])
 
 
-def inspect(data, root, selection=(), stage=None):
+def inspect(data, root, selection=(), stage=None, daily_by_case=None):
     record = Store(current(root),root).get(data['record_id'],data['revision'])
     require(digest(record)==data['record_sha256'],'方案版本与批次登记不一致，请刷新。')
     targets = channel_targets(record)
@@ -160,7 +161,8 @@ def inspect(data, root, selection=(), stage=None):
                     AND COALESCE(t.WarmupFlag,0)=0''',(env,))}
                 variables = {}
                 options = set()
-                for row in dictionary(db):
+                rows = dictionary(db)
+                for row in rows:
                     ident = row['ReportDataDictionaryIndex']
                     group = series_group(row,targets)
                     if not group or ident not in present:
@@ -170,6 +172,20 @@ def inspect(data, root, selection=(), stage=None):
                     if pair in selection:
                         variables[ident] = group,row
                 entry.update(available=sorted(options),sql_sha256=proof['sql_sha256'])
+                if ('loads','Daily') in options:
+                    try:
+                        daily_systems = systems(rows)
+                        issue = building_daily_issue(rows,raw,daily_systems)
+                    except ValueError as error:
+                        issue = str(error)
+                    entry['building_daily_issue'] = issue
+                    if daily_by_case is not None and ('loads','Daily') in selection and not issue:
+                        writing_details = True
+                        last = day_number('%02d-%02d' % tuple(raw['period'][2:]),raw['period'])
+                        points = daily_points(db,env,raw,daily_systems,1,last)
+                        check_daily_months(raw,points)
+                        daily_by_case[case['index']] = [dict(date=p['date'],month=p['time']['Month'],day=p['time']['Day'],
+                            heating_kWh=p['heating_kWh'],cooling_kWh=p['cooling_kWh'],total_kWh=p['total_kWh']) for p in points]
                 if stage is not None and variables:
                     writing_details = True
                     name = f"case-{case['index']+1:03d}.csv"

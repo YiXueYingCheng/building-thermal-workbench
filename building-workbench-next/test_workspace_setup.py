@@ -88,7 +88,7 @@ class WorkspaceSetupTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'先在工作区'):setup.import_numerics(current(self.root))
 
     def test_existing_record_keeps_frozen_engine(self):
-        catalog={'records':{'global_fixed':{'numerics':{'engine_files':{'old':'old-hash'}}}}}
+        catalog={'records':{},'global_bundle':{'building_source':{'numerics':{'engine_files':{'old':'old-hash'}}}}}
         self.assertEqual(setup.engine_files({'numerics':{}},catalog),{'old':'old-hash'})
         self.assertEqual(setup.engine_files({'numerics':{'engine_files':{'bound':'hash'}}},catalog),{'bound':'hash'})
 
@@ -117,6 +117,21 @@ class WorkspaceSetupTests(unittest.TestCase):
         template['name']='测试材料';template['states'][0]['resistance_m2K_W']=2
         saved=call('/api/components',{'kind':'material','name':'测试材料','content':template})
         self.assertEqual(saved['revision'],1)
+        # Saving directly and importing a file must enforce the same material boundary.
+        for path, key in [((), 'building_id'), (('states', 0), 'controls'), (('optics', 'A_R'), 'targets')]:
+            extra = copy.deepcopy(preset['content'])
+            target = extra
+            for part in path:
+                target = target[part]
+            target[key] = 'foreign scheme'
+            for route, body in [
+                ('/api/components', dict(kind='material', name=extra['name'], content=extra)),
+                ('/api/material-library/import-preview', dict(schema='workbench-material/v1', source_revision=1, material=extra)),
+            ]:
+                with self.subTest(route=route, field=key), self.assertRaises(HTTPError) as rejected:
+                    call(route, body)
+                self.assertEqual(rejected.exception.code, 400)
+        self.assertEqual(call('/api/material-library')['versions'], [saved])
         invalid=copy.deepcopy(template);invalid['states'][0]['resistance_m2K_W']=-1
         with self.assertRaises(HTTPError) as error:call('/api/components',{'kind':'material','name':'错误','content':invalid})
         self.assertEqual(error.exception.code,400)

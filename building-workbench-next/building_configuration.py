@@ -95,9 +95,9 @@ def validate_content(content,base):
 
 def resolve(record,catalog,base):
  f=record['factors'];b=copy.deepcopy(f['building']);profile=b.pop('usage_profile',None);b.pop('library_constructions',None)
- if record['provenance']['adapter']!='global_frozen_v011' or b!=catalog['records']['global_fixed']['factors']['building']:raise ValueError('本轮建筑配置适配限于已核实的 Drawing26 全球来源。')
+ if record['provenance']['adapter']!='global_frozen_v011' or b!=catalog['global_bundle']['building_source']['building']:raise ValueError('本轮建筑配置适配限于已核实的 Drawing26 全球来源。')
  content=copy.deepcopy(verify(profile,'usage')['content'] if profile else base);validate_content(content,base)
- op=f['condition']['operation'];original_op=catalog['records']['global_fixed']['factors']['condition']['operation']
+ op=f['condition']['operation'];original_op=catalog['global_bundle']['building_source']['operation']
  if set(op)-{'mode','settings','load_basis','overrides'} or op.get('settings') not in (original_op['settings'],'drawing26_usage') or op.get('load_basis')!=original_op['load_basis']:raise ValueError('建筑运行含未适配字段，不能忽略后继续生成。')
  overrides=op.get('overrides',{})
  if not isinstance(overrides,dict) or set(overrides)-{r['id'] for r in content['rooms'] if r['conditioned']}:raise ValueError('工况覆盖只作用于本建筑配置已接入空调的房间。')
@@ -113,7 +113,7 @@ def resolve(record,catalog,base):
  references={x['id']:x for x in f['condition'].get('reference_runs',[])}
  if changed and any(c['channel']=='orientation' and c['mode']=='calendar' and references.get(c.get('reference_id'),{}).get('kind')!='workspace_daily_calendar_v1' for c in f['condition']['controls']):raise ValueError('建筑使用或温控已改变，原表面光学切换参考需重新核对；请先使用固定光学参数组，未自动生成新日历。')
  if op['mode'] not in ('controlled','natural','both'):raise ValueError('请选择明确运行模式。')
- shim=copy.deepcopy(record);shim['factors']['building']=b;shim['factors']['condition']['operation']=copy.deepcopy(catalog['records']['global_fixed']['factors']['condition']['operation'])
+ shim=copy.deepcopy(record);shim['factors']['building']=b;shim['factors']['condition']['operation']=copy.deepcopy(catalog['global_bundle']['building_source']['operation'])
  return shim,effective
 
 def preview(record,catalog,root=None):
@@ -124,20 +124,23 @@ def preview(record,catalog,root=None):
   from construction_library import apply
   apply(model,record)
  walls=[]
- for ident in catalog['records']['global_fixed']['factors']['building']['wall_ids']:
+ from surface_materials import target_rows
+ for target in target_rows(model):
+  if target['type']!='Wall':continue
+  ident=target['id']
   surface=model['BuildingSurface:Detailed'][ident];construction=model['Construction'][surface['construction_name']]
   layers=[construction['outside_layer']]+[construction[k] for k in sorted(construction,key=lambda k:int(k[6:]) if k.startswith('layer_') else 0) if k.startswith('layer_')]
   details=[]
   for name in layers:
    matches=[k for k in ('Material','Material:NoMass','Material:AirGap') if name in model.get(k,{})]
    details.append(dict(name=name,kind=matches[0] if len(matches)==1 else 'unavailable',values=copy.deepcopy(model[matches[0]][name]) if len(matches)==1 else {}))
-  walls.append(dict(id=ident,zone=surface['zone_name'],construction=surface['construction_name'],layers=layers,layer_details=details,feedback_eligible=ident in catalog['records']['global_fixed']['factors']['condition']['controls'][0]['target_ids']))
+  walls.append(dict(id=ident,zone=surface['zone_name'],construction=surface['construction_name'],layers=layers,layer_details=details))
  profile=record['factors']['building'].get('usage_profile');content=profile['content'] if profile else base
  from usage_schedules import source_snapshot,gain_defaults
  from foundation import ROOT
  sources=source_snapshot(root or ROOT)
  if sources.get('baseline_sha256',base['baseline_sha256'])!=base['baseline_sha256']:raise ValueError('房间说明与当前建筑配置来源不匹配。')
- return dict(base=base,selected=content,walls=walls,source_model=job['model'],eligible=record['provenance']['adapter']=='global_frozen_v011',material_template=catalog['records']['global_fixed']['factors']['materials'],controls_template=catalog['records']['global_fixed']['factors']['condition']['controls'],usage_sources=sources['rooms'],gain_defaults=gain_defaults(model))
+ return dict(base=base,selected=content,walls=walls,source_model=job['model'],eligible=record['provenance']['adapter']=='global_frozen_v011',usage_sources=sources['rooms'],gain_defaults=gain_defaults(model))
 
 def compile_configured(record,site,catalog,reader,operation_mode=None):
  from model_adapter import compile_base_case,changes,VerifiedReader

@@ -30,7 +30,7 @@ def verified_result(root, path, checksum, identity):
     result = read_json(path)
     if result['identity'] != identity:
         raise ValueError('结果身份不符')
-    verify_artifacts(result)
+    verify_artifacts(result,root)
     return result
 
 

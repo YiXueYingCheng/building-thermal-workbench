@@ -17,7 +17,7 @@ from execution_results import verify
 import resources
 import cpu_budget
 import worker_runtime
-from resource_history import ResourceHistory, startup_wait_seconds
+from resource_history import CaseInputError, ResourceHistory, startup_wait_seconds
 
 class ProcessGroup:
     def __init__(self):
@@ -106,7 +106,7 @@ def complete_attempt(q,r,rc):
             elapsed_seconds=elapsed,peak_gib=r['peak'],peak_working_gib=r.get('peak_working'),peak_commit_gib=r.get('peak_commit'),
             exclusive=job.get('manual_start')=='exclusive',resources=r['policy'],
             resource_estimate=r['resource_estimate'],finished=now()),root)
-        load_review(root,job['plan']['id'],job['checksum'])
+        load_review(root,job['plan']['id'],job['checksum'],only_index=job['idx'])
         if sha(folder/'model.epJSON')!=job['case']['model_sha256']:raise ValueError('实际运行输入变化。')
         result=verify(folder,job['case'],rc,elapsed)
         result.update(identity=job['identity'],attempt=job['attempt'],peak_gib=r['peak'],
@@ -151,7 +151,7 @@ def run(root,idle_exit=False):
                 r['cpu'].sample(r['proc']._handle)
                 r['memory'].update(cpu_percent=r['cpu'].percent,cpu_peak_percent=r['cpu'].peak,
                     cpu_settling_seconds=max(0,cpu_budget.SETTLE_SECONDS-(time.monotonic()-r['started'])))
-                latest=history.history.estimate(r['resource_estimate']['key'])
+                latest=history.budget_for(r['resource_estimate']['key'])
                 r['memory']['reserved_gib']=max(r['resource_estimate']['reserved_gib'],latest['reserved_gib'],r['peak_working']*1.25+.05)
                 r['memory']['reserved_commit_gib']=max(r['resource_estimate']['reserved_commit_gib'],latest['reserved_commit_gib'],r['peak_commit']*1.25+.05)
                 rc=r['proc'].poll()
@@ -164,12 +164,20 @@ def run(root,idle_exit=False):
             try:
                 machine=resources.snapshot(root);foreign=sorted(set(engine_pids())-{r['proc'].pid for r in active.values()})
                 candidate=q.next_pending()
+                resource_estimate=None
                 if candidate:
-                    resource_estimate=history.estimate(candidate);estimate=resource_estimate['reserved_gib']
+                    try:
+                        resource_estimate=history.estimate(candidate)
+                    except CaseInputError as error:
+                        job=q.claim(expected=candidate)
+                        if job:fail_attempt(q,job,'input',error)
+                        reason=str(error)
+                if resource_estimate is not None:
+                    estimate=resource_estimate['reserved_gib']
                     budget=resources.dispatch_budget(policy,machine,[r['memory'] for r in active.values()],estimate,
                         per_job_commit_gib=resource_estimate.get('reserved_commit_gib'),exclusive=candidate.get('exclusive',False))
                     budget.update(completed_samples=resource_estimate['configuration_samples'],family_samples=resource_estimate['family_samples'],basis=resource_estimate['basis'],observed_family_peak_gib=resource_estimate['observed_family_peak_gib'])
-                    budget.update({k:resource_estimate.get(k) for k in ('reference_peak_gib','reference_commit_gib','used_samples','legacy_peak','reserved_commit_gib')})
+                    budget.update({k:resource_estimate.get(k) for k in ('reference_peak_gib','reference_commit_gib','used_samples','legacy_peak','reserved_commit_gib','budget_note')})
                     budget.update(batch=candidate['batch'],index=candidate['idx'])
                     disk_budget=output_storage.dispatch_capacity(root,candidate['batch'],policy,list(active.values()))
                     budget['storage']=disk_budget
@@ -179,8 +187,8 @@ def run(root,idle_exit=False):
                     reason='检测到其他 EnergyPlus 计算，等待其完成' if foreign else budget['reason']
                     if reason is None and settling>0:reason=f'等待新配置启动稳定：约 {settling:.0f} 秒后重新核对内存'
                     if reason is not None:budget.update(allowed=False,reason=reason)
-                elif active:reason='当前算例继续运行，没有可派发的排队项'
-                else:
+                elif not candidate and active:reason='当前算例继续运行，没有可派发的排队项'
+                elif not candidate:
                     with q.db() as c:waiting=c.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('pending','interrupted')").fetchone()[0]
                     reason='队列已暂停，等待继续' if waiting else '当前没有排队中的计算任务'
                 if candidate and reason is None:
@@ -188,15 +196,26 @@ def run(root,idle_exit=False):
                     if job:
                         # Keep engine paths below legacy Windows MAX_PATH, including outputs.
                         try:
+                            try:
+                                plan=load_review(root,job['plan']['id'],job['checksum'],only_index=job['idx'])
+                                context=history.context(job['batch'],job['idx'])
+                                if context['case']['identity']!=job['identity']:
+                                    raise ValueError('冻结算例与排队记录的身份不一致。')
+                            except CaseInputError:
+                                raise
+                            except (OSError,ValueError,KeyError,TypeError,IndexError) as error:
+                                raise CaseInputError('输入需核查：'+str(error)) from error
                             folder=output_storage.attempt_folder(root,job['attempt'])
                             folder.mkdir(parents=True,exist_ok=False)
                             if len(str(folder))+35>=260:raise ValueError('工作区路径过长，请将工作区放在更短的目录后运行。')
-                            plan=load_review(root,job['plan']['id'],job['checksum']);cached=q.cached(job['identity'])
-                            if history.context(job['batch'],job['idx'])['key']!=resource_estimate['key']:raise ValueError('派发前内存分类输入变化，请重新核对。')
+                            cached=q.cached(job['identity'])
                             if cached:q.finish(job,'reused',cached)
                             else:
                                 c=job['case'];source=owned(q.folder/'reviews'/plan['id']/c['model_file'],root)
-                                (folder/'model.epJSON').write_bytes(source.read_bytes());(folder/'run').mkdir()
+                                (folder/'model.epJSON').write_bytes(source.read_bytes())
+                                if sha(folder/'model.epJSON')!=c['model_sha256']:
+                                    raise CaseInputError('输入需核查：准备启动时模型内容发生变化。')
+                                (folder/'run').mkdir()
                                 if c.get('warmup_observer'):
                                     from execution_inputs import stage_observer
                                     stage_observer(folder,plan['code_hashes'])
@@ -213,7 +232,7 @@ def run(root,idle_exit=False):
                             run=active.pop(job['attempt'],None)
                             if run:
                                 run['proc'].terminate();run['proc'].wait(timeout=30);run['log'].close()
-                            fail_attempt(q,job,'launch',error)
+                            fail_attempt(q,job,'input' if isinstance(error,CaseInputError) else 'launch',error)
             except Exception as error:reason='暂停派发：'+str(error);print(traceback.format_exc(),flush=True)
             if time.monotonic()-last_status>2:
                 publish_status(root,dict(pid=os.getpid(),root=str(root),heartbeat=now(),active=len(active),resources=policy,machine=machine,foreign_engine_pids=foreign,reason=reason,per_job_reserved_gib=estimate,budget=budget,cpu_jobs=[dict(pid=r['proc'].pid,percent=r['cpu'].percent,peak_percent=r['cpu'].peak) for r in active.values()]));last_status=time.monotonic()

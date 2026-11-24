@@ -55,8 +55,21 @@ def usage_templates():
     return choices + extra, {**donors, **more}
 
 
-def material_presets():
+def material_presets(issues=None):
+    from research_materials import presets
+    try:
+        row = eca_preset()
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        if issues is not None:
+            issues.append('ECA 示例暂不可用：' + str(exc))
+        return presets()
+    return [row, *presets()]
+
+
+def eca_preset():
+    from material_catalog import import_definition
     path = bundled_file('examples/materials/ECA.json')
     content = read_json(path)
-    return [dict(id='builtin_eca', revision=1, name=content['name'], builtin=True,
-                 content=content, license='CC BY 4.0', source='随包已授权 ECA 示例', source_sha256=sha(path))]
+    import_definition(dict(schema='workbench-material/v1', source_revision=1, material=content))
+    return dict(id='builtin_eca', revision=1, name=content['name'], builtin=True,
+                 content=content, license='CC BY 4.0', source='随包已授权 ECA 示例', source_sha256=sha(path))

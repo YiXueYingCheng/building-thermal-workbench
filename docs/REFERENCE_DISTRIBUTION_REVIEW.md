@@ -47,3 +47,7 @@ EP-EXAMPLE 的 8 个材料与 3 个构造已对照 [EnergyPlus 26.1.0 PurchAirTa
 本清单记录 v0.73.11 的分发审阅。已比对两个发布标签，v0.73.14 的 `resources/reference-library/`、条目清单、来源摘要和分发验收记录均与 v0.73.11 一致。这次核对覆盖上列 1,028 项。后续新增或替换条目时，须另行核对其来源与分发条件。
 
 [参考库分发验收记录](REFERENCE_DISTRIBUTION_VALIDATION.json) · [既有安装、升级与求解验收](LOCAL_INSTALL_ACCEPTANCE.md)
+
+## C18 与 PE 研究材料示例
+
+自 v0.73.15 起，作者授权随程序公开 C18 相变层与 PE 光谱层两套示例的具体参数。材料库显示数值及建模假设，其中 PE 示例的太阳透射率为假设值。使用者可复制材料、填写自己的参数并保存版本。

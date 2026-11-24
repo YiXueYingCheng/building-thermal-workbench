@@ -115,6 +115,7 @@ function planDifferencesView(){return `<section class="plan-differences"><div cl
 function planVersionLabel(r){return typeof r.revision==='number'?'版本 '+r.revision:'原来源版本';}
 function planVersionPick(side){
  const rows=S.planHistories[side]||[],current=S.comparison?.[side];
+ if(!rows.length&&current)return `<label class="field">${side==='left'?'基准方案':'研究方案'}的保存版本<select disabled><option>${esc(planVersionLabel(current))} · 比较保存的快照</option></select></label>`;
  return `<label class="field">${side==='left'?'基准方案':'研究方案'}的保存版本<select data-compare-version="${side}">${rows.map((r,i)=>`<option value="${esc(r.revision)}"${String(current?.revision)===String(r.revision)?' selected':''}>${esc(planVersionLabel(r)+(i===0?' · 最新保存':'')+' · '+versionNoteLabel({id:current?.id,revision:r.revision})+' · '+readableTime(r.saved_at))}</option>`).join('')}</select></label>`;
 }
 function capturePlanComparisonDraft(){

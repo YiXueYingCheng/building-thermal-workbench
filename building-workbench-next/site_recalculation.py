@@ -88,17 +88,34 @@ def submit(q, parent, index, attempt, step, purpose='recovery'):
         job = parent_job(db, parent, index, attempt,purpose)
         history = [r for r in links(db,parent) if r['idx']==index and r['step']==step and r['purpose']==purpose]
         previous = history[-1] if history else None
+    reviews = q.folder/'reviews'
+    source = owned(reviews/job['review'], reviews)
+    record = read_json(source/'record.json')
+    pinned = loads(job['plan'])
+    if digest(record) != pinned['record_sha256']:
+        raise ValueError('方案快照变化。')
+    validate_step(record, pinned['cases'][index]['step_minutes'], step, purpose)
     original = load_review(q.root, job['review'], job['checksum'], historical=True, only_index=index)
     case = original['cases'][index]
     if case['identity'] != job['identity'] or case['index'] != index:
         raise ValueError('原地点算例与清单不符。')
-    reviews = q.folder/'reviews'
-    source = owned(reviews/original['id'], reviews)
-    record = read_json(source/'record.json')
-    validate_step(record, case['step_minutes'], step, purpose)
     if previous and previous['status'] not in ('failed','cancelled','interrupted'):
         return dict(id=previous['child'],reused_submission=True)
     model = read_json(owned(source/case['model_file'], source))
+    # A new child gets its own local physical filenames. Keep the parent bytes,
+    # attempt and checksum intact, including the original schedule-sharing report.
+    from history_locations import engine_location, input_path
+    engine, files = engine_location(q.root, original)
+    original = dict(original, engine=engine, engine_files=files)
+    case = dict(case)
+    deps = case['dependencies']
+    rebound = {p:str(input_path(q.root,p,h)) for p,h in deps.items()}
+    for schedule in model.get('Schedule:File',{}).values():
+        path = schedule['file_name']
+        if path not in deps:raise ValueError('冻结模型含未登记的作息文件。')
+        schedule['file_name'] = rebound[path]
+    case['weather'] = rebound[case['weather']]
+    case['dependencies'] = {rebound[p]:h for p,h in deps.items()}
     change_model_step(model, record, case['step_minutes'], step, purpose)
     sharing = case.get('schedule_sharing') or share_files(
         model, case['dependencies'], trusted_observer=OBSERVER if case.get('warmup_observer') else None)

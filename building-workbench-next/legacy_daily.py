@@ -23,11 +23,12 @@ DATES=[dt.date(2007,1,1)+dt.timedelta(days=i) for i in range(365)]
 def discover(catalog, root=ROOT):
     """Only sources already bound by the frozen registry and its batch index."""
     rows=[];issues=[];reader=VerifiedReader(catalog);registry=catalog.get('dynamic_registry',{}).get('records',{})
-    batch_refs={};profiles={}
+    batch_refs={}
+    profiles={p['path']:p for p in catalog.get('legacy_daily_site_profiles',[])}
     for ident,binding in registry.items():
         ref=binding['reference']['reference']
         if ref.get('kind')=='legacy_W00_reference':batch_refs[ref['source_ref']['path']]=ref['source_ref']
-        original=catalog['records'][ident]['provenance'].get('original',{})
+        original=catalog['records'].get(ident,{}).get('provenance',{}).get('original',{})
         p=original.get('dynamic_site')
         if p:profiles[p['path']]=p
     for ref in batch_refs.values():
@@ -175,7 +176,8 @@ def build(record,catalog,root=ROOT):
         row=dict(site_id=sid,city=site['name'],sources=[],status='no_registered_source');out['rows'].append(row)
         found=[s for s in sources if s['weather_sha256']==w]
         current=None
-        if found and ref and f['building']['id']==catalog['records']['global_w00']['factors']['building']['id']:
+        frozen_building=catalog.get('global_bundle',{}).get('building_source',{}).get('building',{}).get('id')
+        if found and ref and f['building']['id']==frozen_building:
             try:
                 m,report=compile_case(ref,sid,catalog,reader,operation_mode='controlled')
                 reader.check(report['weather']);current=model_value(m,ROOT,reader)
@@ -183,7 +185,7 @@ def build(record,catalog,root=ROOT):
         for source in found:
             if source['id'] not in checked:checked[source['id']]=inspect(source,catalog,reader)
             item=copy.deepcopy(checked[source['id']]);item['input_match']=False
-            if f['building']['id']!=catalog['records']['global_w00']['factors']['building']['id']:
+            if f['building']['id']!=frozen_building:
                 item['compatibility']='旧资料属于 Drawing26，不能替代当前建筑的原构造参考。'
             elif not current:item['compatibility']='当前独立参考模型尚未核对。'
             elif item['daily_checks_passed']:

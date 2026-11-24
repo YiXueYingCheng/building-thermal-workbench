@@ -1,14 +1,14 @@
 """On-demand output inventory and bounded daily loads. No solver or source writes.
 
-First slice: show actual output frequencies, then read one original system and
-at most 31 days. Hourly/state linkage requires separately validated outputs.
+Daily building totals cover the saved period. Single-system queries support up to 31 days.
 """
 from contextlib import contextmanager, closing
 from pathlib import Path
+from itertools import groupby
 import datetime as dt
 import calendar
 import json, math, sqlite3, time
-from foundation import now
+from foundation import digest, now
 from schedule_sharing import display_dictionary
 from execution_results import HEAT, COOL
 from result_availability import jobs, check_file, path_checked, stamp
@@ -24,11 +24,8 @@ def require(ok, message):
     if not ok: raise ValueError(message)
 
 
-@contextmanager
-def source(root, batch, index, budget=30):
-    """Verify the registered summary and its exact SQL; guard concurrent changes."""
+def registered_source(root, batch, index, deadline):
     require(type(index) is int and index >= 0, '算例序号无效。')
-    started=time.monotonic();deadline=started+budget
     job=next((j for j in jobs(root,batch) if j['idx']==index),None)
     require(job is not None and job.get('result'), '此算例尚无已登记结果。')
     summary,sw=check_file(root,job['result'],job.get('result_sha256'),deadline)
@@ -43,12 +40,29 @@ def source(root, batch, index, budget=30):
     require(isinstance(artifacts,dict), '原始资料清单无效。')
     paths=[p for p in artifacts if Path(p).name.lower()=='eplusout.sql']
     require(len(paths)==1, '结果未登记唯一的 SQL 明细；不能从汇总还原逐日或逐时数据。')
-    sql,watch=check_file(root,paths[0],artifacts[paths[0]],deadline)
-    require(sql['status']=='verified', '原始 SQL 明细不可用（缺失、已清理或未通过核对）。'+sql.get('reason','')+' 汇总不能还原明细。')
     p=path_checked(root,paths[0])
-    def no_journal():
-        require(not any(Path(str(p)+s).exists() for s in ('-wal','-journal')), '原始结果存在写入日志，暂不读取明细。')
-    no_journal()
+    ensure_closed_sql(p)
+    try:
+        sql_stamp=stamp(p)
+    except OSError as exc:
+        raise ValueError('原始 SQL 明细不可用（缺失、已清理或未通过核对）。汇总不能还原明细。') from exc
+    token=digest([str(p),sql_stamp,p.stat().st_ctime_ns,str(sw[0]),sw[1],job,review_info])
+    return job,raw,review_info,sw,p,artifacts[paths[0]],sql_stamp,token
+
+
+def ensure_closed_sql(p):
+    require(not any(Path(str(p)+s).exists() for s in ('-wal','-journal')), '原始结果存在写入日志，暂不读取明细。')
+
+
+@contextmanager
+def source(root, batch, index, budget=30):
+    """Verify the registered summary and its exact SQL; guard concurrent changes."""
+    started=time.monotonic();deadline=started+budget
+    job,raw,review_info,sw,p,checksum,expected,token=registered_source(root,batch,index,deadline)
+    sql,watch=check_file(root,p,checksum,deadline)
+    require(sql['status']=='verified', '原始 SQL 明细不可用（缺失、已清理或未通过核对）。'+sql.get('reason','')+' 汇总不能还原明细。')
+    require(watch[1]==expected,'读取期间结果资料发生变化，请重新读取。')
+    ensure_closed_sql(p)
     verified=time.monotonic()
     with closing(sqlite3.connect(p.as_uri()+'?mode=ro',uri=True,timeout=3)) as db:
         db.row_factory=sqlite3.Row
@@ -59,13 +73,13 @@ def source(root, batch, index, budget=30):
             env=list(db.execute('SELECT EnvironmentPeriodIndex,EnvironmentType FROM EnvironmentPeriods'))
             require(len(env)==1 and env[0]['EnvironmentType']==3, '仅支持单一正式天气计算环境，不能混入设计日。')
             out=dict(batch=batch,index=index,identity=job['identity'],summary_sha256=job['result_sha256'],
-                     sql_sha256=artifacts[paths[0]],city=raw.get('city'),period=raw.get('period'),
+                     sql_sha256=checksum,view_token=token,city=raw.get('city'),period=raw.get('period'),
                      step_minutes=raw.get('step_minutes'),registered_status=job['status'],checked_at=now(),
                      acceptance_note=(review_summary(review_info) or review_info['label']+'；'+review_info['display_scope']) if review_info else ('警告待复核' if job['status']=='review' else '原结果自动校验通过'),
                      review_info=review_info,
                      note='只读已登记输出；不改变接受结论，不提交计算。日期按原模拟日历，未换算为当前年份或浏览器时区。')
             yield db,raw,env[0]['EnvironmentPeriodIndex'],out
-            no_journal()
+            ensure_closed_sql(p)
             require(all(stamp(path)==before for path,before in (sw,watch)), '读取期间结果资料发生变化，请重新读取。')
             require(next((j for j in jobs(root,batch) if j['idx']==index),None)==job, '读取期间任务登记变化，请重新读取。')
             out['timing']=dict(verification_seconds=round(verified-started,6),query_seconds=round(time.monotonic()-verified,6),
@@ -176,7 +190,13 @@ def monthly_controls(db, env, raw, dictionary_rows):
     return result
 
 
-def inventory(root,batch,index):
+def inventory(root,batch,index,known=None):
+    if known:
+        job,_,_,summary_watch,sql,_,sql_stamp,token=registered_source(root,batch,index,time.monotonic()+30)
+        if known==token and stamp(summary_watch[0])==summary_watch[1] and stamp(sql)==sql_stamp:
+            ensure_closed_sql(sql)
+            if next((j for j in jobs(root,batch) if j['idx']==index),None)==job:
+                return dict(view_token=token,unchanged=True)
     with source(root,batch,index) as (db,raw,env,out):
         rows=display_dictionary(dictionary(db),raw)
         times=[dict(t) for t in db.execute('''SELECT IntervalType,MIN(Interval) AS min_minutes,MAX(Interval) AS max_minutes,
@@ -195,6 +215,7 @@ def inventory(root,batch,index):
         out['monthly_loads'] = raw.get('monthly') or []
         out['monthly_controls'] = monthly_controls(db, env, raw, rows)
         out.update(frequencies=times,coverage=coverage,dictionary=rows,systems=sorted(daily),
+                   building_daily_issue=building_daily_issue(rows,raw,daily),
                    has_subdaily_time_records=detailed,max_days=MAX_DAYS,
                    hourly_note='发现小时／步级时间记录，可按原变量和对象读取有限日期范围；房间与表面位置不从对象名称自动推断。' if detailed else '本结果没有逐小时／逐步时间记录。求解步长不等于输出频率；月均室温和平均状态不能还原变化过程。',
                    state_note='状态／作息按原变量名称列出。平均状态值不代表瞬时状态，也不能据此推断精确切换时刻。')
@@ -249,33 +270,91 @@ def day_number(text,period):
     return (date-first).days+1
 
 
-def daily(root,batch,index,system,start,end):
-    with source(root,batch,index) as (db,raw,env,out):
-        first=day_number(start,raw['period']);last=day_number(end,raw['period'])
-        require(1<=last-first+1<=MAX_DAYS, '每次请选择连续 1—31 天；不会自动截断或抽样。')
-        items=systems(dictionary(db));require(system in items, '没有该系统成对的逐日供暖／制冷输出。')
-        ids=items[system];data=[dict(r) for r in db.execute('''SELECT t.TimeIndex,t.Year,t.Month,t.Day,t.Hour,t.Minute,t.Dst,t.Interval,
-            t.SimulationDays,r.ReportDataDictionaryIndex,r.Value FROM Time t JOIN ReportData r USING(TimeIndex)
-            WHERE t.EnvironmentPeriodIndex=? AND (t.WarmupFlag=0 OR t.WarmupFlag IS NULL) AND t.IntervalType=2
-            AND t.SimulationDays BETWEEN ? AND ? AND r.ReportDataDictionaryIndex IN (?,?)
-            ORDER BY t.SimulationDays,t.TimeIndex,r.ReportDataDictionaryIndex LIMIT ?''',
-            (env,first,last,ids[HEAT],ids[COOL],MAX_DAYS*2+1))]
-        require(len(data)==2*(last-first+1), '逐日记录缺失或重复；未补零，也未插值。')
-        points={};origin=dt.date(2025,*raw['period'][:2])
-        for r in data:
-            day=r['SimulationDays'];expected=origin+dt.timedelta(days=day-1)
+def building_daily_issue(rows, raw, paired):
+    """The building total must cover the systems used by the verified load summary."""
+    names = {r['system'].upper() for r in raw.get('rooms', []) if r.get('system')}
+    for row in rows:
+        if (row['Name'] in (HEAT, COOL) and not row['IsMeter']
+                and row['ReportingFrequency'] in ('Monthly', 'Run Period')):
+            names.add(row['KeyValue'].upper())
+    if not names:
+        return '缺少可核对的整栋建筑系统清单。'
+    daily_names = {r['KeyValue'].upper() for r in rows if r['Name'] in (HEAT, COOL)
+                   and r['ReportingFrequency']=='Daily' and not r['IsMeter']}
+    if names != {s.upper() for s in paired} or daily_names != names or len(paired) != len(names):
+        return '逐日供暖和制冷未完整覆盖建筑的全部系统。'
+    return ''
+
+
+def daily_points(db, env, raw, selected, first, last):
+    """Sum a complete pair from every selected system at each formal daily timestamp."""
+    kinds = {pair[HEAT]:'heating_kWh' for pair in selected.values()}
+    kinds.update({pair[COOL]:'cooling_kWh' for pair in selected.values()})
+    require(bool(kinds), '缺少成对的系统逐日冷热需求。')
+    ids = ','.join(str(int(i)) for i in kinds)
+    rows = db.execute(f'''SELECT t.TimeIndex,t.Year,t.Month,t.Day,t.Hour,t.Minute,t.Dst,t.Interval,
+        t.SimulationDays,r.ReportDataDictionaryIndex,r.Value FROM Time t JOIN ReportData r USING(TimeIndex)
+        WHERE t.EnvironmentPeriodIndex=? AND COALESCE(t.WarmupFlag,0)=0 AND t.IntervalType=2
+        AND t.SimulationDays BETWEEN ? AND ? AND r.ReportDataDictionaryIndex IN ({ids})
+        ORDER BY t.SimulationDays,t.TimeIndex,r.ReportDataDictionaryIndex''',(env,first,last))
+    origin = dt.date(2025,*raw['period'][:2])
+    points = []
+    for day, readings in groupby(rows, key=lambda r:r['SimulationDays']):
+        expected = origin + dt.timedelta(days=day-1)
+        require(day==first+len(points), '逐日记录缺失或重复。')
+        stamp = None
+        energy = {'heating_kWh':[], 'cooling_kWh':[]}
+        seen = set()
+        for r in readings:
             require((r['Month'],r['Day'])==(expected.month,expected.day) and r['Interval']==1440,
                     '日期或逐日统计间隔不符。')
-            require(type(r['Value']) in (int,float) and math.isfinite(r['Value']) and r['Value']>=0, '逐日需求包含无效数值。')
-            key='heating_kWh' if r['ReportDataDictionaryIndex']==ids[HEAT] else 'cooling_kWh'
-            stamp_fields={k:r[k] for k in ('TimeIndex','Year','Month','Day','Hour','Minute','Dst','Interval','SimulationDays')}
-            point=points.setdefault(day,dict(date=f"{r['Month']:02}-{r['Day']:02}",time=stamp_fields))
-            require(point['time']==stamp_fields and key not in point, '冷热数据的时间基准不一致或重复。')
-            point[key]=r['Value']/3.6e6
-        require(set(points)==set(range(first,last+1)) and all({'heating_kWh','cooling_kWh'}<=p.keys() for p in points.values()), '逐日成对数据不完整。')
-        for p in points.values():p['total_kWh']=p['heating_kWh']+p['cooling_kWh']
-        out.update(system=system,start=start,end=end,rows=list(points.values()),
-                   units='kWh',source_units='J',frequency='Daily',aggregation='Sum',
-                   meaning='每日显热需求累积量，不是用电量、瞬时功率或小时曲线。系统名称沿用原输出，不自动推断其房间归属。',
-                   sums={k:sum(p[k] for p in points.values()) for k in ('heating_kWh','cooling_kWh','total_kWh')})
+            if stamp is None:
+                stamp = {k:r[k] for k in ('TimeIndex','Year','Month','Day','Hour','Minute','Dst','Interval','SimulationDays')}
+            ident = r['ReportDataDictionaryIndex']
+            require(r['TimeIndex']==stamp['TimeIndex'] and ident not in seen, '系统冷热记录重复或时间基准不一致。')
+            require(isinstance(r['Value'],(int,float)) and math.isfinite(r['Value']) and r['Value']>=0,
+                    '逐日需求包含无效数值。')
+            seen.add(ident)
+            energy[kinds[ident]].append(r['Value'])
+        require(seen==kinds.keys(), '逐日冷热记录缺失，无法核对所选系统。')
+        point = {k:math.fsum(v)/3.6e6 for k,v in energy.items()}
+        points.append(dict(date=expected.strftime('%m-%d'),time=stamp,**point,total_kWh=sum(point.values())))
+    require(len(points)==last-first+1,'所选范围的逐日记录缺失。')
+    return points
+
+
+def check_daily_months(raw, points):
+    """Reconcile only months whose entire simulated date range is in the selection."""
+    period = raw['period']
+    for m in raw.get('monthly') or []:
+        month = m['month']
+        first = period[1] if month==period[0] else 1
+        last = period[3] if month==period[2] else calendar.monthrange(2025,month)[1]
+        days = [p for p in points if p['time']['Month']==month]
+        if len(days)==last-first+1:
+            for key in ('heating_kWh','cooling_kWh'):
+                require(math.isclose(math.fsum(p[key] for p in days), m[key], rel_tol=1e-8, abs_tol=1e-7),
+                        f'{month} 月建筑逐日冷热需求之和与原月度汇总不符。')
+
+
+def daily(root,batch,index,system,start,end,scope='system'):
+    require(scope in ('system','building'), '逐日需求范围无效。')
+    building = scope=='building'
+    with source(root,batch,index) as (db,raw,env,out):
+        first=day_number(start,raw['period']);last=day_number(end,raw['period'])
+        require(first<=last, '开始日期须早于或等于结束日期。')
+        require(building or last-first+1<=MAX_DAYS, '每次请选择连续 1—31 天；不会自动截断或抽样。')
+        rows=dictionary(db);items=systems(rows)
+        if building:
+            issue=building_daily_issue(rows,raw,items)
+            require(not issue,issue)
+        else:
+            require(system in items, '没有该系统成对的逐日供暖／制冷输出。')
+            items={system:items[system]}
+        points=daily_points(db,env,raw,items,first,last)
+        if building:check_daily_months(raw,points)
+        out.update(scope=scope,system='整栋建筑' if building else system,system_count=len(items),
+                   start=start,end=end,rows=points,units='kWh',source_units='J',frequency='Daily',aggregation='Sum',
+                   meaning=(f'合计 {len(items)} 个理想负荷系统。' if building else '')+'供暖和制冷均为每日累计显热需求，单位 kWh。',
+                   sums={k:math.fsum(p[k] for p in points) for k in ('heating_kWh','cooling_kWh','total_kWh')})
     return out

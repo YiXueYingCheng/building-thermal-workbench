@@ -19,7 +19,7 @@ def inspect(root,job):
     def check(label,ok,detail=''):
         require(ok,label+'未通过。');checks.append(dict(label=label,passed=True,detail=detail))
     check('绑定本次待复核结果',j['status']=='review' and binding(j)==job['binding'])
-    verify_artifacts(raw)
+    verify_artifacts(raw,root)
     check('模型、日志与结果原文件校验值一致',True)
     plan=load_review(root,b['review'],b['checksum'],historical=True);case=plan['cases'][j['idx']]
     check('保存方案、冻结输入与算例一致',case['identity']==j['identity'])
@@ -41,7 +41,7 @@ def inspect(root,job):
     fields=('status','site_id','city','mode','period','days','step_minutes','loads','monthly','rooms','temperatures','temperature_extrema','warnings','pending_warnings','checks','daily_reference','time_detail','output_contract')
     check('重新读取的数值和警告与原汇总一致',all(fresh.get(k)==raw.get(k) for k in fields))
     check('确有待用户判断的警告',bool(raw['pending_warnings']))
-    _,current,_=target(root,j['batch'],j['idx']);verify_artifacts(raw)
+    _,current,_=target(root,j['batch'],j['idx']);verify_artifacts(raw,root)
     check('核查期间原结果保持不变',binding(current)==binding(j))
     log=(run/'run/eplusout.err').read_text('utf-8',errors='replace')
     # Include the exact warning paragraphs and surrounding context, not merely

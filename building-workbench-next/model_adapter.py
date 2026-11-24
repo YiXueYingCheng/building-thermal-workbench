@@ -26,10 +26,10 @@ def fixed_capability(record,catalog):
     try:
         r=normalize(record);errors=validate(r,catalog['sites'])
         if errors:return dict(supported=False,reasons=errors)
-        f=r['factors'];reference=catalog['records']['global_w00']
-        if r['provenance']['adapter']!='global_frozen_v011' or f['building']!=reference['factors']['building']:
+        f=r['factors'];reference=catalog['global_bundle']['building_source']
+        if r['provenance']['adapter']!='global_frozen_v011' or f['building']!=reference['building']:
             raise NotSupported('当前模型生成支持已复核的 Drawing26 全球参考建筑。')
-        if f['condition']['operation']!=reference['factors']['condition']['operation']:
+        if f['condition']['operation']!=reference['operation']:
             raise NotSupported('当前生成器保留原温控运行、设定点与作息；自然室温及运行覆盖待适配。')
         if any(x.get('kind')!='workspace_daily_calendar_v1' for x in f['condition'].get('reference_runs',[])):
             raise NotSupported('带参考日历的表面光学控制将在动态适配阶段开放。')
@@ -46,7 +46,7 @@ def fixed_capability(record,catalog):
         if d['kind']!='single_layer' or d['model']!='equivalent_resistance_no_layer_storage' or {s['id'] for s in d['states']}!={'R','C'}:
             raise NotSupported('当前支持 R/C 独立状态的单层 ECA 等效热阻模型。')
         if app['position']!='exterior' or app['component']!='wall' or set(app['target_ids'])!=set(f['building']['wall_ids']):
-            raise NotSupported('当前支持原 14 段外墙的外侧应用；其他构件、层位与安装范围待适配。')
+            raise NotSupported('活动保温层的构件、层位或墙号与已核对的建筑输入不一致。')
         if app['orientation']!={'A':'cooling_face','B':'other_face'} or app['placement_basis']!='legacy_outer_equivalent_model':
             raise NotSupported('材料方向或应用模型已改变，需相应适配。')
         states={s['id']:s for s in d['states']}
@@ -67,12 +67,16 @@ def fixed_capability(record,catalog):
 
 class VerifiedReader:
     """One generation request owns its verification cache. No cross-request trust cache."""
-    def __init__(self,catalog=None):self.checked={};self.catalog=catalog;self.location_uses={}
+    def __init__(self,catalog=None,*,history_root=None):self.checked={};self.catalog=catalog;self.history_root=history_root;self.location_uses={}
     def check(self,ref):
         from source_locations import resolve
         actual,location=resolve(ref,self.catalog) if self.catalog else (ref,None)
         if location:self.location_uses[location['key']]=location
-        p=Path(actual['path']);expected=ref.get('expected_sha256') or ref['sha256'];key=(str(p),expected)
+        p=Path(actual['path']);expected=ref.get('expected_sha256') or ref['sha256']
+        if self.history_root:
+            from history_locations import input_path
+            p=input_path(self.history_root,p,expected)
+        key=(str(p),expected)
         if key not in self.checked:
             if sha(p)!=expected:raise ValueError('来源内容已变化：'+str(p))
             self.checked[key]=dict(path=str(p),sha256=expected)
@@ -202,9 +206,10 @@ def _build_bundle(record,catalog,root,site_ids=None,*,compact_check=False):
     for site in selected:
         for mode in modes:
             from source_locations import prepare_case
-            compiled.append(prepare_case(*compile_case(record,site,catalog,reader,operation_mode=mode),reader))
+            from spectral_solar import freeze
+            compiled.append(freeze(*prepare_case(*compile_case(record,site,catalog,reader,operation_mode=mode),reader),reader,engine_files,root))
     reader.unchanged()
-    identity=dict(recipe=recipe_digest(normalize(record)),record=digest(record),adapter_sha256=digest({p.name:sha(p) for p in [Path(__file__),Path(__file__).with_name('construction_library.py'),Path(__file__).with_name('material_types.py'),Path(__file__).with_name('surface_materials.py'),Path(__file__).with_name('surface_controls.py'),Path(__file__).with_name('dynamic_adapter.py'),Path(__file__).with_name('calendar_library.py'),Path(__file__).with_name('calendar_preview.py'),Path(__file__).with_name('weather_import.py'),Path(__file__).with_name('source_locations.py')]+([Path(__file__).with_name('building_configuration.py'),Path(__file__).with_name('component_library.py'),Path(__file__).with_name('usage_schedules.py')] if __import__('building_configuration').has_configuration(record) else [])+([Path(__file__).with_name(n) for n in ('ordinary_building.py','ordinary_envelope.py','ordinary_materials.py','ordinary_orientation.py','solid_eca.py','solid_feedback.py','queue_calendar.py','transition_confirmation.py','building_configuration.py','component_library.py','usage_schedules.py')] if record['provenance']['adapter']=='ordinary_building_v1' else [])}))
+    identity=dict(recipe=recipe_digest(normalize(record)),record=digest(record),adapter_sha256=digest({p.name:sha(p) for p in [Path(__file__),Path(__file__).with_name('research_materials.py'),Path(__file__).with_name('spectral_boundary.py'),Path(__file__).with_name('spectral_solar.py'),Path(__file__).with_name('construction_library.py'),Path(__file__).with_name('material_types.py'),Path(__file__).with_name('surface_materials.py'),Path(__file__).with_name('surface_controls.py'),Path(__file__).with_name('drawing_wall_scope.py'),Path(__file__).with_name('dynamic_adapter.py'),Path(__file__).with_name('calendar_library.py'),Path(__file__).with_name('calendar_preview.py'),Path(__file__).with_name('weather_import.py'),Path(__file__).with_name('source_locations.py')]+([Path(__file__).with_name('building_configuration.py'),Path(__file__).with_name('component_library.py'),Path(__file__).with_name('usage_schedules.py')] if __import__('building_configuration').has_configuration(record) else [])+([Path(__file__).with_name(n) for n in ('ordinary_building.py','ordinary_envelope.py','ordinary_materials.py','ordinary_orientation.py','solid_eca.py','solid_feedback.py','queue_calendar.py','transition_confirmation.py','building_configuration.py','component_library.py','usage_schedules.py')] if record['provenance']['adapter']=='ordinary_building_v1' else [])}))
     if reader.location_uses:identity['source_locations']=digest(reader.location_uses)
     if selected!=scope_sites:identity['selected_site_ids']=selected
     # Only private import checks use a short alias. Formal input IDs stay stable;
@@ -265,6 +270,9 @@ def compile_base_case(record,site_id,catalog,reader=None,operation_mode=None,ref
 
 def capability(record,catalog):
     import surface_materials
+    from drawing_wall_scope import fixed_partial
+    try:record=fixed_partial(record)
+    except (KeyError,ValueError,TypeError) as error:return dict(supported=False,reasons=[str(error)])
     if surface_materials.enabled(record):return surface_materials.capability(record,catalog)
     import construction_library
     if construction_library.enabled(record):return construction_library.capability(record,catalog)
@@ -282,6 +290,8 @@ def capability(record,catalog):
 
 def compile_case(record,site_id,catalog,reader=None,operation_mode=None):
     import surface_materials
+    from drawing_wall_scope import fixed_partial
+    record=fixed_partial(record)
     if surface_materials.enabled(record):return surface_materials.compile_case(record,site_id,catalog,reader,operation_mode)
     import construction_library
     if construction_library.enabled(record):return construction_library.compile_case(record,site_id,catalog,reader,operation_mode)

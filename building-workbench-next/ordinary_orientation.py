@@ -1,4 +1,4 @@
-"""Five-storey fixed-R orientation, pinned to accepted baseline daily evidence."""
+"""Five-storey ECA orientation, pinned to accepted baseline daily evidence."""
 import copy
 import datetime as dt
 import math
@@ -34,10 +34,10 @@ def optics(record,catalog):
     r=normalize(record)
     spec=validate(r,source(catalog,r['factors']['building']['id']))
     if not spec:raise ValueError('当前是原构造方案。可独立保存日历；核对表面光学切换输入需先选择 ECA 材料应用。')
-    if spec['state']!='R' and not spec.get('feedback'):raise ValueError('首轮表面光学切换输入核对采用固定蓬松 R；当前固定压缩方案保持。')
+    if spec['state']!='R' and not spec.get('feedback') and 'mapping' not in spec:raise ValueError('固定压缩与光学切换需使用已校准的实体 ECA 层。')
     d=r['factors']['materials']['definitions'][0];faces={}
     for face in ('A','B'):
-        item=copy.deepcopy(d['optics'].get(face+'_R',{}))
+        item=copy.deepcopy(d['optics'].get(face+'_'+spec['state'],{}))
         for key,label in (('solar_absorptance','太阳吸收率'),('emissivity','发射率')):
             v=item.get(key)
             if v is None:raise ValueError(f'当前材料版本尚未登记 {face} 组的{label}；请先核对并采用双面材料版本。')
@@ -121,7 +121,7 @@ def compile_inspection(record,catalog,content,site_id,reader=None,operation_mode
         surfaces=len(exposed),net_area_m2=measured['totals']['net_m2'],period=r['factors']['scope']['period'],initial_face='A' if calendar[start] else 'B',
         calendar_sha256=digest(calendar),calendar_content_sha256=digest(content),material_sha256=digest(r['factors']['materials']['definitions'][0]),
         material_version=copy.deepcopy(r['factors']['materials'].get('definition_reference')),source=row['reference_record'],
-        generated_model_sha256=digest(m),control=dict(calling_point=CALLING_POINT,lines=lines,thermal_state='feedback' if spec.get('feedback') else 'fixed_R',
+        generated_model_sha256=digest(m),control=dict(calling_point=CALLING_POINT,lines=lines,thermal_state='feedback' if spec.get('feedback') else 'fixed_'+spec['state'],
             warmup='沿用原求解器预热；预热也按当前模拟日期取光学参数组，不追加实际天气前置。',date_basis='实际非闰年日序，局部时段不从日历第一项重排。'),
         days=[dict(day_of_year=i+1,date=(dt.date(2025,1,1)+dt.timedelta(days=i)).strftime('%m-%d'),face='A' if f else 'B',
             solar_absorptance=faces['A' if f else 'B']['solar_absorptance'],emissivity=faces['A' if f else 'B']['emissivity']) for i,f in enumerate(calendar)],

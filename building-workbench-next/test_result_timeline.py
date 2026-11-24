@@ -78,6 +78,41 @@ class TimelineTests(unittest.TestCase):
         self.assertEqual(r['step_minutes'],5);self.assertFalse(r['has_subdaily_time_records'])
         self.assertEqual(r['frequencies'][0]['records'],31);self.assertEqual(r['systems'],['SYSTEM A'])
 
+    def test_reopening_inventory_reuses_only_verified_unchanged_sql(self):
+        token=rt.inventory(self.root,self.batch,0)['view_token']
+        with patch.object(rt,'source',side_effect=AssertionError('SQL reader reopened')):
+            self.assertEqual(rt.inventory(self.root,self.batch,0,token),dict(view_token=token,unchanged=True))
+        with self.q.db() as db:db.execute("UPDATE jobs SET status='reused'")
+        changed=rt.inventory(self.root,self.batch,0,token)
+        self.assertNotEqual(changed['view_token'],token)
+        self.assertEqual(changed['registered_status'],'reused')
+        self.sql.write_bytes(b'broken result')
+        with self.assertRaisesRegex(ValueError,'SQL'):rt.inventory(self.root,self.batch,0,changed['view_token'])
+
+    def test_building_daily_sums_include_every_system_and_match_monthly(self):
+        self.raw.update(period=[1,1,1,31], rooms=[dict(system=s) for s in ('SYSTEM A','SYSTEM B')],
+                        monthly=[dict(month=1,heating_kWh=527,cooling_kWh=992)])
+        with closing(sqlite3.connect(self.sql)) as db, db:
+            for idx,name,value in ((4,rt.HEAT,3.6e6),(5,rt.COOL,0)):
+                db.execute("INSERT INTO ReportDataDictionary VALUES(?,0,'Sum','SYSTEM B',?,'Daily','J')",(idx,name))
+                db.execute('INSERT INTO ReportData SELECT TimeIndex,?,? FROM Time WHERE WarmupFlag IS NULL',(idx,value))
+        self.save()
+        def building():
+            return rt.daily(self.root,self.batch,0,'','01-01','01-31','building')
+        self.assertEqual(rt.inventory(self.root,self.batch,0)['building_daily_issue'],'')
+        actual=building()
+        self.assertEqual(actual['system_count'],2)
+        self.assertEqual(actual['rows'][0]['total_kWh'],4)
+        self.assertEqual(actual['sums'],dict(heating_kWh=527,cooling_kWh=992,total_kWh=1519))
+        self.raw['monthly'][0]['cooling_kWh']=993
+        self.save()
+        with self.assertRaisesRegex(ValueError,'月度汇总'):building()
+        self.mutate('DELETE FROM ReportData WHERE TimeIndex=2 AND ReportDataDictionaryIndex=5')
+        with self.assertRaisesRegex(ValueError,'缺失'):building()
+        self.mutate("DELETE FROM ReportDataDictionary WHERE KeyValue='SYSTEM B'")
+        with self.assertRaisesRegex(ValueError,'全部系统'):building()
+        self.assertEqual(self.daily(end='01-01')['rows'][0]['total_kWh'],3)
+
     def test_daily_closed_values_and_preserved_calendar(self):
         before={p:sha(p) for p in (self.q.path,self.sql,self.summary)}
         r=self.daily();self.assertEqual(r['sums'],dict(heating_kWh=6,cooling_kWh=12,total_kWh=18))

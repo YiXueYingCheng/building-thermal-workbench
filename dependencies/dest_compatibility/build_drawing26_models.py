@@ -15,8 +15,7 @@ from run_annual import overlap_length
 from energyplus_runtime import use_current_version
 
 PROJECT = Path(__file__).resolve().parents[1]
-WORKSPACE = PROJECT.parents[1]
-SOURCE = WORKSPACE/'outputs/01a0805a-fcec-7b73-9ee0-021b342ea2a4/drawing26-model-data'
+SOURCE = Path('drawing26-model-data')
 OUT = PROJECT/'projects/Drawing26'
 
 def read(p): return json.loads(Path(p).read_text(encoding='utf-8-sig'))

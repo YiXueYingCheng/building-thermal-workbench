@@ -1,5 +1,15 @@
 'use strict';
 let rtSequence=0,rtState=null;
+const rtInventories=new RecentViewReader();
+const rtDetails=new DialogReads(8);
+function rtDetail(kind,params){
+ const url=rtUrl(kind,params),token=rtState.inventory.view_token;
+ return rtDetails.read(JSON.stringify([url,token]),async()=>{
+  const result=await api(url);
+  if(result.view_token!==token)throw Error('结果资料已更新，请重新打开。');
+  return result;
+ });
+}
 const rtFreq={Daily:'逐日',Monthly:'逐月','Run Period':'整个计算时段',Hourly:'逐时','Zone Timestep':'逐步','HVAC System Timestep':'HVAC 系统步'};
 function rtDialog(){
  let d=document.getElementById('result-timeline');
@@ -8,16 +18,14 @@ function rtDialog(){
 }
 function rtClose(){
  const trigger=rtState?.trigger;
- rtSequence++;rtState=null;
- const d=rtDialog();d.close();d.replaceChildren();
+ const d=rtDialog();d.close();
  if(trigger?.isConnected)trigger.focus({preventScroll:true});
 }
 function rtShell(body){
  const d=rtDialog(), back=rtState.context?'返回月度差异':'返回结果';
  const sub=rtState.inventory?.city || rtState.context?.city || '';
  d.innerHTML=`<header class="viewer-head"><div><h2 id="rt-title">输出频率与时序明细</h2>${sub?`<p class="muted">${esc(sub)} · 算例 ${rtState.index+1}</p>`:''}</div><button data-rt-close autofocus>${back}</button></header>${rtState.inventory?rtFrequencyBanner(rtState.inventory):''}<div class="focused-body">${body}</div>`;
- if(!d.open)d.showModal();
- d.querySelector('[data-rt-close]').focus({preventScroll:true});
+ if(d.open)d.querySelector('[data-rt-close]').focus({preventScroll:true});
 }
 function rtUrl(kind,extra={}){return '/api/result-timeline/'+kind+'?'+new URLSearchParams({batch:rtState.batch,index:rtState.index,...extra});}
 function rtOptions(a){return a.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');}
@@ -48,7 +56,7 @@ function rtInventory(d){
  return `${d.registered_status==='review'?'<p class="warning" role="status">此结果仍待复核。可在「输出清单与来源」查看接受说明。</p>':''}<div class="rt-toolbar">${context}<label>查看月份<select id="rt-month">${options(monthChoices,rtState.month)}</select></label></div>
  <div class="rt-tabs" role="group" aria-label="查看内容">${tabs.map(([k,v])=>`<button data-rt-tab="${k}" aria-pressed="false">${v}</button>`).join('')}</div>
  <section data-rt-panel="month"></section>
- ${d.systems.length?`<section data-rt-panel="daily" hidden><h3>原系统逐日显热需求</h3><div class="rt-fields"><label>系统<select id="rt-system">${rtOptions(d.systems)}</select></label>${rtDateFields('rt')}</div><button class="primary" data-rt-load>读取逐日冷热需求</button><div id="rt-daily" aria-live="polite"></div></section>`:''}
+ ${d.systems.length?`<section data-rt-panel="daily" hidden><h3>逐日显热需求</h3><div class="rt-fields"><label>查看范围<select id="rt-system">${d.building_daily_issue?'':'<option value="">整栋建筑（全部系统）</option>'}${rtOptions(d.systems)}</select></label>${rtDateFields('rt')}</div>${d.building_daily_issue?`<p class="muted">${esc(d.building_daily_issue)}</p>`:'<button data-rt-period>选择整个计算时段</button>'}<button class="primary" data-rt-load>读取逐日冷热需求</button><div id="rt-daily" aria-live="polite"></div></section>`:''}
  <section data-rt-panel="series" hidden></section>
  <section data-rt-panel="source" hidden><h3>实际输出频率</h3><p>${esc(d.acceptance_note||'沿用已登记接受范围')}</p><div class="viewer-table"><table class="table"><thead><tr><th>频率</th><th>时间记录数</th></tr></thead><tbody>${d.frequencies.map(f=>`<tr><td>${esc(f.label)}</td><td>${f.records}</td></tr>`).join('')}</tbody></table></div>
  <details><summary>按变量类别查看输出数量</summary><div class="viewer-table"><table class="table"><thead><tr><th>变量类别</th><th>频率</th><th>登记项数</th></tr></thead><tbody>${d.coverage.map(x=>`<tr><td>${esc(x.signal)}</td><td>${esc(rtFreq[x.frequency]||x.frequency)}</td><td>${x.items}</td></tr>`).join('')}</tbody></table></div></details>
@@ -74,7 +82,7 @@ function rtMonthView(){
  const signals=[...new Set(d.dictionary.filter(r=>r.KeyValue==='EMS' && rtControlName(r.Name) && rtQueryable.includes(r.ReportingFrequency)).map(r=>r.Name))];
  const shortcuts=signals.length>4?`<label>材料控制指标<select id="rt-material-signal">${options(signals.map(n=>[n,rtControlName(n)]),signals[0])}</select></label><button data-rt-tab-jump="series" data-rt-control-picker>查看材料时序</button>`:signals.map(name=>`<button data-rt-tab-jump="series" data-rt-control="${esc(name)}">查看${esc(rtControlName(name))}</button>`).join('');
  const note=signals.length?'按指标查看实际保存的材料状态。区间占比无法还原区间内的具体切换时刻。':'本结果未登记可识别的材料控制时序。';
- const daily=d.systems.length?'本月可查看各系统的逐日供暖、制冷需求。':finer?'可按指标查看已记录的细时段。':'本结果的房间或系统需求明细请按实际输出频率查看。';
+ const daily=d.systems.length?(d.building_daily_issue?'本月可查看各系统的逐日供暖、制冷需求。':'可查看整栋建筑或单个系统的逐日供暖、制冷需求。'):finer?'可按指标查看已记录的细时段。':'本结果的房间或系统需求明细请按实际输出频率查看。';
  return `<h3>${m} 月建筑显热需求</h3>${cards.length?`<div class="rt-cards">${cards.join('')}</div>`:'<p>本结果没有建筑月度冷热需求汇总。</p>'}
  ${controls.length?`<h3>材料控制的月度记录</h3><div class="rt-cards rt-controls">${controls.join('')}</div>`:''}
  <p class="muted">${note} ${daily}</p><div class="actions">${shortcuts}${d.systems.length?'<button data-rt-tab-jump="daily">查看本月逐日需求</button>':''}</div>
@@ -111,24 +119,46 @@ function rtShowTab(tab){
  if(tab==='source'&&!d.querySelector('#rt-dictionary').children.length)rtDictionary();
 }
 async function rtOpen(batch,index,context=null,trigger=document.activeElement){
- const state={batch,index,context,trigger,month:context?.month,seq:++rtSequence};
- rtState=state;rtShell('<p role="status">正在读取当前算例实际保存的频率与时段…</p>');
+ const key=JSON.stringify([batch,index,context]),dialog=rtDialog();
+ const same=rtState?.key===key;
+ const state=same?rtState:{key,batch,index,context,month:context?.month};
+ rtState=state;state.trigger=trigger;
+ if(!same)rtSequence++;
+ if(!state.inventory)rtShell('<p role="status">正在读取当前算例实际保存的频率与时段…</p>');
+ if(!dialog.open)dialog.showModal();
+ // Keep the current controls, scroll position and pending detail read while the receipt is checked.
+ const body=dialog.querySelector('.focused-body');body.inert=true;
+ const url=rtUrl('inventory'),request=(state.openRequest||0)+1;
+ state.openRequest=request;
  try{
-   const d=await api(rtUrl('inventory'));if(rtState!==state)return;
-   const expected=context?.sides[context.side];
+   const receipt=await rtInventories.read(url,false,async known=>{
+    const result=await api(url+(known?'&known='+encodeURIComponent(known):''));
+    return {view_token:result.view_token,summary:result.unchanged?undefined:result};
+   });
+   if(rtState!==state||request!==state.openRequest)return;
+   const d=receipt.summary,expected=context?.sides[context.side];
    if(expected && (expected.sha!==d.summary_sha256 || !['passed','reused'].includes(d.registered_status)))throw Error('已有结果登记发生变化，请返回对比集重新读取。');
+   if(state.inventory===d)return;
+   rtSequence++;state.seriesRequest=(state.seriesRequest||0)+1;state.daily=null;state.series=null;
    state.inventory=d;
    state.month=state.month>=d.period[0]&&state.month<=d.period[2]?state.month:d.period[0];
    rtShell(rtInventory(d));rtShowTab((d.monthly_loads?.length||Object.keys(d.monthly_controls||{}).length)?'month':'series');
- }catch(e){if(rtState===state)rtShell(`<p class="warning" role="alert">${esc(e.message)}</p><p>可返回结果检查原始资料。</p>`);}
+ }catch(e){
+   if(rtState===state&&request===state.openRequest){
+    rtSequence++;state.seriesRequest=(state.seriesRequest||0)+1;state.inventory=null;state.series=null;state.daily=null;
+    rtShell(`<p class="warning" role="alert">${esc(e.message)}</p><p>可返回结果检查原始资料。</p>`);
+   }
+ }finally{
+   if(rtState===state&&request===state.openRequest)body.inert=false;
+ }
 }
 function rtInvalidate(){
  if(!rtState)return;rtSequence++;rtState.daily=null;
  const b=rtDialog().querySelector('[data-rt-load]');if(b)b.disabled=false;
- const t=rtDialog().querySelector('#rt-daily');if(t)t.textContent='请读取所选系统与日期。';
+ const t=rtDialog().querySelector('#rt-daily');if(t)t.textContent='请读取所选范围的逐日需求。';
 }
 document.addEventListener('click',e=>{
- const b=e.target.closest('[data-rt-batch],[data-rt-close],[data-rt-load],[data-rt-export],[data-rt-day],[data-rt-tab],[data-rt-tab-jump]');
+ const b=e.target.closest('[data-rt-period],[data-rt-batch],[data-rt-close],[data-rt-load],[data-rt-export],[data-rt-day],[data-rt-tab],[data-rt-tab-jump]');
  if(!b)return;e.preventDefault();e.stopImmediatePropagation();
  if(b.dataset.rtTab||b.dataset.rtTabJump){
    rtShowTab(b.dataset.rtTab||b.dataset.rtTabJump);
@@ -143,6 +173,10 @@ document.addEventListener('click',e=>{
    }
  }
  else if(b.hasAttribute('data-rt-close'))rtClose();
+ else if(b.hasAttribute('data-rt-period')){
+   const d=rtDialog(),[sm,sd,em,ed]=rtState.inventory.period;
+   d.querySelector('#rt-start').value=rtMD(sm,sd);d.querySelector('#rt-end').value=rtMD(em,ed);rtInvalidate();
+ }
  else if(b.hasAttribute('data-rt-load'))rtLoad();
  else if(b.hasAttribute('data-rt-export'))rtExport();
  else if(b.hasAttribute('data-rt-day'))rtSelectDay(Number(b.dataset.rtDay));
@@ -157,7 +191,11 @@ document.addEventListener('change',e=>{
  const t=e.target;
  if(['rt-est-start','rt-est-frequency'].includes(t.id))rtEstimate();
  else if(t.id==='rt-day')rtSelectDay(t.selectedIndex);
- else if(t.id==='rt-system')rtInvalidate();
+ else if(t.id==='rt-system'){
+   const period=rtDialog().querySelector('[data-rt-period]');if(period)period.hidden=!!t.value;
+   if(t.value){const range=rtMonthRange();rtDialog().querySelector('#rt-start').value=range.start;rtDialog().querySelector('#rt-end').value=range.end;}
+   rtInvalidate();
+ }
  else if(t.id==='rt-side'){
    const ctx={...rtState.context,side:Number(t.value),month:rtState.month},side=ctx.sides[ctx.side];
    rtOpen(side.batch,side.index,ctx,rtState.trigger);
@@ -173,7 +211,7 @@ document.addEventListener('change',e=>{
 function rtChart(data){const max=Math.max(...data.rows.flatMap(r=>[r.heating_kWh,r.cooling_kWh]),0);const scale=max||1,width=760,height=210,step=width/data.rows.length;return `<p>供暖（棕色）／制冷（蓝色）· 日累积量 / kWh。柱高上限 ${format(max,3)}；选择日期查看双列数值。</p><svg class="rt-chart" viewBox="0 0 800 255" role="img" aria-label="逐日供暖与制冷需求柱图"><text x="0" y="15">${format(max,3)}</text><line x1="35" y1="225" x2="795" y2="225" class="rt-axis"/>${data.rows.map((r,i)=>{const x=35+i*step,h=r.heating_kWh/scale*height,c=r.cooling_kWh/scale*height;return `<g><title>${esc(r.date)}：供暖 ${format(r.heating_kWh,3)}；制冷 ${format(r.cooling_kWh,3)} kWh</title><rect class="rt-heat" x="${x+step*.12}" y="${225-h}" width="${step*.32}" height="${h}"/><rect class="rt-cool" x="${x+step*.48}" y="${225-c}" width="${step*.32}" height="${c}"/>${i===0||i===data.rows.length-1?`<text x="${Math.min(x,748)}" y="247">${esc(r.date)}</text>`:''}</g>`;}).join('')}</svg>`;}
 function rtDaily(d){return `<h4>${esc(d.system)} · ${esc(d.start)} 至 ${esc(d.end)}</h4><p>${esc(d.meaning)}</p><p>${esc(d.acceptance_note||'')}</p>${rtChart(d)}<p>本次范围：供暖 ${format(d.sums.heating_kWh,3)} · 制冷 ${format(d.sums.cooling_kWh,3)} · 合计 ${format(d.sums.total_kWh,3)} kWh</p><label>联动查看日期<select id="rt-day">${rtOptions(d.rows.map(r=>r.date))}</select></label><p id="rt-selected" role="status"></p><button data-rt-export>导出当前范围 CSV</button><div class="viewer-table"><table class="table"><thead><tr><th>月-日</th><th>供暖 / kWh</th><th>制冷 / kWh</th><th>合计 / kWh</th></tr></thead><tbody>${d.rows.map((r,i)=>`<tr data-rt-row="${i}"><td><button data-rt-day="${i}">${esc(r.date)}</button></td><td>${format(r.heating_kWh,6)}</td><td>${format(r.cooling_kWh,6)}</td><td>${format(r.total_kWh,6)}</td></tr>`).join('')}</tbody></table></div><p class="muted">SQL 原始年字段：${[...new Set(d.rows.map(r=>r.time.Year))].join('、')}；按原模拟日历展示。完整数值及来源校验值随 CSV 保留。</p>`;}
 function rtSelectDay(i){const d=rtState?.daily;if(!d)return;const r=d.rows[i];if(!r)return;rtDialog().querySelector('#rt-day').value=r.date;rtDialog().querySelector('#rt-selected').textContent=`${r.date}：供暖 ${format(r.heating_kWh,6)}，制冷 ${format(r.cooling_kWh,6)}，合计 ${format(r.total_kWh,6)} kWh`;rtDialog().querySelectorAll('[data-rt-row]').forEach(row=>row.classList.toggle('rt-selected',Number(row.dataset.rtRow)===i));}
-async function rtLoad(){const seq=++rtSequence,target=rtDialog().querySelector('#rt-daily'),button=rtDialog().querySelector('[data-rt-load]');const params={system:rtDialog().querySelector('#rt-system').value,start:rtDialog().querySelector('#rt-start').value.trim(),end:rtDialog().querySelector('#rt-end').value.trim()};rtState.daily=null;button.disabled=true;target.innerHTML='<p role="status">正在读取所选范围…</p>';try{const d=await api(rtUrl('daily',params));if(seq!==rtSequence||!rtDialog().open)return;if(d.summary_sha256!==rtState.inventory.summary_sha256||d.sql_sha256!==rtState.inventory.sql_sha256)throw Error('结果资料已更新，请重新打开。');rtState.daily=d;target.innerHTML=rtDaily(d);rtSelectDay(0);}catch(e){if(seq===rtSequence&&rtDialog().open)target.innerHTML=`<p class="warning" role="alert">${esc(e.message)}</p>`;}finally{if(seq===rtSequence&&rtDialog().open)button.disabled=false;}}
+async function rtLoad(){const seq=++rtSequence,target=rtDialog().querySelector('#rt-daily'),button=rtDialog().querySelector('[data-rt-load]');const system=rtDialog().querySelector('#rt-system').value;const params={system,scope:system?'system':'building',start:rtDialog().querySelector('#rt-start').value.trim(),end:rtDialog().querySelector('#rt-end').value.trim()};rtState.daily=null;button.disabled=true;target.innerHTML='<p role="status">正在读取所选范围…</p>';try{const d=await rtDetail('daily',params);if(seq!==rtSequence)return;if(d.summary_sha256!==rtState.inventory.summary_sha256||d.sql_sha256!==rtState.inventory.sql_sha256)throw Error('结果资料已更新，请重新打开。');rtState.daily=d;target.innerHTML=rtDaily(d);rtSelectDay(0);}catch(e){if(seq===rtSequence)target.innerHTML=`<p class="warning" role="alert">${esc(e.message)}</p>`;}finally{if(seq===rtSequence)button.disabled=false;}}
 function rtExport(){const d=rtState?.daily;if(!d)return;const cell=v=>'"'+String(typeof v==='string'&&/^[=+@-]/.test(v)?"'"+v:v??'').replaceAll('"','""')+'"';const lines=[['batch','case_index','identity','summary_sha256','sql_sha256','registered_status','acceptance_note','system','frequency','aggregation','source_units','display_units','month_day','sql_year','time_index','interval_minutes','heating_kWh','cooling_kWh','total_kWh'],...d.rows.map(r=>[d.batch,d.index,d.identity,d.summary_sha256,d.sql_sha256,d.registered_status,d.acceptance_note,/^[=+@-]/.test(d.system)?"'"+d.system:d.system,d.frequency,d.aggregation,d.source_units,d.units,r.date,r.time.Year,r.time.TimeIndex,r.time.Interval,r.heating_kWh,r.cooling_kWh,r.total_kWh])];const url=URL.createObjectURL(new Blob(['\uFEFF'+lines.map(r=>r.map(cell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`daily-loads-${d.index+1}-${d.start}-${d.end}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 
 const rtPriorView=resultViewContent;

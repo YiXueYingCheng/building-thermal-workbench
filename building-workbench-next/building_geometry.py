@@ -114,7 +114,7 @@ def describe(record,catalog):
     from building_configuration import baseline
     from model_adapter import VerifiedReader
     building=copy.deepcopy(record['factors']['building']);building.pop('usage_profile',None);building.pop('envelope_overrides',None);building.pop('library_constructions',None)
-    expected=(catalog['records']['global_w00']['factors']['building'] if adapter=='global_frozen_v011' else catalog['ordinary_buildings'][building['id']]['building'])
+    expected=(catalog['global_bundle']['building_source']['building'] if adapter=='global_frozen_v011' else catalog['ordinary_buildings'][building['id']]['building'])
     if building!=expected:raise ValueError('建筑身份或几何来源已改变，请先核对来源。')
     reader=VerifiedReader(catalog);base,m,job=baseline(catalog,reader,building['id'])
     if record['factors']['building'].get('library_constructions'):

@@ -104,6 +104,9 @@ class FallbackTests(unittest.TestCase):
             with self.assertRaises(ValueError):wd.register(self.root,child['id'],[item['id']],{},False)
             result=wd.register(self.root,child['id'],[item['id']],{},True)
             metadata=register.call_args.args[3]
+            self.assertEqual(metadata['storage_mode'],'copy')
+            wd.register(self.root,child['id'],[item['id']],{},True,storage_mode='reference')
+            self.assertEqual(register.call_args.args[3]['storage_mode'],'reference')
             self.assertIn('JRC 备用',metadata['name']);self.assertIn('非原 TMYx',metadata['note'])
             self.assertNotIn('supersedes',metadata);self.assertEqual(result['items'][0]['status'],'registered')
         Path(item['result']['path']).write_bytes(b'changed')

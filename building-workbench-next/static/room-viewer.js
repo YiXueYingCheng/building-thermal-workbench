@@ -94,7 +94,7 @@ function roomViewerEditor(){
  return `<div class="row room-edit-heading"><h3>编辑 ${esc(roomViewerChannels[selectedUsage().channel])}</h3><button data-room-view="detail">完成编辑，查看摘要</button></div>${el.outerHTML}`;
 }
 function roomViewerTools(){
- const cross=S.record.factors.building.id==='building2_5f_verified';
+ const cross=Boolean(S.usageDraft?.building_id);
  return `<details class="room-viewer-tools"><summary>配置名称、复用与差异核对</summary><label class="field">整份建筑配置名称<input id="usage-name" value="${esc(S.usageName)}"${disabled()}></label><div class="actions"><button data-room-action="open-compare">核对全部配置差异</button><button data-room-action="open-reuse"${disabled()}>复用到同建筑房间（可按类型）</button>${S.roomUndo?`<button data-room-action="undo"${disabled()}>撤销上次房间复用</button>`:''}${cross?`<button data-building-reuse="open"${disabled()}>跨建筑复用房间配置</button><button data-building-reuse="open-overview">当前全楼复用状态</button>${S.buildingReuseLast?`<button data-building-reuse="undo"${disabled()}>撤销上次跨建筑复用</button><button data-building-reuse="download-last">下载跨建筑复用记录</button>`:''}`:''}</div><p class="muted">先核对再应用；返回本房间继续查看。配置保存包含所有房间，方案版本另行保存。</p></details>`;
 }
 function roomViewerRemember(){const v=buildingViewerCurrent();if(!v||!roomViewerActive())return;v.roomScroll=buildingViewerDialog().querySelector('.viewer-body')?.scrollTop||0;}

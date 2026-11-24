@@ -27,7 +27,7 @@ async function rlAction(b){const v=rl();if(v.pending)return;v.error='';v.message
  if(op==='construction'){v.pending=true;render();v.detail=await api('/api/reference-library/construction/'+encodeURIComponent(r.id));return;}
  if(op==='copy-construction'){v.pending=true;render();const result=await api('/api/reference-library/copy-construction',{id:r.id,name:r.name+' · 我的构造'});v.data=await api('/api/reference-library');v.kind='construction_versions';v.query='';v.page=0;v.selected=result.id+':'+result.revision;v.message='已复制独立构造版本，原参考及方案保持。';return;}
  if(op==='daily'){await rlOpenDaily();return;}
- if(op==='material'){mcCheckDraft();v.pending=true;render();const draft=await api('/api/reference-library/material/'+encodeURIComponent(r.id));await openMaterialCatalog();mc().draft=draft;mc().parent=null;mc().dirty=false;return;}
+ if(op==='material'){mcCheckDraft();v.pending=true;render();const draft=await api('/api/reference-library/material/'+encodeURIComponent(r.id));await openMaterialCatalog();mc().draft=draft;mc().parent=null;mc().exampleOrigin=null;mc().dirty=false;return;}
  if(op==='download-annual'){const a=v.detail;rlDownload(r.name+'.csv','\uFEFF小时序号,值,单位\r\n'+a.values.map((x,i)=>[i+1,x,a.unit].join(',')).join('\r\n'),'text/csv;charset=utf-8');return;}
  if(op==='download-construction')rlDownload(r.name+'.json',JSON.stringify(r,null,2),'application/json');
  }catch(e){v.error=e.message;}finally{v.pending=false;render();}}

@@ -198,18 +198,26 @@ def decode(row):
 def batch_destination(root,batch):
     row=_row(root,'batch_storage','batch',batch)
     # Existing batches always retain their historical workspace destination.
-    return decode(row) if row else capture('local',root)
+    return local_destination(decode(row),root) if row else capture('local',root)
+
+
+def local_destination(snapshot,root):
+    from history_locations import workspace_path
+    if snapshot.get('id')=='local' and Path(snapshot['path'])!=Path(root)/'runs' and workspace_path(root,snapshot['path'])==Path(root)/'runs':
+        return capture('local',root)
+    return snapshot
 
 def attempt_folder(root,attempt,probe=False):
     if not re.fullmatch('attempt_[a-f0-9]{32}',str(attempt)):raise ValueError('计算尝试编号无效。')
     row=_row(root,'attempt_storage','attempt',attempt)
     if not row:return owned(Path(root)/'runs'/attempt[8:],root)
-    snapshot=decode(row);verify(snapshot,root,probe)
+    snapshot=local_destination(decode(row),root);verify(snapshot,root,probe)
     return owned(safe_path(str(Path(snapshot['path'])/attempt[8:])),snapshot['path'])
 
 def checked_path(path,root=ROOT):
     """Workspace files or paths tied to a registered, pinned external attempt."""
-    raw=Path(path);p=raw.resolve();workspace=Path(root).resolve()
+    from history_locations import workspace_path
+    raw=workspace_path(root,path);p=raw.resolve();workspace=Path(root).resolve()
     if p.is_relative_to(workspace):return owned(p,workspace)
     safe_path(str(raw))
     for item in entries(root):

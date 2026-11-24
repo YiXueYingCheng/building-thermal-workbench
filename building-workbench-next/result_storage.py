@@ -53,7 +53,7 @@ def strings(value):
  elif isinstance(value,list):
   for v in value:yield from strings(v)
 
-def documents(root,issues,include_all_databases=False):
+def documents(root,issues,include_all_databases=False,plan_files=None):
  """All managed JSON evidence and JSON-bearing database rows, not file contents of SQL/CSV.
  Unreadable/reparse/oversize metadata blocks cleanup rather than implying no reference.
  """
@@ -70,26 +70,40 @@ def documents(root,issues,include_all_databases=False):
    folder=stack.pop()
    try:
     safe_child(base,folder)
-    for p in folder.iterdir():
-     s=p.lstat()
-     if link(s):issues.append('资料路径为链接，未扫描：'+str(p));continue
-     if p==root/'data/navigation-cache' or p==root/'data/storage-management':continue
-     if stat.S_ISDIR(s.st_mode):stack.append(p);continue
-     if p.suffix=='.sqlite' and (base==root/'data' or include_all_databases):
-      with closing(sqlite3.connect(p.as_uri()+'?mode=ro',uri=True,timeout=2)) as db:
-       db.row_factory=sqlite3.Row;db.execute('BEGIN')
-       for (table,) in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
-        if p.name=='queue.sqlite' and not include_all_databases:continue # separately interpreted job/cache/event semantics
-        quoted='"'+table.replace('"','""')+'"'
-        for row in db.execute('SELECT * FROM '+quoted):
-         row=dict(row)
-         for k,v in list(row.items()):
-          if isinstance(v,str) and v.startswith(('{','[')):row[k]=json.loads(v)
-         yield str(p)+'#'+table,dict(row,_storage_table=table)
-     elif p.suffix.lower()=='.json':
-      if s.st_size>16*2**20:raise ValueError('资料超过本次核对上限：'+str(p))
-      # JSON metadata only, never follow paths contained in it.
-      yield str(p),read_json(p)
+    with os.scandir(folder) as entries:
+     for entry in entries:
+      p=folder/entry.name
+      try:
+       # Windows DirEntry.stat omits the file identity used by link checks and previews.
+       s=p.lstat()
+       if link(s):issues.append('资料路径为链接，未扫描：'+str(p));continue
+       if p==root/'data/navigation-cache' or p==root/'data/storage-management':continue
+       if stat.S_ISDIR(s.st_mode):stack.append(p);continue
+       if p.suffix=='.sqlite' and (base==root/'data' or include_all_databases):
+        with closing(sqlite3.connect(p.as_uri()+'?mode=ro',uri=True,timeout=2)) as db:
+         db.row_factory=sqlite3.Row;db.execute('BEGIN')
+         for (table,) in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
+          if p.name=='queue.sqlite' and not include_all_databases:continue # separately interpreted job/cache/event semantics
+          quoted='"'+table.replace('"','""')+'"'
+          query='SELECT * FROM '+quoted
+          if plan_files is not None and p==root/'data/drafts.sqlite' and table=='reading_links':
+           if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='reading_hidden'").fetchone():
+            query+=' WHERE NOT EXISTS (SELECT 1 FROM reading_hidden h WHERE h.group_id=reading_links.group_id AND h.signature=reading_links.signature)'
+          for row in db.execute(query):
+           raw=dict(row);row=raw.copy()
+           for k,v in list(row.items()):
+            if isinstance(v,str) and v.startswith(('{','[')):row[k]=json.loads(v)
+           if plan_files is None or plan_files.row_matches(raw):
+            yield str(p)+'#'+table,dict(row,_storage_table=table)
+       elif p.suffix.lower()=='.json':
+        if plan_files is not None:
+         value=plan_files.read(p,s)
+         if value is not None:yield str(p),value
+         continue
+        if s.st_size>16*2**20:raise ValueError('资料超过本次核对上限：'+str(p))
+        # JSON metadata only, never follow paths contained in it.
+        yield str(p),read_json(p)
+      except (OSError,ValueError,sqlite3.Error) as e:issues.append(str(p)+' · '+str(e))
    except (OSError,ValueError,sqlite3.Error) as e:issues.append(str(e))
 
 def label_for(path,value):

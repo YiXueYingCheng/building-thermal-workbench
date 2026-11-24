@@ -15,20 +15,89 @@ def available(record):
             and applications[0].get('placement_basis') == 'fixed_surface_material_v1'
             and bool(applications[0]['target_ids']))
 
+def fixed_partial(record):
+    f=record['factors'];apps=f['materials']['applications'];walls=f['building'].get('wall_ids',[])
+    if (len(apps)==1 and apps[0].get('placement_basis')=='legacy_outer_equivalent_model'
+            and set(apps[0]['target_ids'])<set(walls) and not f['condition']['reference_runs']
+            and all(c['mode']=='fixed' for c in f['condition']['controls'])):
+        from surface_materials import FIXED_MOVABLE
+        a=apps[0]
+        if a.get('position')!='exterior' or a.get('component')!='wall':
+            raise ValueError('活动保温层的应用位置必须是室外墙面。')
+        out=copy.deepcopy(record)
+        out['factors']['materials']['applications']=[dict(id=a['id'],material_id=a['material_id'],
+            component='opaque_exterior',position='exterior',placement_basis=FIXED_MOVABLE,target_ids=list(a['target_ids']))]
+        return out
+    return record
+
 
 def select(record, wall_ids, covered, feedback_ids):
     from contracts import normalize
     from surface_controls import thermal_groups
     record = normalize(record)
-    if not available(record):
-        raise ValueError('请先从材料库选用双状态实体材料并应用到室外墙。')
+    from surface_materials import enabled
+    f=record['factors']
+    fixed_equivalent=(len(f['materials']['definitions'])==len(f['materials']['applications'])==1
+        and f['materials']['definitions'][0]['model']=='equivalent_resistance_no_layer_storage'
+        and all(c['mode']=='fixed' for c in f['condition']['controls']) and not f['condition']['reference_runs'])
+    apps=f['materials']['applications']
+    legacy=len(apps)==1 and apps[0].get('placement_basis')=='legacy_outer_equivalent_model'
+    if not (enabled(record) or fixed_equivalent or legacy) or len(apps) != 1:
+        raise ValueError('请先选用一份可逐墙铺设的外表面材料。')
     if any(not isinstance(ls, list) or len(set(ls)) != len(ls) for ls in (covered, feedback_ids)):
         raise ValueError('选墙清单须由不重复的墙号组成。')
     if not covered or not set(covered) <= set(wall_ids) or not set(feedback_ids) <= set(covered):
         raise ValueError('请至少铺设一段室外墙，反馈组只能从已铺墙中选择。')
     if not set(record['factors']['materials']['applications'][0]['target_ids']) <= set(wall_ids):
         raise ValueError('当前材料应用包含屋面。请在材料库单独选用外墙，再按墙段调整。')
+    if fixed_equivalent:
+        if feedback_ids:raise ValueError('固定热学状态不使用反馈墙组。')
+        from surface_materials import fixed_assignments
+        app=f['materials']['applications'][0]
+        initial=fixed_assignments(record)
+        ids=[wall for wall in wall_ids if wall in covered]
+        out=copy.deepcopy(record)
+        out['factors']['materials']['applications'][0]['target_ids']=ids
+        controls=[]
+        for i,(channel,key,default) in enumerate((('thermal','state_id','R'),('orientation','face_id','A'))):
+            existing={values[i] for values in initial.values()}
+            fallback=next(iter(existing)) if len(existing)==1 else default
+            groups={}
+            for wall in ids:
+                value=initial[wall][i] if wall in initial else fallback
+                groups.setdefault(value,[]).append(wall)
+            for value,walls in groups.items():
+                controls.append(dict(application_id=app['id'],channel=channel,mode='fixed',target_ids=walls,**{key:value}))
+        out['factors']['condition']['controls']=controls
+        return out
+    if legacy:
+        app=apps[0];wanted=set(covered)
+        active={w for c in f['condition']['controls'] if c['channel']=='thermal' and c['mode']=='feedback' for w in c['target_ids']}
+        if set(feedback_ids)!=active&wanted:raise ValueError('请在材料控制中选择反馈墙段。')
+        added=[w for w in wall_ids if w in wanted and w not in app['target_ids']]
+        out=copy.deepcopy(record)
+        out['factors']['materials']['applications'][0]['target_ids']=[w for w in wall_ids if w in wanted]
+        controls=[]
+        for c in f['condition']['controls']:
+            keep=[w for w in c['target_ids'] if w in wanted]
+            if keep:controls.append({**copy.deepcopy(c),'target_ids':keep})
+        if added:
+            controls.append(dict(application_id=app['id'],target_ids=added.copy(),channel='thermal',mode='fixed',state_id='R'))
+            orientations=[c for c in f['condition']['controls'] if c['channel']=='orientation']
+            orientation=orientations[0] if len(orientations)==1 else dict(application_id=app['id'],channel='orientation',mode='fixed',face_id='A')
+            controls.append({**copy.deepcopy(orientation),'target_ids':added.copy()})
+        out['factors']['condition']['controls']=controls
+        return out
     groups, optical = thermal_groups(record)
+    if not available(record):
+        if feedback_ids or len(groups) != 1 or groups[0]['mode'] != 'fixed':
+            raise ValueError('此材料使用固定热学状态，请只选择铺设墙段。')
+        targets = [wall for wall in wall_ids if wall in covered]
+        out = copy.deepcopy(record)
+        out['factors']['materials']['applications'][0]['target_ids'] = targets
+        for control in out['factors']['condition']['controls']:
+            control['target_ids'] = targets.copy()
+        return out
     previous = next((c for c in groups if c['mode'] == 'feedback'), None)
     d = record['factors']['materials']['definitions'][0]
     high = max(d['states'], key=lambda s: s['resistance_m2K_W'])['id']

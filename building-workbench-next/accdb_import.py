@@ -202,7 +202,8 @@ def options(catalog,root):
  from usage_schedules import gain_defaults,source_snapshot
  from starter_library import usage_templates,describe_choice
  choices,donors=usage_templates()
- for bid,label in ([('drawing26_global_frozen','Drawing26')] if 'global_w00' in catalog['records'] else [])+[(k,v['building']['name']) for k,v in catalog.get('ordinary_buildings',{}).items()]:
+ frozen=catalog.get('global_bundle',{}).get('building_source',{}).get('building')
+ for bid,label in ([(frozen['id'],frozen['name'])] if frozen else [])+[(k,v['building']['name']) for k,v in catalog.get('ordinary_buildings',{}).items()]:
   base,m,job=baseline(catalog,building_id=bid);gains=gain_defaults(m)
   sources=source_snapshot(root)['rooms'] if bid=='drawing26_global_frozen' else catalog['ordinary_buildings'][bid]['usage_sources']
   for room in base['rooms']:

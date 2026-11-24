@@ -17,7 +17,7 @@ def inspect(model,case,evidence,root):
     result=read_json(result_path)
     require(result.get('output_contract')==CONTRACT and result['status']=='passed' and not result['pending_warnings'],'逐日参考输出或接受状态不符。')
     from execution_results import verify_artifacts,close
-    verify_artifacts(result)
+    verify_artifacts(result,root)
     def artifact(name):
         paths=[output_storage.checked_path(p,root) for p in result['artifacts'] if Path(p).name==name]
         require(len(paths)==1,'逐日参考缺少唯一的 '+name)

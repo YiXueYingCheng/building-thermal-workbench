@@ -1,6 +1,6 @@
 # 安装与首次使用
 
-> 当前版本为 v0.73.14 公开预览版。已有 v0.72.2、v0.73.11 至 v0.73.13 或 v0.73.14-rc.1 至 rc.9 用户请看 [升级与备份恢复](UPGRADE_TO_0_73_14.md)，使用新包中的 Upgrade Workbench.cmd；不要直接覆盖旧工作区。
+> 当前版本为 v0.73.15 公开预览版。已有 v0.72.2、v0.73.11 至 v0.73.14 或 v0.73.14-rc.1 至 rc.9 用户请看 [升级与备份恢复](UPGRADE_TO_0_73_15.md)，使用新包中的 Upgrade Workbench.cmd；不要直接覆盖旧工作区。
 
 > 普通建筑导入可使用 [Drawing26 门洞修补版](../examples/drawing26-repaired/README.md)。
 

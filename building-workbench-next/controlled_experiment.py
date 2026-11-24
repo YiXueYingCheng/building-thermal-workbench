@@ -106,4 +106,5 @@ def handle(sets, ident, action, body):
         db.execute('INSERT INTO versions VALUES (?,?,?,?)', (target_id,1,canonical(target),at))
         db.execute('INSERT INTO events(at,action,record_id,revision) VALUES (?,?,?,?)', (at,'create',target_id,1))
         db.execute('INSERT INTO comparisons VALUES (?,?,?)', (pair_id,canonical(pair),at))
+        sets.store._pin_members(db,pair)
     return dict(saved=True, comparison=pair, target_id=target_id)

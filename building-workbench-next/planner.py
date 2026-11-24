@@ -101,6 +101,11 @@ def compare(left,right):
         out.append(dict(key=key,label=label,equal=left['factors'][key]==right['factors'][key]))
     out.append(dict(key='numerics',label='计算设置',equal=left['numerics']==right['numerics']))
     operation_equal=left['factors']['condition']['operation']==right['factors']['condition']['operation']
+    if not out[0]['equal']:
+        from comparison_results import room_usage_contrast
+        if room_usage_contrast(left,right):
+            return dict(rows=out,shared_conditions=True,operation_equal=operation_equal,contrast_factor='room_usage',
+                note='同一建筑的房间使用配置对照。双方材料、方案运行设置、气象范围和求解设置一致。')
     comparable=operation_equal and all(r['equal'] for r in out if r['key'] in ('building','scope','numerics'))
     return dict(rows=out,shared_conditions=comparable,operation_equal=operation_equal,
         note='共同条件一致，仅表示配置层面可组织对照；科学可比性仍需相应模型和结果核查。' if comparable else '共同建筑、范围、运行或计算设置存在差异，需明确比较目的。')

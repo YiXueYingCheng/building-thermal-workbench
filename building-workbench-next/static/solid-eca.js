@@ -15,5 +15,11 @@ materialViewerLibraryView=function(){if(!solidProfile())return solidBeforeLibrar
 const solidBeforeFields=mcFields;
 mcFields=function(d){const rows=solidBeforeFields(d);if(solidDefinition(d))for(const s of d.states)rows.push([s.name+' · 密度 / kg/m³',s.density_kg_m3],[s.name+' · 比热 / J/(kg·K)',s.specific_heat_J_kgK],[s.name+' · 面热容 / J/(m²·K)',s.thickness_mm/1000*s.density_kg_m3*s.specific_heat_J_kgK]);return rows;};
 const solidBeforeDetails=mcDetails;
-mcDetails=function(){const html=solidBeforeDetails();if(mc().tab!=='research'||!solidDefinition(mcRow()?.content))return html;const t=document.createElement('template');t.innerHTML=html;t.content.querySelectorAll('[data-mc="edit"],[data-mc="clone"]').forEach(e=>e.remove());return t.innerHTML.replace('等效热阻材料','实体材料 · 质量守恒').replace('忽略材料层自身蓄热；','计入材料层自身蓄热；')+'<p class="muted">本版本保存已完成校准的物理参数。数值接法只适用于独立的 1 min CondFD 对照组。</p>';};
+mcDetails=function(){const html=solidBeforeDetails();if(mc().tab!=='research'||!solidDefinition(mcRow()?.content))return html;const t=document.createElement('template');t.innerHTML=html;t.content.querySelectorAll('[data-mc="edit"],[data-mc="clone"]').forEach(e=>e.remove());const preview=t.content.querySelector('[data-mc="preview"]');
+ if(preview&&S.record&&!solidProfile()){
+  preview.disabled=true;
+  const reason=document.createElement('p');reason.className='condition-hint';reason.textContent='当前方案为 '+S.record.numerics.step_minutes+' min。这份材料需从五层建筑的 1 min 外墙有限差分（CondFD）方案中选用。';
+  preview.parentElement.after(reason);
+ }
+ return t.innerHTML.replace('等效热阻材料','实体材料 · 质量守恒').replace('忽略材料层自身蓄热；','计入材料层自身蓄热；')+'<p class="muted">本版本保存已完成校准的物理参数。</p>'+(mcForScheme()?'<p>数值接法只适用于独立的 1 min CondFD 对照组。</p>':'');};
 

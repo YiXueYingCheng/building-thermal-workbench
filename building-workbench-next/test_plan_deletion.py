@@ -109,6 +109,29 @@ class PlanDeletionTests(unittest.TestCase):
   before=sha(self.store.path)
   with self.assertRaises(sqlite3.IntegrityError):self.execute(p)
   self.assertEqual(self.revisions(),[2,1]);self.assertEqual(notes.get(self.store,self.ident,1)['note'],'note');self.assertEqual(pd.history(self.root),[]);self.assertEqual(before,sha(self.store.path))
+ def test_directional_dependencies_and_historical_inventory(self):
+  self.store.save(self.ident,1,{'name':'二'})
+  manifest=self.root/'data/integration-sources/8796/manifest/entity-keys.json'
+  write_json(manifest,{'tables':[{'record_id':self.ident,'revision':1}],'peer_roots':[]},self.root)
+  write_json(manifest.parent.parent/'RECEIPT.json',dict(origin='source',snapshot_cut='date',sealed=True,files=[dict(file='manifest/entity-keys.json',sha256=sha(manifest))]),self.root)
+  v=self.preview(1)['inspection']
+  self.assertFalse(v['blocked']);self.assertEqual(len(v['historical_mentions']),1)
+  self.assertIn(self.source['id'],[r['id'] for r in v['target']['versions'][0]['outgoing']])
+  loc=self.root/'data/model-inputs/inputs_example'
+  for name in ('manifest','record'):
+   write_json(loc/(name+'.json'),{'record_id':self.ident,'revision':2},self.root)
+  v=self.preview(2)['inspection']
+  self.assertEqual({r['owner'] for r in v['references']},{'inputs_example'})
+  self.assertTrue(v['blocked']);self.assertFalse(self.preview(1)['inspection']['blocked'])
+ def test_index_refresh_and_escaped_ids_in_large_metadata(self):
+  path=self.root/'data/large.json'
+  path.write_bytes(b'{"padding":"'+b' '*(17*2**20)+b'"}')
+  self.assertFalse(self.preview()['inspection']['blocked'])
+  path.write_text('{"record_id":"\\u0064'+self.ident[1:]+'","revision":1}')
+  self.assertTrue(self.preview()['inspection']['references'])
+  path.write_text('{invalid')
+  info=self.preview()['inspection']
+  self.assertTrue(info['blocked']);self.assertIn(str(path),info['issues'][0])
  def test_unknown_revision_reference_is_conservative(self):
   self.store.save(self.ident,1,{'name':'two'})
   write_json(self.root/'data/ref.json',{'id':self.ident,'revision':'unknown'},self.root)

@@ -33,3 +33,7 @@ Python 环境、EnergyPlus、Microsoft Access Runtime 和 Windows 字体不随�
 随包公用参考库的 EP-EXAMPLE 部分来自 EnergyPlus 26.1.0 PurchAirTables.idf，含 8 个材料和 3 个构造；已逐项核对并保留 [同版本原许可](LICENSES/EnergyPlus-26.1.0.txt)。旧记录哈希对应提取的 material-library.json，官方原 IDF 的身份另记，二者不混用。这些条目不改用本项目 CC BY 4.0，也不表示任何原作者为本平台背书。
 
 来源、具体条目及排除项见 [随包清单](docs/REFERENCE_DISTRIBUTION_REVIEW.md)。用户于 2026-11-15 明确允许作息与公用配置库随平台公开；其他此次讨论的源建筑与独立材料不纳入。上述内容不改变 destep、地图、Drawing26 和其他原署名、原许可证。
+
+## C18 与 PE 研究材料示例
+
+自 v0.73.15 起，作者授权随程序公开 C18 相变层与 PE 光谱层两套示例的具体参数。材料库显示数值及建模假设，其中 PE 示例的太阳透射率为假设值。使用者可复制材料、填写自己的参数并保存版本。

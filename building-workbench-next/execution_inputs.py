@@ -11,7 +11,7 @@ from model_adapter import VerifiedReader
 
 OUTPUT_CONTRACT = 'monthly_period_v1'
 DAILY_CONTRACT = 'daily_sensible_reference_v1'
-CODE_FILES = ('execution_inputs.py','execution_results.py','execution_queue.py','execution_worker.py','resources.py','cpu_budget.py','worker_runtime.py','daily_reference.py','resource_history.py','output_storage.py','output_resolution.py','wb_warmup.py','site_recalculation.py','schedule_sharing.py')
+CODE_FILES = ('execution_inputs.py','execution_results.py','execution_queue.py','execution_worker.py','resources.py','cpu_budget.py','worker_runtime.py','daily_reference.py','resource_history.py','output_storage.py','output_resolution.py','wb_warmup.py','site_recalculation.py','schedule_sharing.py','history_locations.py')
 
 OBSERVER = {'WB Daily Warmup': {'run_during_warmup_days':'Yes',
             'python_module_name':'wb_warmup','plugin_class_name':'DailyRoomTemperatures'}}
@@ -42,26 +42,43 @@ def code_hashes():
 def execution_revision(frozen,root,*,historical=False):
     actual=code_hashes()
     if frozen==actual:return dict(kind='frozen',code_hashes=actual)
-    # Trace exact pairs backwards. Previously prepared models are run as frozen.
+    # A frozen parent may be inspected at a new location. Only exact named
+    # file sets from the running program or an explicit upgrade are accepted.
+    def names(values):
+        by_name={Path(name).name:checksum for name,checksum in values.items()}
+        if len(by_name)!=len(values):raise ValueError('冻结执行程序包含重复文件名。')
+        return by_name
+    if historical:
+        if names(frozen)==names(actual):return dict(kind='relocated_frozen',code_hashes=actual)
     contract_path=ROOT.parent/'EXECUTOR_COMPATIBILITY.json'
-    compatible=[actual]
+    edges=[]
+    historical_baselines={}
     if contract_path.is_file():
         contract=read_json(contract_path)
-        for key in ('schedule_sharing_update','scheduling_update'):
-            revision=contract.get(key)
-            if not revision:continue
-            before={str(ROOT/n):h for n,h in revision['from'].items()}
-            after={str(ROOT/n):h for n,h in revision['to'].items()}
-            if after in compatible and before:
-                compatible.append(before)
-                if frozen==before:return dict(kind='audited_scheduling_update',id=revision['id'],code_hashes=actual)
+        for key in ('history_location_update','schedule_sharing_update','scheduling_update'):
+            item=contract.get(key)
+            if item:edges.append((item['from'],item['to'],item['id']))
+        if historical and contract.get('schema')==2:
+            historical_baselines=contract.get('historical_baselines',{})
+            item=contract.get('integrated_history_read')
+            if item:edges.append((item['from'],item['to'],item['id']))
     path=Path(root)/'data/execution/runtime-compatibility.json'
-    if path.exists():
-        for upgrade in read_json(path).get('upgrades',[]):
-            if upgrade['from_code_hashes']==frozen and upgrade['to_code_hashes'] in compatible:
-                if upgrade.get('historical_only') and not historical:
-                    continue
-                return dict(kind=upgrade.get('kind','audited_scheduling_update'),id=upgrade['id'],code_hashes=actual)
+    if path.is_file():
+        for row in read_json(path).get('upgrades',[]):
+            if not row.get('historical_only') or historical:
+                edges.append((names(row['from_code_hashes']),names(row['to_code_hashes']),row['id']))
+    local_names=all(Path(p).parent==ROOT for p in frozen)
+    if historical or local_names:
+        known=[names(actual)]
+        for current in known:
+            if historical_baselines and current==contract['to_code_hashes']:
+                for version, checksums in historical_baselines.items():
+                    if checksums and names(frozen)==checksums:
+                        return dict(kind='audited_historical_result_read',id=version,code_hashes=actual)
+            for before,after,ident in edges:
+                if after!=current or not before:continue
+                if names(frozen)==before:return dict(kind='audited_scheduling_update',id=ident,code_hashes=actual)
+                if before not in known:known.append(before)
     raise ValueError('计算程序已更新，请重新准备计算。')
 
 def portable_reference(root,path,checksum,suffix):
@@ -224,9 +241,13 @@ def load_review(root,ident,checksum,*,historical=False,only_index=None):
         if len(plan['cases']) != 1 or plan['cases'][0]['step_minutes'] != followup['step']:
             raise ValueError('单地点补算清单与登记的步长不符。')
         validate_step(record, followup['original_step'], followup['step'], followup.get('purpose','recovery'))
-    reader=VerifiedReader()
+    reader=VerifiedReader(history_root=root if historical else None)
     reader.check(dict(path=str(Path(root)/'data/model-inputs'/plan['bundle_id']/'manifest.json'),sha256=plan['bundle_sha256']))
-    for p,h in plan['engine_files'].items():reader.check(dict(path=p,sha256=h))
+    files = plan['engine_files']
+    if historical:
+        from history_locations import engine_location
+        _, files = engine_location(root,plan)
+    for p,h in files.items():reader.check(dict(path=p,sha256=h))
     cases=plan['cases'] if only_index is None else [plan['cases'][only_index]]
     for c in cases:
         if c.get('output_contract',OUTPUT_CONTRACT)!=plan['output_contract']:raise ValueError('算例与清单的输出类型不一致。')

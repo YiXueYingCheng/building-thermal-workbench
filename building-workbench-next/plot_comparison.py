@@ -52,9 +52,10 @@ def plot_site(folder,d):
     (folder/'figure_caption.txt').write_text(f"{period} sensible heating and cooling demand at {site['city']} ({site['site_id']}). Panel (a) compares reference and study totals in kWh; panel (b) shows monthly reference-minus-study contributions, positive for reduced demand and negative for increased demand. The plotted period is {d['period']}; monthly values contain only selected dates. Reference: {d['records']['left']['name']} v{d['records']['left']['revision']}; study: {d['records']['right']['name']} v{d['records']['right']['revision']}. This single-site result is not a climate-type or global estimate. Timesteps: {d.get('step_label') or (str(d['step_minutes'])+' min')}. Dataset: {d['dataset_sha256']}. See dataset.json for pinned sources and scientific review evidence.",encoding='utf-8')
 
 
-def plot(folder):
+def plot(folder,metric=None):
     folder=Path(folder);d=json.loads((folder/'dataset.json').read_text('utf-8'))
     if figure_kind(d)=='site':return plot_site(folder,d)
+    chart_metric=metric or d['metric']
     a=json.loads((folder/'map.json').read_text('utf-8'))
     g=a['grid'];grid=np.frombuffer(base64.b64decode(g['data']),dtype=np.uint8).reshape((g['height'],g['width']))
     np.savetxt(folder/'matrix_climate.csv',grid,delimiter=',',fmt='%d')
@@ -80,13 +81,13 @@ def plot(folder):
     cbar=fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm,cmap=cmap),ax=axes,orientation='horizontal',fraction=.025,pad=.015,shrink=.65)
     cbar.set_label('Reference − study (MJ m⁻² of conditioned floor area)')
     fig.legend(handles=[Patch(facecolor='#d1d5db',label='No paired data')],loc='center right',bbox_to_anchor=(.97,.57),frameon=False,fontsize=8)
-    ax=fig.add_subplot(gs[2,:]);x=np.arange(len(classes));key=d['metric']+'_saved_MJ_m2_'
+    ax=fig.add_subplot(gs[2,:]);x=np.arange(len(classes));key=chart_metric+'_saved_MJ_m2_'
     vals=np.array([c[key+'mean'] if c[key+'mean'] is not None else np.nan for c in classes]);lo=np.array([c[key+'min'] if c[key+'min'] is not None else np.nan for c in classes]);hi=np.array([c[key+'max'] if c[key+'max'] is not None else np.nan for c in classes]);valid=np.isfinite(vals)
     ax.bar(x[valid],vals[valid],color=cmap(norm(vals[valid])),edgecolor='#6b7280',linewidth=.5)
     ax.errorbar(x[valid],vals[valid],yerr=[vals[valid]-lo[valid],hi[valid]-vals[valid]],fmt='none',ecolor='#30383d',capsize=2,linewidth=.8)
     ax.scatter(x[~valid],np.zeros((~valid).sum()),marker='x',color='#6b7280',label='No paired data')
     ax.axhline(0,color='#6b7280',linewidth=.7);ax.set_xticks(x,[c['climate']+'\n'+str(c['valid_sites']) for c in classes],fontsize=8)
-    ax.set(ylabel='Demand reduction (MJ m⁻²)',xlabel='Köppen–Geiger climate type / paired sites (n)',title=f"{d['metric'].capitalize()} demand reduction: mean and site range")
+    ax.set(ylabel='Demand reduction (MJ m⁻²)',xlabel='Köppen–Geiger climate type / paired sites (n)',title=f"{chart_metric.capitalize()} demand reduction: mean and site range")
     fig.suptitle(f"Climate representative comparison · {d.get('step_label') or (str(d['step_minutes'])+' min')} · {d['paired_sites']} paired sites" + waiver_label(d),fontsize=14)
     fig.get_layout_engine().set(rect=(0,.105,1,.83))
     fig.text(.02,.068,f"Equal-site means; bars show site ranges, not confidence intervals. Grey / ×: no data.\nClimate-type mapping, not pixel simulations. Period: {period}; area: {d['conditioned_area_m2']:g} m². Dataset: {d['dataset_sha256'][:16]}",fontsize=8)
@@ -101,4 +102,9 @@ def plot(folder):
     (folder/'figure_caption.txt').write_text(f"{period} sensible heating and cooling demand reduction for the selected reference and study schemes. Class values are equal-weight means of paired representative sites; vertical ranges show site minima and maxima, not confidence intervals. Results are normalized by {d['conditioned_area_m2']} m² of conditioned floor area. Climate-type values are mapped onto an existing 0.5° display grid and are not simulations at every grid cell. Missing results remain missing. The figure uses {d['paired_sites']} paired sites, {d.get('step_label') or (str(d['step_minutes'])+' min')} simulation timesteps, and dataset {d['dataset_sha256']}. See dataset.json for pinned scheme revisions, source batches, excluded sites and review notes. Climate map source: {a['manifest']['source'].get('classification_url','')}.\n"+attribution,encoding='utf-8')
 
 
-if __name__=='__main__':plot(sys.argv[1])
+if __name__=='__main__':
+    if len(sys.argv)==6:
+        from plot_regional import plot as regional_plot
+        regional_plot(*sys.argv[1:])
+    else:
+        plot(*sys.argv[1:])

@@ -10,6 +10,7 @@ import json,re,sqlite3,uuid
 from foundation import read_json,write_json,sha,now,owned
 from execution_inputs import load_review
 from execution_results import verify_artifacts
+from history_locations import workspace_path, input_path
 
 CONTRACT='annual_warmup_assessment_v1'
 FIELDS=('batch','idx','status','identity','attempt','result','result_sha256','error','updated')
@@ -36,7 +37,7 @@ def validate_assessment(root,b,j,expected_failure=None):
     require(path.is_file(),'本项还没有完整的年度诊断依据；保留未通过状态，不建议直接重复计算。')
     a=read_json(path)
     require(a.get('contract')==CONTRACT and a.get('source_job')==(expected_failure or failure_binding(j)),'诊断依据与本次失败记录不一致。')
-    candidate=owned(a['candidate_path'],root/'verification');evidence=owned(a['evidence_path'],root/'verification')
+    candidate=owned(workspace_path(root,a['candidate_path']),root/'verification');evidence=owned(workspace_path(root,a['evidence_path']),root/'verification')
     require(sha(candidate)==a['candidate_sha256'] and sha(evidence)==a['evidence_sha256'],'诊断候选或分析依据发生变化。')
     raw=read_json(candidate);proof=read_json(evidence);report=a['report']
     require(raw['status']=='review' and raw['identity']==j['identity'] and raw['attempt']==j['attempt'],'诊断候选不属于本次算例。')
@@ -51,17 +52,17 @@ def validate_assessment(root,b,j,expected_failure=None):
     require(report['scope']==proof.get('scope') and report.get('checks') and all(c.get('passed') is True for c in report['checks']),'检查结论不完整。')
     refs=proof.get('verified_sources',[])
     require(refs and len({v['path'] for v in refs})==len(refs),'分析来源缺失或重复。')
-    for ref in refs:require(sha(ref['path'])==ref['sha256'],'诊断引用资料发生变化，请重新分析。')
+    for ref in refs:require(sha(input_path(root,ref['path'],ref['sha256']))==ref['sha256'],'诊断引用资料发生变化，请重新分析。')
     for file,h in raw['artifacts'].items():
         require(any(v['path']==file and v['sha256']==h for v in refs),'原始计算文件没有绑定到分析依据。')
     plan=load_review(root,b['review'],b['checksum'],historical=True);case=plan['cases'][j['idx']]
     require(case['identity']==j['identity'] and case['site_id']==raw['site_id'] and case['model_sha256']==a['model_sha256'],'冻结输入与诊断对象不一致。')
     model_path=next((path for path in raw['artifacts'] if Path(path).name=='model.epJSON'),None)
-    require(model_path is not None and sha(model_path)==case['model_sha256'],'实际模型与冻结输入不一致。')
+    require(model_path is not None and sha(workspace_path(root,model_path))==case['model_sha256'],'实际模型与冻结输入不一致。')
     require(raw['days']==365 and raw['step_minutes']==5 and raw['mode']=='controlled' and raw['checks']['full_period'] and raw['checks']['monthly_reconciliation'],'当前只支持完整全年 5 min 显热诊断。')
     if raw.get('daily_reference'):
         require(raw['daily_reference']['data_checks_passed'] and raw['daily_reference']['days']==365 and proof.get('daily_calendar_reviewed') is True,'逐日参考与日历敏感性尚未核查。')
-    verify_artifacts(raw)
+    verify_artifacts(raw,root)
     return path,a,raw,proof
 
 def failed_view(root,batch,index):
@@ -95,8 +96,10 @@ def handle_start(root,batch,index):
     """Return None for ordinary results; warmup cases use registered evidence."""
     root=Path(root).resolve();b,j=source(root,batch,index)
     if j['status']=='review' and j['result']:
-        require(sha(j['result'])==j['result_sha256'],'待复核候选文件发生变化。')
-        raw=read_json(j['result'])
+        from output_storage import checked_path
+        result_path=checked_path(j['result'],root)
+        require(sha(result_path)==j['result_sha256'],'待复核候选文件发生变化。')
+        raw=read_json(result_path)
         if not raw.get('warmup_diagnostic'):return None
         match=existing(root,j);require(match is not None,'未找到对应的预热复核记录。')
         _,job=match;validate_assessment(root,b,j,job['original_failure'])

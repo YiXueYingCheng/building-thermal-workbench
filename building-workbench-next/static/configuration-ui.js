@@ -4,6 +4,8 @@ function usageRoomType(room){
  return {name:name||'用途未标注',key:name?(source.room_type_id!=null?'id:'+source.room_type_id:'name:'+name):'',legacy:name&&source.room_type_id==null};
 }
 S.configuration=null;S.usageDraft=null;S.usageDirty=false;S.usageRoom=0;S.usageChannel='people';S.componentLists={usage:[],material:[]};S.materialLibraryOpen=false;
+// Track successive library saves of the same open definition without editing the scheme.
+const materialLibrarySaves=new WeakMap();
 function configurationSupported(){return ['global_frozen_v011','ordinary_building_v1'].includes(S.record?.provenance.adapter);}
 function usageMembershipText(){const r=S.usageDraft?.rooms||[];const n=r.filter(x=>x.conditioned).length;return `保持原 ${n} 间空调房、${r.length-n} 间非空调房`; }
 function resetConfiguration(){S.configuration=null;S.usageDraft=null;S.usageDirty=false;S.usageRoom=0;S.materialLibraryOpen=false;S.operationOpen=false;S.envelopeTarget=null;S.envelopeOpen=false;S.constructionOpen=false;S.materialParent=S.record?.factors.materials.definition_reference||null;}
@@ -38,7 +40,17 @@ buildingPanel=function(){
  html+=`<section class="well usage-editor"><div class="row"><h3>房间与建筑默认运行</h3><span id="usage-edit-status">${S.usageDirty?'配置有未保存修改':'配置已读取'}</span></div><p class="muted">${usageMembershipText()}。作息输入为该小时的实际人数或功率，空调可用计划独立设置。</p><label class="field">配置名称<input id="usage-name" value="${esc(S.usageName)}"${disabled()}></label><div class="grid2"><label class="field">房间<select id="usage-room">${S.usageDraft.rooms.map((r,i)=>`<option value="${i}"${i===S.usageRoom?' selected':''}>${esc(r.zone)} · ${esc(usageRoomType(r).name)} · ${format(r.area_m2,2)} m² · ${r.conditioned?'空调房':'非空调房'}</option>`).join('')}</select></label><label class="field">使用计划<select id="usage-channel">${Object.entries(roomChannels).filter(([k])=>k!=='available'||room.hvac).map(([k,v])=>`<option value="${k}"${k===channel?' selected':''}>${v}</option>`).join('')}</select></label></div>${dayTable(value,'data-usage-hour="'+channel+'"')}${room.hvac?`<details><summary>此房间的默认启停温度</summary><div class="grid2">${Object.entries(temperatureLabels).map(([k,v])=>`<label class="field">${v} / °C<input type="number" step="any" data-usage-temperature="${k}" value="${room.hvac[k]}"${disabled()}></label>`).join('')}</div><p class="muted">本模型保留四个启停温度及原回差控制；工况可显式覆盖这些值。</p></details>`:''}<div class="actions"><button data-configuration="usage-save" class="primary"${disabled()}>保存配置版本并用于当前草稿</button><button data-configuration="usage-discard">撤销配置编辑</button></div><p class="muted">这里只保存建筑配置版本；当前方案还需“保存版本”。其他方案不会自动更新。</p></section>`;
  return html;
 };
-function controlPresetToolbar(){return S.record.factors.materials.definitions.length?`<div class="actions control-presets">${[['fixed','固定'],['calendar','季节光学切换'],['feedback','热阻反馈'],['combined','表面光学切换＋热阻调节']].map(([k,label])=>`<button data-control-preset="${k}"${disabled()}>${label}</button>`).join('')}</div><p class="muted">预设只组织工况；缺少本地日历或对应物性时会提示。热学状态与表面光学仍可在工况中分别调整。</p>`:'';}
+function wallThermalText(id){
+ const m=S.record.factors.materials;
+ const app=m.applications.find(a=>a.target_ids.includes(id));
+ if(!app)return '未铺设';
+ const c=S.record.factors.condition.controls.find(c=>c.application_id===app.id&&c.channel==='thermal'&&c.target_ids.includes(id));
+ if(!c)return '待配置';
+ if(c.mode==='feedback')return '反馈调节';
+ const state=m.definitions.find(d=>d.id===app.material_id)?.states.find(s=>s.id===c.state_id);
+ return state?.name||c.state_id||'待配置';
+}
+function controlPresetToolbar(){return S.record.factors.materials.applications.some(a=>a.placement_basis==='legacy_outer_equivalent_model')?`<div class="actions control-presets">${[['fixed','固定'],['calendar','季节光学切换'],['feedback','热阻反馈'],['combined','表面光学切换＋热阻调节']].map(([k,label])=>`<button data-control-preset="${k}"${disabled()}>${label}</button>`).join('')}</div><p class="muted">预设只组织工况；缺少本地日历或对应物性时会提示。热学状态与表面光学仍可在工况中分别调整。</p>`:'';}
 const originalConditionPanel=conditionPanel;
 conditionPanel=function(){
  let html=originalConditionPanel();if(!configurationSupported())return html;
@@ -53,14 +65,34 @@ const originalMaterialsPanel=materialsPanel;
 materialsPanel=function(){
  if(S.record.provenance.adapter!=='global_frozen_v011')return originalMaterialsPanel()+'<p class="muted">此旧动态来源保留原材料应用与控制。建筑配置和材料库选择先在 Drawing26 全球来源接通。</p>';
  const m=S.record.factors.materials,ref=m.definition_reference;
- const html=`<div class="configuration-toolbar"><div class="actions"><button data-configuration="material-list">选择 / 添加材料</button>${m.definitions.length?`<button data-configuration="material-save"${disabled()}>保存当前材料版本</button><button data-configuration="remove-material"${disabled()}>移除研究层，使用 W00</button>`:''}<button data-configuration="construction">核对基础构造与研究层</button></div>${ref?`<p>材料版本：${esc(ref.name)} · 版本 ${ref.revision}</p>`:'<p class="muted">当前材料物性随方案快照保存。</p>'}${S.materialLibraryOpen?`<div class="well"><button data-configuration="default-material"${disabled()}>选用当前已核实的 ECA 模板</button><label class="field">已保存材料版本<select data-component-use="material"${disabled()}>${componentOptions('material',ref)}</select></label></div>`:''}</div>`;
+ const html=`<div class="configuration-toolbar"><div class="actions"><button data-configuration="material-list">选择 / 添加材料</button>${m.definitions.length?`<button data-configuration="material-save"${disabled()}>保存当前材料版本</button><button data-configuration="remove-material"${disabled()}>移除研究层，使用 W00</button>`:''}<button data-configuration="construction">核对基础构造与研究层</button></div>${ref?`<p>材料版本：${esc(ref.name)} · 版本 ${ref.revision}</p>`:'<p class="muted">当前材料物性随方案快照保存。</p>'}${S.materialLibraryOpen?`<div class="well"><label class="field">已保存材料版本<select data-component-use="material"${disabled()}>${componentOptions('material',ref)}</select></label></div>`:''}</div>`;
  const wallData=S.configuration?.data.walls;
- return html+originalMaterialsPanel()+`${m.definitions.length?`<label class="field">材料名称<input data-path="factors.materials.definitions.0.name" value="${esc(m.definitions[0].name)}"${disabled()}></label>`:''}${S.constructionOpen&&wallData?`<details class="well configuration-construction" open><summary>实际构造与作用墙面</summary><p>${m.definitions.length?'基础构造从外到内列出。当前执行接法为原 14 段外墙外侧等效热阻层；所选位置和范围不符时按能力提示待适配。':'W00 不含新增研究层；关闭反馈本身不等于移除材料。'}</p><div class="table-scroll"><table class="table"><thead><tr><th>墙面 / 房间</th><th>基础构造，从外到内</th><th>研究层</th><th>反馈范围</th></tr></thead><tbody>${wallData.map(w=>`<tr><td>${esc(w.id)} / ${esc(w.zone)}</td><td>${w.layers.map(esc).join(' → ')}</td><td>${m.definitions.length&&m.applications.some(a=>a.target_ids.includes(w.id))?esc(m.definitions[0].name)+' · '+esc(({exterior:'外侧等效层',interior:'内侧（待适配）',between:'层间（待适配）'})[m.applications[0]?.position]||'待适配'):'无'}</td><td>${w.feedback_eligible?'原 7 段参与墙':'固定状态'}</td></tr>`).join('')}</tbody></table></div></details>`:''}`;
+ return html+originalMaterialsPanel()+`${m.definitions.length?`<label class="field">材料名称<input data-path="factors.materials.definitions.0.name" value="${esc(m.definitions[0].name)}"${disabled()}></label>`:''}${S.constructionOpen&&wallData?`<details class="well configuration-construction" open><summary>实际构造与作用墙面</summary><p>${m.definitions.length?'基础构造从外到内列出。下表按当前草稿逐墙列出铺设范围和控制。':'W00 不含新增研究层；关闭反馈本身不等于移除材料。'}</p><div class="table-scroll"><table class="table"><thead><tr><th>墙面 / 房间</th><th>基础构造，从外到内</th><th>研究层</th><th>热学控制</th></tr></thead><tbody>${wallData.map(w=>`<tr><td>${esc(w.id)} / ${esc(w.zone)}</td><td>${w.layers.map(esc).join(' → ')}</td><td>${m.definitions.length&&m.applications.some(a=>a.target_ids.includes(w.id))?esc(m.definitions[0].name)+' · '+esc(({exterior:'外侧等效层',interior:'内侧（待适配）',between:'层间（待适配）'})[m.applications[0]?.position]||'待适配'):'无'}</td><td>${esc(wallThermalText(w.id))}</td></tr>`).join('')}</tbody></table></div></details>`:''}`;
 };
-function applyMaterial(definition,reference=null){
- S.materialParent=reference;const d=S.configuration.data,m=copy(d.material_template);m.definitions=[copy(definition)];m.applications[0].material_id=definition.id;
- if(reference)m.definition_reference=copy(reference);setPath('factors.materials',m);
- setPath('factors.condition.controls',copy(d.controls_template));
+async function chooseLegacyFeedbackWalls(){
+ const request={id:S.id,revision:S.saved.revision,changes:changes()};
+ const key=JSON.stringify(request);
+ const rows=await api('/api/material-library/legacy-feedback-options',request);
+ if(!rows.some(r=>r.supported))throw Error('此等效热阻算例的已铺墙段没有可用于反馈的输入。');
+ const dlg=document.createElement('dialog');
+ dlg.className='library-adoption';
+ dlg.setAttribute('aria-label','选择参与热阻反馈的墙段');
+ dlg.innerHTML='<form method="dialog"><header class="viewer-head"><h2>选择参与热阻反馈的墙段</h2></header>'+
+  '<div class="mc-preview-body"><p>勾选参与反馈的已铺墙。其余墙沿用各自的固定状态。</p>'+
+  rows.map(r=>`<label class="field"><span><input type="checkbox" value="${esc(r.id)}" ${r.supported?'':'disabled'} ${r.selected&&r.supported?'checked':''}> ${esc(r.id)}${r.supported?'':' · 旧求解器缺少此墙的反馈输入'}</span></label>`).join('')+
+  '</div><footer class="actions"><button type="button" data-feedback-cancel>取消</button><button type="submit" class="primary" value="apply">采用所选墙段</button></footer></form>';
+ const picked=()=>Array.from(dlg.querySelectorAll('input:enabled:checked'),x=>x.value);
+ const sync=()=>{dlg.querySelector('[type=submit]').disabled=!picked().length;};
+ dlg.addEventListener('change',sync);
+ dlg.querySelector('[data-feedback-cancel]').onclick=()=>dlg.close();
+ const closed=new Promise(resolve=>dlg.addEventListener('close',()=>resolve(dlg.returnValue==='apply'?new Set(picked()):null),{once:true}));
+ document.body.append(dlg);
+ try{
+  sync();dlg.showModal();
+  const selection=await closed;
+  if(selection&&key!==JSON.stringify({id:S.id,revision:S.saved?.revision,changes:changes()}))throw Error('方案已更改，请重新选择墙段。');
+  return selection;
+ }finally{dlg.remove();}
 }
 async function configurationAction(button){
  const a=button.dataset.configuration,kind=button.dataset.componentUse;
@@ -68,9 +100,24 @@ async function configurationAction(button){
  if(button.dataset.overrideOperation){await loadConfiguration();const id=button.dataset.overrideOperation,c=S.record.factors.building.usage_profile?.content||S.configuration.data.base;const o=copy(S.record.factors.condition.operation.overrides||{});o[id]=copy(c.rooms.find(r=>r.id===id).hvac);setPath('factors.condition.operation.overrides',o);return true;}
  if(button.dataset.clearOperation){const o=copy(S.record.factors.condition.operation.overrides);delete o[button.dataset.clearOperation];setPath('factors.condition.operation.overrides',o);return true;}
  if(button.dataset.controlPreset){
-  const preset=button.dataset.controlPreset;await loadConfiguration();const c=copy(S.configuration.data.controls_template);
-  if(['feedback','combined'].includes(preset))Object.assign(c[0],{mode:'feedback',rule:'UNIFIED',policy:copy(S.boot.control_policy),update:{kind:'solver_step'},state_roles:copy(stateRoles())});
-  if(['calendar','combined'].includes(preset))Object.assign(c[2],{mode:'calendar',reference_id:S.record.factors.condition.reference_runs[0]?.id||'season_reference'});
+  if(!S.record.factors.materials.applications.some(a=>a.placement_basis==='legacy_outer_equivalent_model'))throw Error('请在当前材料的工况中选择控制。');
+  const preset=button.dataset.controlPreset,condition=S.record.factors.condition;
+  const feedback=['feedback','combined'].includes(preset),calendar=['calendar','combined'].includes(preset);
+  const selected=feedback?await chooseLegacyFeedbackWalls():null;
+  if(feedback&&!selected)return true;
+  const c=condition.controls.flatMap(({channel,application_id,target_ids,state_id,face_id})=>{
+   const fixed={channel,application_id,target_ids:[...target_ids],mode:'fixed'};
+   if(channel==='orientation'){
+    return calendar?{...fixed,mode:'calendar',reference_id:condition.reference_runs[0]?.id||'season_reference'}:{...fixed,face_id:face_id||'A'};
+   }
+   fixed.state_id=state_id;
+   if(!feedback)return fixed;
+   const active=target_ids.filter(id=>selected.has(id)),passive=target_ids.filter(id=>!selected.has(id));
+   return [...(active.length?[{...fixed,target_ids:active,mode:'feedback',rule:'UNIFIED',
+    policy:copy(S.boot.control_policy),update:{kind:'solver_step'},state_roles:copy(stateRoles())}]:[]),
+    ...(passive.length?[{...fixed,target_ids:passive}]:[])];
+  });
+  if(feedback&&!c.some(group=>group.mode==='feedback'))throw Error('当前铺设范围中没有可采用此历史反馈策略的墙段。');
   setPath('factors.condition.controls',c);S.factor='condition';return true;
  }
  if(!a)return false;
@@ -83,11 +130,13 @@ async function configurationAction(button){
   setPath('factors.building.usage_profile',row);S.usageDirty=false;notice('建筑配置版本已保存并选入当前草稿；请保存方案版本。');return true;
  }
  if(a==='material-save'){
-  const m=S.record.factors.materials,d=m.definitions[0],old=m.definition_reference||S.materialParent;
+  const m=S.record.factors.materials,d=m.definitions[0],old=materialLibrarySaves.get(d)||m.definition_reference||S.materialParent;
   const row=await api('/api/components',{kind:'material',name:d.name,content:d,parent:old?{id:old.id,revision:old.revision}:null});
-  S.materialParent=row;setPath('factors.materials.definition_reference',row);notice('材料版本已保存；其他方案保持原快照。');return true;
+  materialLibrarySaves.set(d,row);
+  const versions=S.materialCatalog?.data?.versions;
+  if(versions&&!versions.some(r=>r.sha256===row.sha256))versions.unshift(row);
+  notice('已保存到公用材料库。要在方案中采用此版本，请预览并确认选用。');return true;
  }
- if(a==='default-material'){await loadConfiguration();applyMaterial(S.configuration.data.material_template.definitions[0]);return true;}
  if(a==='remove-material'){
   removeResearchMaterialFromDraft();
   return true;
@@ -104,7 +153,7 @@ document.addEventListener('change',async event=>{
    const current=kind==='usage'?S.record.factors.building.usage_profile:S.record.factors.materials.definition_reference;
    if(current?.id===row.id&&current.revision===row.revision&&current.sha256===row.sha256)return;
    if(current?.id===row.id&&row.revision>current.revision&&typeof openComponentVersionUpdate==='function'){t.value=String(S.componentLists[kind].findIndex(v=>v.id===current.id&&v.revision===current.revision&&v.sha256===current.sha256));await openComponentVersionUpdate(row);return;}
-   if(kind==='usage'){if(row.content.building_id!==S.configuration.data.base.building_id)throw Error('请选择同一建筑的配置版本。');setPath('factors.building.usage_profile',copy(row));resetUsageDraft();}else applyMaterial(row.content,row);render();
+   if(kind==='usage'){if(row.content.building_id!==S.configuration.data.base.building_id)throw Error('请选择同一建筑的配置版本。');setPath('factors.building.usage_profile',copy(row));resetUsageDraft();}else await openMaterialCatalog(Boolean(materialViewerCurrent()),row);render();
   }
  }catch(error){notice(error.message);}
 });

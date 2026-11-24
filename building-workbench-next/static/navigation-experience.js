@@ -27,24 +27,21 @@ function drawQueueResult(){
  const v=S.queueResultWindow;if(!v||v.suspended)return;
  const d=queueResultDialog();
  const receipt=v.verified&&!v.error&&!v.pending?`<p class="muted" data-batch-read-status>${v.reused?'已读取最近核验的结果 · 登记与文件状态一致':'本次已完成内容核验'} · ${esc(v.verified.replace('T',' '))}</p>`:'';
- d.innerHTML=`<header class="viewer-head"><h2 id="queue-result-title">计算结果与核验</h2><button data-action="close-execution-results">关闭并返回任务</button></header><div class="focused-body">${v.error?'<p class="warning" role="alert">'+esc(v.error)+'</p>':''}${v.pending?'<p role="status">正在读取批次，首次打开需核验文件。可以先关闭窗口。</p>':receipt+navigationResultsMarkup()}</div>`;
+ d.innerHTML=`<header class="viewer-head"><h2 id="queue-result-title">计算结果与核验</h2><button data-action="close-execution-results">关闭并返回任务</button></header><div class="focused-body">${v.error?'<p class="warning" role="alert">'+esc(v.error)+'</p>':''}${v.pending?(v.preview?'<p role="status">正在确认上次核验后有无变化…</p><div inert>'+navigationResultsMarkup()+'</div>':'<p role="status">正在核验批次文件。可以先关闭窗口。</p>'):receipt+navigationResultsMarkup()}</div>`;
  if(!d.open)d.showModal();
  d.querySelector('.focused-body').scrollTop=v.scroll||0;
 }
 function closeQueueResult(){const v=S.queueResultWindow;if(!v)return;++queueResultEpoch;S.queueResultWindow=null;queueResultDialog().close();queueResultDialog().replaceChildren();S.executionResults=null;resetBatchResults();requestAnimationFrame(()=>{scrollTo({top:v.y,behavior:'instant'});document.querySelector(`[data-batch-results="${v.id}"], [data-index-open="${v.id}"]`)?.focus({preventScroll:true});});}
-const batchReadsInProgress=new Map();
+const recentBatchReads=new RecentViewReader();
 function readBatchView(id,force){
- const running=batchReadsInProgress.get(id);
- if(running&&(!force||running.force))return running.promise;
- const promise=api('/api/execution/'+id+'/summary?view='+(force?'refresh':'recent'));
- const read={promise,force};batchReadsInProgress.set(id,read);
- const clear=()=>{if(batchReadsInProgress.get(id)===read)batchReadsInProgress.delete(id);};
- promise.then(clear,clear);return promise;
+ return recentBatchReads.read(id,force,known=>api('/api/execution/'+id+'/summary?view='+(force?'refresh':'recent')+(known?'&known='+encodeURIComponent(known):'')));
 }
 loadBatchResults=async function(id,reset=false,force=false){
  const epoch=++queueResultEpoch;let v=S.queueResultWindow;
  if(!v||v.id!==id){S.executionResults=null;resetBatchResults();v=S.queueResultWindow={id,y:scrollY,scroll:0};}
- v.pending=true;v.error='';drawQueueResult();
+ const previous=!force&&recentBatchReads.entries.get(id);
+ if(previous)S.executionResults=previous.summary;
+ v.pending=true;v.preview=Boolean(previous);v.error='';drawQueueResult();
  try{
    const read=await readBatchView(id,force);
    if(epoch!==queueResultEpoch||S.queueResultWindow!==v)return false;
@@ -57,7 +54,7 @@ loadBatchResults=async function(id,reset=false,force=false){
    if(epoch===queueResultEpoch&&S.queueResultWindow===v){S.executionResults=null;v.error=e.message;v.verified=null;}
    return false;
  }finally{
-   if(epoch===queueResultEpoch&&S.queueResultWindow===v){v.pending=false;drawQueueResult();}
+   if(epoch===queueResultEpoch&&S.queueResultWindow===v){v.pending=false;v.preview=false;drawQueueResult();}
  }
 };
 let listViewEpoch=0,sourceSelectionBusy=false,indexSelectionEpoch=0;

@@ -3,6 +3,7 @@ import copy
 import csv
 import datetime as dt
 import math
+import re
 from pathlib import Path
 from contracts import normalize,validate
 from foundation import digest
@@ -15,7 +16,7 @@ def resolve(record,catalog,site_id=None,reference_context=None):
  r=normalize(record);errors=validate(r,catalog['sites'])
  if errors:raise NotSupported('；'.join(errors))
  registry=catalog.get('dynamic_registry',{});binding=registry.get('records',{}).get(origin(r));f=r['factors']
- original_record=catalog['records'].get(origin(r))
+ original_record=catalog['global_bundle']['building_source'] if r['provenance']['adapter']=='global_frozen_v011' else catalog['records'].get(origin(r))
  if not original_record or {k:v for k,v in r['numerics'].items() if k!='step_minutes'}!={k:v for k,v in original_record['numerics'].items() if k!='step_minutes'}:raise NotSupported('来源引擎或数值设置已变化，需重新适配。')
  if r['provenance']['adapter']=='legacy_plan_v011':
   if not binding or f['building']!=binding['building']:raise NotSupported('该旧方案的建筑尚未登记到动态模板。')
@@ -25,15 +26,16 @@ def resolve(record,catalog,site_id=None,reference_context=None):
   if operation!=original['factors']['condition']['operation']:raise NotSupported('建筑运行参数覆盖尚未接入。')
  elif r['provenance']['adapter']=='global_frozen_v011':
   if any(not catalog['sites'][s].get('eligible') or catalog['sites'][s].get('source_kind') not in ('reviewed_global','imported_epw_v1') for s in f['scope']['site_ids']):raise NotSupported('地点没有可用的气象输入。')
-  if f['building']!=catalog['records']['global_fixed']['factors']['building']:raise NotSupported('建筑改变后需要新的动态模板。')
-  if f['condition']['operation']!=catalog['records']['global_fixed']['factors']['condition']['operation']:raise NotSupported('全球模板当前支持原温控运行。')
+  if f['building']!=catalog['global_bundle']['building_source']['building']:raise NotSupported('建筑改变后需要新的动态模板。')
+  if f['condition']['operation']!=catalog['global_bundle']['building_source']['operation']:raise NotSupported('全球模板当前支持原温控运行。')
  else:raise NotSupported('来源没有相应动态模板。')
  m=f['materials']
  if len(m['definitions'])!=1 or len(m['applications'])!=1:raise NotSupported('当前动态适配支持一个 ECA 等效层应用。')
  d=m['definitions'][0];app=m['applications'][0];wallmap={w['surface']:w for w in registry.get('walls',[])}
  states={s['id']:s for s in d['states']}
  if set(states)!={'R','C'} or d['model']!='equivalent_resistance_no_layer_storage' or d['kind']!='single_layer':raise NotSupported('当前支持 R/C 独立状态的单层等效热阻材料。')
- if app['position']!='exterior' or app['component']!='wall' or set(app['target_ids'])!=set(wallmap):raise NotSupported('当前动态适配保留原 14 段外墙外侧应用。')
+ if app['position']!='exterior' or app['component']!='wall' or not app['target_ids'] or not set(app['target_ids'])<=set(wallmap):raise NotSupported('请核对应用墙号和外侧层位。')
+ wallmap={w:info for w,info in wallmap.items() if w in app['target_ids']}
  if any(s.get('resistance_m2K_W') is None for s in states.values()):raise NotSupported('材料两态热阻尚未补全。')
  if app['orientation']!={'A':'cooling_face','B':'other_face'} or app.get('placement_basis')!='legacy_outer_equivalent_model':raise NotSupported('材料方向或应用模型尚未适配。')
  thermal={};orientation={};groups=[]
@@ -44,7 +46,7 @@ def resolve(record,catalog,site_id=None,reference_context=None):
    dest[wall]=c
   if c['channel']=='thermal' and c['mode']=='feedback':
    if c.get('rule') not in ('UNIFIED','GROUPED'):raise NotSupported('反馈预设尚未支持。')
-   if any(not wallmap[w]['eligible'] for w in c['target_ids']):raise NotSupported('本阶段反馈作用范围限于原 7 段参与墙。')
+   if not c['target_ids'] or any(w not in wallmap or wallmap[w]['area_m2']<=0 or not wallmap[w].get('zone') for w in c['target_ids']):raise NotSupported('反馈墙需要可定位的房间和有效墙面积。')
    policy=c.get('policy')
    if not isinstance(policy,dict) or any(type(policy.get(k)) not in (int,float) or not math.isfinite(policy[k]) for k in POLICY_KEYS):raise NotSupported('请明确反馈阈值及最短保持时间。')
    if policy['cold_C']>=policy['hot_C'] or policy['flux_deadband_W_m2']<0 or policy['minimum_hold_minutes']<0:raise NotSupported('反馈阈值或保持时间无效。')
@@ -93,9 +95,53 @@ def program(lines):return dict(lines=[dict(program_line=s) for s in lines])
 def num(v):return format(v,'.15g')
 def state_num(s):return 0 if s=='R' else 1
 
+def restore_uncovered(model, original, skipped):
+ """Restore physical walls and remove their former controls and material diagnostics."""
+ names=set(skipped)
+ surfaces=model['BuildingSurface:Detailed']
+ for wall in skipped:
+  base=original['BuildingSurface:Detailed'][wall];surface=surfaces[wall]
+  if {k:v for k,v in surface.items() if k!='construction_name'}!={k:v for k,v in base.items() if k!='construction_name'}:
+   raise NotSupported(f'{wall} 与基础建筑几何不一致。')
+  layers=original['Construction'][base['construction_name']].copy()
+  for key,name in layers.items():
+   kind=next((kind for kind in ('Material','Material:NoMass','Material:AirGap') if name in original.get(kind,{})),None)
+   if not kind:raise NotSupported(f'{wall} 的基础构造层无法还原。')
+   values=original[kind][name];library=model.setdefault(kind,{})
+   if name in library and library[name]!=values:name='NX_BaseLayer_'+digest([kind,values])[:24]
+   if library.setdefault(name,values)!=values:raise NotSupported('基础层名称冲突。')
+   layers[key]=name
+  construction=base['construction_name']
+  if construction in model['Construction'] and model['Construction'][construction]!=layers:
+   construction='NX_BaseConstruction_'+digest(layers)[:24]
+  if model['Construction'].setdefault(construction,layers)!=layers:raise NotSupported('基础构造名称冲突。')
+  surface['construction_name']=construction
+ for key,item in list(model['SurfaceControl:MovableInsulation'].items()):
+  if item['surface_name'] in names:del model['SurfaceControl:MovableInsulation'][key]
+ prefix=re.compile(r'\b(?:ECA|JR)_(?:'+'|'.join(re.escape(w) for w in skipped)+r')_',re.I)
+ for kind in ('EnergyManagementSystem:Sensor','EnergyManagementSystem:Actuator'):
+  group=model.get(kind,{})
+  for key in list(group):
+   if prefix.match(key):del group[key]
+ for obj in model['EnergyManagementSystem:GlobalVariable'].values():
+  obj['variables']=[x for x in obj['variables'] if not prefix.match(x['erl_variable_name'])]
+ for obj in model['EnergyManagementSystem:Program'].values():
+  keep=[]
+  for line in obj['lines']:
+   expr=line['program_line']
+   if not prefix.search(expr):keep.append(line)
+   elif not expr.startswith('SET ') or not prefix.match(expr[4:]):
+    raise NotSupported('撤去墙段后仍有其他控制读取该墙，请核对控制关系。')
+  obj['lines']=keep
+ outputs=model.get('EnergyManagementSystem:OutputVariable',{})
+ removed={k for k,v in outputs.items() if prefix.match(v['ems_variable_name'])}
+ for key in removed:del outputs[key]
+ requests=model.get('Output:Variable',{})
+ for key,obj in list(requests.items()):
+  if obj['variable_name'] in removed:del requests[key]
+
 def compile_dynamic(record,site,catalog,reader=None,operation_mode=None,reference_context=None):
  cfg=resolve(record,catalog,site,reference_context);r=cfg['record'];reader=reader or VerifiedReader(catalog);binding=cfg['binding']
- for ref in catalog.get('dynamic_registry',{}).get('source_refs',[]):reader.check(ref)
  from calendar_library import verify_for_site
  verify_for_site(reference_context or r,catalog,site,reader)
  if site not in r['factors']['scope']['site_ids']:raise ValueError('地点不在方案范围。')
@@ -109,6 +155,20 @@ def compile_dynamic(record,site,catalog,reader=None,operation_mode=None,referenc
   from weather_import import job as weather_job
   job=weather_job(catalog,site,'FIXED_COOL_LOW7')
  raw=reader.json(job['model']);weather=reader.check(job['weather'])
+ capture={line['program_line'] for line in raw['EnergyManagementSystem:Program']['ECA_Capture']['lines']}
+ sensors=raw.get('EnergyManagementSystem:Sensor',{})
+ for group in cfg['groups']:
+  for wall in group['targets']:
+   prefix='ECA_'+wall
+   for suffix,where,variable,expression in (
+     ('T',cfg['walls'][wall]['zone'],'Zone Mean Air Temperature',''),
+     ('Q',wall,'Surface Outside Face Conduction Heat Transfer Rate per Area','0 - ')):
+    key=prefix+'_'+suffix+'Sensor'
+    sensor=sensors.get(key,{})
+    if (sensor.get('output_variable_or_output_meter_index_key_name')!=where or
+        sensor.get('output_variable_or_output_meter_name','').casefold()!=variable.casefold() or
+        'SET '+prefix+'_Last'+suffix+' = '+expression+key not in capture):
+     raise NotSupported(f'{wall} 的反馈输入缺少可核对的房温或墙面热流。')
  with weather.open(encoding='utf-8-sig') as stream:header=next(csv.reader(stream))
  location=dict(zip(('latitude','longitude','time_zone','elevation'),map(float,header[6:10])))
  prepared=copy.deepcopy(raw)
@@ -119,9 +179,9 @@ def compile_dynamic(record,site,catalog,reader=None,operation_mode=None,referenc
   def check(self,ref):return reader.check(ref)
   def json(self,ref):reader.check(ref);return copy.deepcopy(prepared)
  # Both fixed and feedback paths share the same material parameter compiler.
- shim=copy.deepcopy(r);shim['provenance']['adapter']='global_frozen_v011';shim['factors']['building']=copy.deepcopy(catalog['records']['global_fixed']['factors']['building'])
- shim['factors']['condition']['operation']=copy.deepcopy(catalog['records']['global_fixed']['factors']['condition']['operation']);shim['factors']['condition']['reference_runs']=[]
- shim['numerics']={**catalog['records']['global_fixed']['numerics'],'step_minutes':r['numerics']['step_minutes']}
+ shim=copy.deepcopy(r);shim['provenance']['adapter']='global_frozen_v011';shim['factors']['building']=copy.deepcopy(catalog['global_bundle']['building_source']['building'])
+ shim['factors']['condition']['operation']=copy.deepcopy(catalog['global_bundle']['building_source']['operation']);shim['factors']['condition']['reference_runs']=[]
+ shim['numerics']={**catalog['global_bundle']['building_source']['numerics'],'step_minutes':r['numerics']['step_minutes']}
  startday=(dt.date(2025,*r['factors']['scope']['period'][:2])-dt.date(2025,1,1)).days
  for c in shim['factors']['condition']['controls']:
   c['mode']='fixed'
@@ -129,6 +189,14 @@ def compile_dynamic(record,site,catalog,reader=None,operation_mode=None,referenc
  # Preserve individually selected fixed faces.
  for c,old in zip(shim['factors']['condition']['controls'],r['factors']['condition']['controls']):
   if old['channel']=='orientation' and old['mode']=='fixed':c['face_id']=old['face_id']
+ app=shim['factors']['materials']['applications'][0]
+ skipped=[w for w in shim['factors']['building']['wall_ids'] if w not in cfg['walls']]
+ if skipped:
+  # The frozen source has controls on every wall. Only the selected controls survive projection.
+  app['target_ids']=[*app['target_ids'],*skipped]
+  first=next(iter(cfg['walls']))
+  for c in shim['factors']['condition']['controls']:
+   if first in c['target_ids']:c['target_ids']=[*c['target_ids'],*skipped]
  local=dict(catalog);local['sites']=dict(catalog['sites']);local['sites'][site]={**catalog['sites'][site],'source_kind':'reviewed_global'}
  local['global_bundle']={**catalog['global_bundle'],'jobs':{**catalog['global_bundle']['jobs'],site+'|FIXED_COOL_LOW7':job}}
  model,base=compile_fixed_case(shim,site,local,PreparedReader());before=copy.deepcopy(model)
@@ -185,6 +253,12 @@ def compile_dynamic(record,site,catalog,reader=None,operation_mode=None,referenc
   p=row['path'];allowed=(p[:2] in [['EnergyManagementSystem:Program',x] for x in ('ECA_Initialize','ECA_Update','JR_Optics')] or p[:2]==['EnergyManagementSystem:GlobalVariable','NX_States'] or p[:3]==['EnergyManagementSystem:ProgramCallingManager','ECA_Control','programs'])
   allowed |= p[0] in ('EnergyManagementSystem:OutputVariable','Output:Variable') and str(p[1]).startswith('NX')
   if not allowed:raise ValueError('动态适配修改了控制范围以外的内容。')
+ if skipped:
+  jobs=catalog['global_bundle']['jobs']
+  base_job=jobs.get(site+'|W00') or next(j for j in jobs.values() if j['case']=='W00')
+  restore_uncovered(model,reader.json(base_job['model']),skipped)
+  base['uncovered_base_model']=base_job['model']
+  base['wall_assignments']=[row for row in base['wall_assignments'] if row['surface'] in cfg['walls']]
  report={**base,'adapter':'drawing26_state_v1','mode':mode,'source_model_digest':digest(raw),'generated_model_digest':digest(model),'exact_input_match':False,'differences':changes(raw,model),
   'control_groups':cfg['groups'],'wall_assignments_basis':'initial_state_only_see_control_groups_for_transitions','calendar_binding':dict(site_id=site,weather_sha256=job['weather']['sha256'],calendar_sha256=digest(next(iter(cfg['calendars'].values()))) if cfg['calendars'] else None),
   'state_identity':dict(R=0,C=1),'control_order':['previous_complete_step','update_state','apply_current_state_optics'],'new_simulations':0}

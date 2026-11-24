@@ -36,8 +36,8 @@ def check(root=ROOT):
         data = read_json(owned(root / pointer['catalog'], root))
         if digest(data) != pointer['sha256']:
             raise ValueError('来源目录校验值不一致。')
-        if data.get('catalog_kind')!='standalone_v1' and (not {'global_w00', 'global_fixed'} <= set(data.get('records', {})) or 'global_bundle' not in data):
-            raise ValueError('当前版本仍需要参考建筑和研究材料模板，来源目录尚不完整。')
+        if not all(isinstance(data.get(key),dict) for key in ('records','sites','global_bundle')):
+            raise ValueError('来源目录缺少方案、地点或建筑来源索引。')
         return '目录指针与内容校验通过。外部模型、气象和引擎在相应操作时按来源校验。'
 
     def converter():

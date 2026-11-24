@@ -1,6 +1,8 @@
 /* A file describes one saved material. Each receiving library assigns its own identity. */
 function exportMaterialFile(row) {
     const file = {schema: 'workbench-material/v1', source_revision: row.revision, material: row.content};
+    const origin = mcExampleOrigin(row);
+    if (origin) file.example_origin = origin;
     const name = row.name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_');
     rlDownload(name + '-v' + row.revision + '.material.json',
         JSON.stringify(file, null, 2) + '\n', 'application/json;charset=utf-8');
@@ -26,6 +28,7 @@ function openMaterialImport() {
     const status = dialog.querySelector('[role=status]');
     const preview = dialog.querySelector('[data-preview]');
     let content = null;
+    let exampleOrigin = null;
     let saving = false;
     cancel.onclick = () => dialog.close();
     dialog.oncancel = event => { if (saving) event.preventDefault(); };
@@ -33,6 +36,7 @@ function openMaterialImport() {
     picker.onchange = async () => {
         const file = picker.files[0];
         content = null;
+        exampleOrigin = null;
         save.disabled = true;
         preview.replaceChildren();
         status.className = '';
@@ -56,6 +60,7 @@ function openMaterialImport() {
             status.textContent = checked.name + ' · 来源 v' + documentData.source_revision +
                 (duplicate ? '。本机已有同名材料，本次将另建一份。' : '。请核对下列参数。');
             content = checked;
+            exampleOrigin = documentData.example_origin || null;
             save.disabled = false;
         } catch (error) {
             if (dialog.open && file === picker.files[0]) {
@@ -69,7 +74,7 @@ function openMaterialImport() {
         saving = true;
         save.disabled = cancel.disabled = picker.disabled = true;
         try {
-            const row = await api('/api/components', {kind: 'material', name: content.name, content, parent: null});
+            const row = await api('/api/components', {kind: 'material', name: content.name, content, parent: null, example_origin: exampleOrigin});
             const v = mc();
             v.data.versions.unshift(row);
             v.selected = row.id + ':' + row.revision;

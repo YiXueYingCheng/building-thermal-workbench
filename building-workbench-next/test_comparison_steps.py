@@ -9,6 +9,8 @@ from comparison_results import build
 from comparison_steps import can_waive, choose
 from record_store import Store
 from site_recalculation import adopt, submit
+from recent_batch_views import RecentComparisons
+from unittest.mock import patch
 from test_site_recalculation import fixture, finish_fixture
 
 
@@ -37,12 +39,21 @@ class PairedStepTest(unittest.TestCase):
             def relation(name):
                 return store.add_comparison(name,*({k:r[k] for k in ('id','revision')} for r in (base,study)),'total')['id']
             ident=relation('哈尔滨步长配对')
+            cache=RecentComparisons(root)
+            scope=(ident,left,right,'controlled')
             def report(active=ident,controls=True):
+                if controls:
+                    return cache.get((active,left,right,'controlled'),catalog)['summary']
                 return build(active,left,right,'controlled',catalog,root,with_controls=controls)
             fixed_child=submit(q,right,33,jobs[-1]['attempt'],1)['id']
             adopt(q,right,33,fixed_child,finish_fixture(q,q.claim()))
             before=report()
             self.assertEqual(before['paired_sites'],33)
+            with patch.object(cache,'build',side_effect=AssertionError('unchanged results were read again')):
+                hit=cache.get(scope,catalog)
+                self.assertTrue(hit['reused'])
+                self.assertEqual(hit['summary'],before)
+                self.assertNotIn('summary',cache.get(scope,catalog,known=hit['view_token']))
             control=before['step_controls']['s33']
             self.assertEqual([(o['side'],o['step']) for o in control['options']],[('left',1)])
             args=(q,left,33,originals[-1]['attempt'],1,'comparison')
@@ -64,6 +75,7 @@ class PairedStepTest(unittest.TestCase):
                 with self.assertRaises(ValueError):choose(root,catalog,dict(waiver,**bad))
             choose(root,catalog,waiver)
             mixed=report()
+            self.assertNotEqual(cache.get(scope,catalog)['view_token'],hit['view_token'])
             self.assertEqual([(s['paired_sites'],s['waived_sites']) for s in mixed['pairing_summaries']],[(33,0),(34,1)])
             self.assertEqual((mixed['strict_classes'][0]['valid_sites'],mixed['classes'][0]['valid_sites']),(33,34))
             self.assertEqual(mixed['monthly'][-1]['pairing_basis'],'跨步长豁免')

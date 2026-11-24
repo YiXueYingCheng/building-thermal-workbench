@@ -153,7 +153,7 @@ function batchResultsView(){
  return `<section class="section" id="execution-results"><div class="row"><div><h2>${esc(d.record_name)} · 本批结果</h2><p class="muted">版本 ${esc(d.revision)} · ${d.annual?'全年':d.period.slice(0,2).join('-')+' 至 '+d.period.slice(2).join('-')} · ${esc(d.step_label)}${d.conditioned_area_m2?' · 温控面积 '+format(d.conditioned_area_m2,3)+' m²':''}</p></div><div class="actions"><button data-action="refresh-batch-results">刷新本批结果</button><button data-action="close-execution-results">关闭结果</button></div></div>
  <div class="metrics"><span><strong>${c.routine_passed}</strong>核验通过</span><span><strong>${c.reviewed}</strong>附说明接受</span><span><strong>${c.pending_review}</strong>待复核</span><span><strong>${c.unfinished}</strong>尚未完成</span>${c.failed||c.cancelled?`<span><strong>${c.failed} / ${c.cancelled}</strong>失败 / 已取消</span>`:''}</div>
  <p class="muted">负荷为所选时段的显热冷热需求，单位 kWh。附说明接受的结果可在明细中查看依据与原警告。</p>${c.pending_review?'<p class="warning">待复核项已完成自动校验；请在算例明细的“来源与核查”打开“复核处理”，检查依据后明确采用结论。</p>':''}<details><summary>查看汇总口径</summary><p class="muted">${esc(d.note)}自然室温不填负荷。</p></details>
- <div class="actions batch-toolbar">${c.pending_review?`<button data-bulk-review="${esc(d.id)}">强制采用待复核结果…</button>`:''}<button data-batch-table="sites" aria-pressed="${S.batchTable==='sites'}">地点结果</button><button data-batch-table="classes" aria-pressed="${S.batchTable==='classes'}">气候汇总</button><button data-action="export-batch" class="primary"${!c.completed?' disabled':''}>导出本批数据包</button>${S.batchExport?link('batch.zip','下载完整批次')+link('阅读说明.txt','阅读说明'):''}<a target="_blank" rel="noopener" href="/api/execution/${d.id}/summary">完整数据与核验 JSON ↗</a></div>
+ <div class="actions batch-toolbar">${c.pending_review?`<button data-bulk-review="${esc(d.id)}">强制采用待复核结果…</button>`:''}<button data-batch-table="sites" aria-pressed="${S.batchTable==='sites'}">地点结果</button><button data-batch-table="classes" aria-pressed="${S.batchTable==='classes'}">气候汇总</button><button data-action="export-batch" class="primary"${!c.completed?' disabled':''}>导出本批数据包</button>${S.batchExport?link('batch.zip','下载完整批次')+(S.batchExport.files?.['daily.csv']?link('daily.csv','整栋建筑逐日冷热需求 CSV'):'')+link('阅读说明.txt','阅读说明'):''}<a target="_blank" rel="noopener" href="/api/execution/${d.id}/summary">完整数据与核验 JSON ↗</a></div>
  ${exportHistoryView('batch',d.id)}
  ${S.batchTable==='sites'?`<div class="batch-filters"><label class="field">搜索地点或站点类型<input id="batch-query" type="search" value="${esc(f.query)}" placeholder="城市、气候或站点名称"></label><label class="field">气候类型<select id="batch-climate">${options([['','全部气候'],...d.classes.map(c=>[c.climate,c.climate+' · '+c.name])],f.climate)}</select></label><label class="field">核验状态<select id="batch-status">${options([['','全部状态'],['passed','核验通过 / 已复用'],['reviewed','附说明接受'],['review','待复核'],['pending','排队'],['running','计算中'],['failed','失败'],['interrupted','中断'],['cancelled','已取消']],f.status)}</select></label><label class="field">运行模式<select id="batch-mode">${options([['','全部模式'],...d.modes.map(m=>[m,modes[m]])],f.mode)}</select></label></div>`:''}
  ${batchDetail(d)}<div id="batch-results-list">${batchList(d)}</div></section>`;
@@ -186,50 +186,75 @@ async function batchResultsAction(button){
  return false;
 }
 
+const batchExportOptions=new DialogReads(3);
+const batchExportSelections=new WeakMap();
 function chooseBatchExport(batch){
  const dialog=document.createElement('dialog');
  dialog.className='batch-export-dialog';
  dialog.setAttribute('aria-labelledby','batch-export-title');
- dialog.innerHTML='<header class="viewer-head"><h2 id="batch-export-title">选择数据包内容</h2><button type="button" data-close>关闭</button></header><div class="focused-body"><p>包含全批次的基础汇总、核验状态和来源。可另选各算例的时序明细。</p><div data-choices aria-live="polite">正在核对已保存的指标和频率…</div><p role="alert" class="warning"></p></div><footer class="actions"><button class="primary" data-build>仅导出基础汇总</button></footer>';
+ dialog.innerHTML='<header class="viewer-head"><h2 id="batch-export-title">选择数据包内容</h2><button type="button" data-recheck disabled>重新核对可选数据</button><button type="button" data-close>关闭</button></header><div class="focused-body"><p>包含全批次的基础汇总、核验状态和来源。可另选各算例的时序明细。</p><div data-choices aria-live="polite">正在核对已保存的指标和频率…</div><p role="alert" class="warning"></p></div><footer class="actions"><button class="primary" data-build>仅导出基础汇总</button></footer>';
  document.body.append(dialog);
  dialog.addEventListener('click',event=>event.stopPropagation());
  const request={id:batch.id,expected_dataset_sha256:batch.dataset_sha256};
  const choices=dialog.querySelector('[data-choices]'),run=dialog.querySelector('[data-build]'),close=dialog.querySelector('[data-close]');
  let inventory,receipt,busy=false;
+ const recheck=dialog.querySelector('[data-recheck]');
+ const verified=typeof recentBatchReads==='undefined'?null:recentBatchReads.entries.get(batch.id)?.view_token;
+ const key=JSON.stringify([batch.id,batch.dataset_sha256,verified]);
  const selected=()=>Array.from(choices.querySelectorAll('input:checked'),e=>[e.dataset.group,e.value]);
  close.onclick=()=>dialog.close();
  dialog.oncancel=e=>{if(busy)e.preventDefault();};
  const done=new Promise(resolve=>dialog.addEventListener('close',()=>{dialog.remove();resolve(receipt);},{once:true}));
- choices.onchange=()=>{run.textContent=selected().length?'生成所选数据包':'仅导出基础汇总';};
+ choices.onchange=()=>{
+  if(inventory)batchExportSelections.set(inventory,selected());
+  run.textContent=selected().length?'生成所选数据包':'仅导出基础汇总';};
  run.onclick=async()=>{
   if(busy)return;
   const selection=selected();
-  busy=true;run.disabled=close.disabled=true;choices.inert=true;
+  busy=true;run.disabled=close.disabled=recheck.disabled=true;choices.inert=true;
   run.textContent='正在生成数据包…';
   try{
    receipt=await api('/api/batch-export',{...request,selection,inventory_sha256:inventory?.inventory_sha256});
    dialog.close();
-  }catch(error){dialog.querySelector('[role="alert"]').textContent=error.message;}
-  finally{busy=false;run.disabled=close.disabled=false;choices.inert=false;choices.onchange();}
+  }catch(error){batchExportOptions.entries.delete(key);dialog.querySelector('[role="alert"]').textContent=error.message;}
+  finally{busy=false;run.disabled=close.disabled=recheck.disabled=false;choices.inert=false;choices.onchange();}
  };
  dialog.showModal();
- api('/api/batch-export/options',request).then(info=>{
-  if(!dialog.isConnected)return;
-  inventory=info;
-  const row=(key,label)=>{
-   const available=info.choices.filter(x=>x.group===key);
-   const preferred=['thermal','optical'].includes(key)?info.frequencies.find(f=>available.some(x=>x.frequency===f)):null;
-   return '<fieldset><legend>'+esc(label)+'</legend>'+(available.length?info.frequencies.map(f=>{
-    const item=available.find(x=>x.frequency===f);
-    return item?`<label><input type="checkbox" data-group="${esc(key)}" value="${esc(f)}"${preferred===f?' checked':''}> ${esc(rtFreq[f])}${item.cases<info.total_cases?'（'+item.cases+'/'+info.total_cases+' 个算例）':''}</label>`:'';
-   }).join(''):'<span class="muted">未找到对应的时序记录</span>')+'</fieldset>';
-  };
-  const missing=info.cases.filter(c=>!c.available.length);
-  choices.innerHTML=Object.entries(info.groups).map(([k,v])=>row(k,v)).join('')+
-   '<p class="muted">可多选。各频率沿用实际保存的读数；逐步明细可能较大。</p>'+
-   (missing.length?`<details><summary>有 ${missing.length} 个算例缺少可导出明细</summary>${missing.map(c=>'<p>'+esc(c.city)+' · '+esc(c.note||'没有匹配的输出记录')+'</p>').join('')}</details>`:'');
-  if(!busy)choices.onchange();
- }).catch(error=>{if(dialog.isConnected)choices.textContent='时序清单读取失败。'+error.message+' 可关闭后重试，或仅导出基础汇总。';});
+ function loadOptions(){
+  recheck.disabled=true;
+  choices.textContent='正在核对已保存的指标和频率…';
+  inventory=null;
+  run.textContent='仅导出基础汇总';
+  batchExportOptions.read(key,()=>api('/api/batch-export/options',request)).then(info=>{
+   if(!dialog.isConnected)return;
+   inventory=info;
+   const dailyCount=info.cases.filter(c=>c.building_daily_issue===''&&c.available.some(([g,f])=>g==='loads'&&f==='Daily')).length;
+   const row=(key,label)=>{
+    const available=info.choices.filter(x=>x.group===key);
+    const preferred=key==='loads'&&dailyCount?'Daily':['thermal','optical'].includes(key)?info.frequencies.find(f=>available.some(x=>x.frequency===f)):null;
+    return '<fieldset><legend>'+esc(label)+'</legend>'+(available.length?info.frequencies.map(f=>{
+     const item=available.find(x=>x.frequency===f);
+     return item?`<label><input type="checkbox" data-group="${esc(key)}" value="${esc(f)}"${preferred===f?' checked':''}> ${esc(rtFreq[f])}${key==='loads'&&f==='Daily'?(dailyCount?'（整栋建筑日表 daily.csv，'+dailyCount+' 个算例）':'（仅系统明细）'):''}${item.cases<info.total_cases?'（'+item.cases+'/'+info.total_cases+' 个算例）':''}</label>`:'';
+    }).join(''):'<span class="muted">未找到对应的时序记录</span>')+'</fieldset>';
+   };
+   const missing=info.cases.filter(c=>!c.available.length);
+   choices.innerHTML=Object.entries(info.groups).map(([k,v])=>row(k,v)).join('')+
+    '<p class="muted">可多选。各频率沿用实际保存的读数；逐步明细可能较大。</p>'+
+    (missing.length?`<details><summary>有 ${missing.length} 个算例缺少可导出明细</summary>${missing.map(c=>'<p>'+esc(c.city)+' · '+esc(c.note||'没有匹配的输出记录')+'</p>').join('')}</details>`:'');
+   const previous=batchExportSelections.get(info);
+   if(previous){
+    const selectedKeys=new Set(previous.map(pair=>JSON.stringify(pair)));
+    for(const input of choices.querySelectorAll('input[data-group]')){
+     input.checked=selectedKeys.has(JSON.stringify([input.dataset.group,input.value]));
+    }
+   }
+   if(!busy)choices.onchange();
+  }).catch(error=>{
+   if(dialog.isConnected)choices.textContent='可选数据读取失败。'+error.message+' 可重新核对。';
+  }).finally(()=>{if(!busy)recheck.disabled=false;});
+ }
+ recheck.onclick=()=>{if(!busy){batchExportOptions.entries.delete(key);loadOptions();}};
+ loadOptions();
  return done;
 }
 

@@ -30,6 +30,24 @@ def fixture():
 
 
 class SurfaceControlTests(unittest.TestCase):
+    def test_single_state_coverage_updates_both_controls_without_creating_feedback(self):
+        from drawing_wall_scope import select
+        from research_materials import example
+        walls = ['west', 'north', 'east']
+        for kind in ('pcm', 'spectral'):
+            with self.subTest(kind=kind):
+                scheme = record(example(kind), walls)
+                scheme['provenance'] = {'adapter': 'ordinary_building_v1'}
+                edited = select(scheme, walls, ['west', 'east'], [])
+                app = edited['factors']['materials']['applications'][0]
+                self.assertEqual(app['target_ids'], ['west', 'east'])
+                for control in edited['factors']['condition']['controls']:
+                    self.assertEqual(control['target_ids'], app['target_ids'])
+                    self.assertEqual(control['mode'], 'fixed')
+                self.assertEqual(scheme['factors']['materials']['applications'][0]['target_ids'], walls)
+                with self.assertRaises(ValueError):
+                    select(scheme, walls, walls, ['north'])
+
     def test_combined_controls_on_selected_roof_only(self):
         scheme, geometry = fixture()
         original = copy.deepcopy(scheme)

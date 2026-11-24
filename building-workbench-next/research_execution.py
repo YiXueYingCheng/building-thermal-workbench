@@ -159,8 +159,11 @@ class Runs:
   from preparation_status import group,approved_sources
   bindings={};p=s['plan']
   if p.get('id'):
-   sets=Sets(self.catalog(),self.root);snapshot=sets.get(p['id'])
-   if not members_match(snapshot,p):snapshot=sets.get(p['id'],p['revision'])
+   sets=Sets(self.catalog(),self.root)
+   with sets.store.connect() as db:
+    current=db.execute('SELECT 1 FROM research_sets WHERE id=?',(p['id'],)).fetchone()
+    snapshot=sets.get(p['id'],db=db) if current else None
+   if not snapshot or not members_match(snapshot,p):snapshot=sets.evidence_version(p['id'],p['revision'])
    for role in p['roles']:
     r=p['members'][role];record=sets.store.get(r['id'],r['revision'])
     if ref(record)==r:bindings[role]=approved_sources(sets,record,snapshot)

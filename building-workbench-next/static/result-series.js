@@ -139,7 +139,7 @@ async function rtReadSeries(){
  const seq=(s.seriesRequest||0)+1;s.seriesRequest=seq;s.series=null;
  try{
    const params=rtSeriesSelection();button.disabled=true;target.textContent='正在核对并读取所选输出…';
-   const data=await api(rtUrl('series',params));
+   const data=await rtDetail('series',params);
    if(rtState!==s||s.seriesRequest!==seq)return;
    if(data.summary_sha256!==s.inventory.summary_sha256||data.sql_sha256!==s.inventory.sql_sha256)throw Error('结果资料已更新，请关闭并重新打开。');
    s.series=data;target.innerHTML=rtSeriesResult(data);if(data.rows.length>1)rtSeriesCursor(0);

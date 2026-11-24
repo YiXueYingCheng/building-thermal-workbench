@@ -7,20 +7,31 @@ from foundation import owned, read_json, sha, digest
 import output_storage
 
 
+class CaseInputError(ValueError):
+    """This particular frozen input could not be verified."""
+
+
+def initial_budget():
+    return dict(reserved_gib=.75, reserved_commit_gib=.75, reference_peak_gib=None,
+                reference_commit_gib=None, used_samples=0, legacy_peak=False, family_samples=0,
+                configuration_samples=0, observed_family_peak_gib=None, basis='no_history',
+                unseen_configuration=True)
+
+
 def fingerprint(record, plan, case, model):
     building = record['factors']['building']
-    source = building.get('model_snapshot', {}).get('sha256')
+    # Some buildings are model families with a separate prepared model per case.
+    # Use only observations of that exact verified input when no shared snapshot exists.
+    has_snapshot = 'model_snapshot' in building
+    source = building['model_snapshot'].get('sha256') if has_snapshot else case.get('model_sha256')
     if not building.get('id') or not re.fullmatch('[0-9a-f]{64}', str(source)):
         raise ValueError('缺少已核实的建筑模型来源。')
-    if building.get('zones') != len(model.get('Zone', {})):
-        raise ValueError('建筑房间数量与模型不一致。')
     engine = plan.get('engine_files', {})
-    if plan.get('engine') not in engine or not all(re.fullmatch('[0-9a-f]{64}', str(h)) for h in engine.values()):
-        raise ValueError('缺少完整的计算引擎标识。')
     # Include the runtime libraries, not just the launcher executable. Relocation
     # alone changes no resource family; a different runtime file does.
-    family = digest(dict(building=building['id'], source=source, zones=building['zones'],
-                         engine_files=sorted(engine.values())))
+    family_inputs = dict(building=building['id'], zones=building['zones'], engine_files=sorted(engine.values()))
+    family_inputs['source' if has_snapshot else 'prepared_model'] = source
+    family = digest(family_inputs)
     shape = {kind: len(items) for kind, items in model.items() if isinstance(items, dict)}
     if case.get('schedule_sharing'):
         family = digest([family, 'shared_file_schedules_v1', shape['Schedule:File']])
@@ -69,6 +80,8 @@ class History:
 
     def estimate(self, key):
         family = [s for s in self.samples.values() if s.family == key['family']]
+        if not family:
+            return initial_budget()
         exact = [s for s in family if s.configuration == key['configuration']]
         comparable = [s for s in family if s.workload and s.workload == key.get('workload')]
         same_step = [s for s in family if s.timing and s.timing == key.get('timing')]
@@ -81,7 +94,7 @@ class History:
             used_samples=len(used), legacy_peak=any(not s.working or not s.committed for s in used),
             family_samples=len(family),configuration_samples=len(exact),
             observed_family_peak_gib=max((s.peak_gib for s in family),default=None),
-            basis='exact' if exact else 'comparable' if comparable else 'same_step' if same_step else 'family' if family else 'no_history',
+            basis='exact' if exact else 'comparable' if comparable else 'same_step' if same_step else 'family',
             unseen_configuration=not exact)
 
 
@@ -114,7 +127,7 @@ class CheckedFiles:
                 raise ValueError('读取内存观测来源时文件变化。')
             self.files[path] = before, actual
         if actual != expected:
-            raise ValueError('内存观测的来源文件校验不一致。')
+            raise ValueError('文件内容校验不一致：'+path)
         return path, before, expected
 
 
@@ -135,6 +148,12 @@ class ResourceHistory:
         return closing(db)
 
     def context(self, batch, index):
+        try:
+            return self._context(batch,index)
+        except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
+            raise CaseInputError('输入需核查：'+str(error)) from error
+
+    def _context(self, batch, index):
         with self.db() as db:
             row = db.execute('select plan,checksum,review from batches where id=?', (batch,)).fetchone()
         if not row:
@@ -168,20 +187,47 @@ class ResourceHistory:
         model_path = owned(folder / case['model_file'], folder)
         check(model_path, case['model_sha256'])
         model = read_json(model_path)
-        source = record['factors']['building']['model_snapshot']
-        check(source['path'], source['sha256'])
+        building = record['factors']['building']
+        if building.get('zones') is not None and building['zones'] != len(model.get('Zone', {})):
+            raise ValueError('建筑房间数量与模型不一致。')
+        if 'model_snapshot' in building:
+            source = building['model_snapshot']
+            if not isinstance(source,dict) or not source.get('path') or not source.get('sha256'):
+                raise ValueError('建筑模型快照引用不完整。')
+            check(source['path'], source['sha256'])
+        if plan['engine'] not in plan['engine_files']:
+            raise ValueError('冻结清单缺少计算引擎标识。')
         for path, checksum in plan['engine_files'].items():
             check(path, checksum)
-        key = fingerprint(record, plan, case, model)
+        for path, checksum in case['dependencies'].items():
+            check(path, checksum)
         if not all(self.files.stamp(p) == stamp for p, stamp, _ in proofs):
             raise ValueError('读取期间内存分类输入变化。')
-        memo = dict(key=key, case=case, proofs=proofs)
+        note = None
+        try:
+            key = fingerprint(record, plan, case, model)
+        except Exception as error:
+            # Classification is optional. Keep observations of this exact input
+            # reusable without pooling unrelated, unrecognized configurations.
+            exact = digest({'verified_case':case['identity']})
+            key = dict.fromkeys(('family','configuration','timing','workload'),exact)
+            note = '仅匹配本算例的历史峰值（'+str(error)+'）'
+        memo = dict(key=key, case=case, proofs=proofs, classification_note=note)
         self.contexts[memo_key] = memo
         return memo
 
     def estimate(self, candidate):
-        key = self.context(candidate['batch'], candidate['idx'])['key']
-        return dict(self.history.estimate(key), key=key, skipped_history=self.skipped)
+        context = self.context(candidate['batch'], candidate['idx'])
+        budget = self.budget_for(context['key'])
+        if context['classification_note']:
+            budget.setdefault('budget_note',context['classification_note'])
+        return dict(budget,key=context['key'],skipped_history=self.skipped)
+
+    def budget_for(self,key):
+        try:
+            return self.history.estimate(key)
+        except Exception as error:
+            return dict(initial_budget(),budget_note='历史峰值暂不可用（'+str(error)+'）')
 
     def refresh(self):
         history = History()
@@ -223,7 +269,7 @@ class ResourceHistory:
                 if not all(valid_peak(v) and v <= peak for v in (working,committed)):
                     working = committed = None
                 history.add(Sample(str(folder.resolve()), **c['key'], peak_gib=peak,working=working,committed=committed))
-            except (OSError, ValueError, KeyError, TypeError, IndexError, json.JSONDecodeError):
+            except (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError):
                 skipped += 1
         self.history = history
         self.skipped = skipped

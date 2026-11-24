@@ -68,7 +68,7 @@ def verify_case(folder,row):
 
 def code_identity():
     import model_adapter
-    names=('construction_library.py','material_types.py','surface_materials.py','surface_controls.py','model_adapter.py','dynamic_adapter.py','calendar_library.py','calendar_preview.py',
+    names=('research_materials.py','spectral_boundary.py','spectral_solar.py','construction_library.py','material_types.py','surface_materials.py','surface_controls.py','model_adapter.py','dynamic_adapter.py','calendar_library.py','calendar_preview.py',
         'weather_import.py','source_locations.py','building_configuration.py','component_library.py',
         'drawing_wall_scope.py','usage_schedules.py','ordinary_building.py','ordinary_envelope.py','ordinary_materials.py',
         'ordinary_orientation.py','solid_eca.py','solid_feedback.py','queue_calendar.py','transition_confirmation.py','workspace_setup.py')
@@ -126,6 +126,8 @@ def _build(record,catalog,root,site_ids,progress):
         reader=VerifiedReader(catalog)
         for p,h in engine.items():reader.check(dict(path=p,sha256=h))
         model,report=prepare_case(*compile_case(record,site,catalog,reader,operation_mode=mode),reader)
+        from spectral_solar import freeze
+        model,report=freeze(model,report,reader,engine,root)
         progress(stage='保存模型与独立详情',completed=index,total=total,city=report['city'],case_seconds=durations,resumed=resumed)
         if shutil.disk_usage(root).free<512*1024**2:raise ValueError('可用空间不足 512 MiB，已完成输入保留；释放空间后可续接。')
         name=f'{index+1:03d}.epJSON';audit=f'audit-{index+1:03d}.json'

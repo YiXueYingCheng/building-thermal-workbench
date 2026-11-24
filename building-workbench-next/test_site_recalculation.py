@@ -13,7 +13,7 @@ from batch_results import build, tables
 from site_recalculation import submit, adopt, change_model_step
 
 
-def fixture(root, size=2, engine=None, weather=None, model=None, frozen_record=None, *, bundle_id=None, fail_last=True, snapshot=None, step=5):
+def fixture(root, size=2, engine=None, weather=None, model=None, frozen_record=None, *, bundle_id=None, fail_last=True, snapshot=None, step=5, include_model_snapshot=True, pending=False):
     root=Path(root)
     q=Queue(root)
     bundle_id=bundle_id or 'inputs_'+'1'*32
@@ -36,7 +36,8 @@ def fixture(root, size=2, engine=None, weather=None, model=None, frozen_record=N
     record['numerics']['engine_files']={str(engine):sha(engine)}
     source=base/'base.epJSON'
     write_json(source,model,root)
-    record['factors']['building']['model_snapshot']=snapshot or dict(path=str(source),sha256=sha(source))
+    if include_model_snapshot:
+        record['factors']['building']['model_snapshot']=snapshot or dict(path=str(source),sha256=sha(source))
     record['factors']['building']['zones']=len(model.get('Zone',{}))
     paths=[weather,*{Path(s['file_name']) for s in model.get('Schedule:File',{}).values()}]
     manifest=dict(id=bundle_id,identity=dict(record=digest(record)),verified_sources=[dict(path=str(p),sha256=sha(p)) for p in paths],
@@ -48,6 +49,10 @@ def fixture(root, size=2, engine=None, weather=None, model=None, frozen_record=N
     review=prepare(root,bundle_id)
     batch=q.submit(review['id'],review['plan_sha256'])['id']
     plan=read_json(q.folder/'reviews'/review['id']/'plan.json')
+    catalog=dict(records={record['id']:record},sites=sites,global_bundle=dict(classes=[
+        dict(id='D',climate='D',name='D',expected_sites=size)]))
+    if pending:
+        return q,record,catalog,batch,[]
     jobs=[]
     for i,case in enumerate(plan['cases']):
         job=q.claim()
@@ -56,8 +61,6 @@ def fixture(root, size=2, engine=None, weather=None, model=None, frozen_record=N
         else:
             finish_fixture(q,job)
         jobs.append(job)
-    catalog=dict(records={record['id']:record},sites=sites,global_bundle=dict(classes=[
-        dict(id='D',climate='D',name='D',expected_sites=size)]))
     return q,record,catalog,batch,jobs
 
 
@@ -70,6 +73,27 @@ def finish_fixture(q,job,status='passed'):
                         pending_warnings=[],loads=loads,monthly=[dict(month=1,**loads)]),q.root)
     q.finish(job,status,str(dest))
     return sha(dest)
+
+
+class FrozenModelBudgetTests(unittest.TestCase):
+    def test_estimate_uses_verified_case_for_building_without_shared_snapshot(self):
+        from resource_history import ResourceHistory, fingerprint
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp).resolve()
+            q,record,_,batch,jobs=fixture(root,1,include_model_snapshot=False)
+            history=ResourceHistory(root)
+            estimate=history.estimate(dict(batch=batch,idx=0))
+            self.assertEqual(estimate['basis'],'no_history')
+            plan=jobs[0]['plan']
+            case=plan['cases'][0]
+            path=q.folder/'reviews'/plan['id']/case['model_file']
+            model=read_json(path)
+            key=fingerprint(record,plan,case,model)
+            self.assertNotEqual(key['family'],fingerprint(record,plan,dict(case,model_sha256='0'*64),model)['family'])
+            self.assertEqual(estimate['key'],key)
+            path.write_bytes(b'{}')
+            with self.assertRaisesRegex(ValueError,'校验不一致'):
+                history.estimate(dict(batch=batch,idx=0))
 
 
 class SiteRecalculationTests(unittest.TestCase):
@@ -211,7 +235,10 @@ class BeijingStepTests(unittest.TestCase):
             self.assertIsNone(queue.claim())
             from recent_batch_views import RecentBatches
             cache = RecentBatches(root)
-            cache.get(parent, catalog)
+            first = cache.get(parent, catalog)
+            reused = cache.get(parent, catalog, known=first['view_token'])
+            self.assertTrue(reused['reused'])
+            self.assertNotIn('summary', reused)
             result = submit(queue, parent, 1, jobs[1]['attempt'], 1)
             report = cache.get(parent, catalog)
             self.assertFalse(report['reused'])
