@@ -126,37 +126,71 @@ mcShowAdoption=function(){
     const text=a.model==='phase_change_layer_v1'?'外置相变层 · 有限差分，计算安排选择 1 或 2 分钟':'载体外表面 · 分波段天空辐射与外层热平衡';
     mcAdoptionDialog().querySelector('.mc-preview-body').insertAdjacentHTML('afterbegin','<p>'+text+' · 净面积 '+format(a.net_m2,2)+' m²</p><details><summary>查看逐墙层序、洞口与面积</summary><table class="table"><tr><th>外墙</th><th>净面积 / m²</th><th>洞口</th><th>从室外到室内</th></tr>'+rows+'</table></details>');
 };
-document.addEventListener('click',async event=>{
+const materialSummaries=new RecentViewReader();
+let materialSummaryView;
+function materialSummaryRows(data){
+    const rows=[];
+    const add=(title,unit,get)=>rows.push([title,unit,get(data.left),get(data.right)]);
+    add('覆盖净面积','m²',r=>r.area_m2);
+    for(const [id,label] of [['day','有日照'],['night','无日照']]){
+        if(!data.left.segments[id]&&!data.right.segments[id])continue;
+        for(const [field,title,unit] of [['hours','时长','h'],['emitter_C','材料层外侧温度','°C'],['cover_C','暴露面温度','°C'],
+            ['sky_window_W_m2','8–13 µm 向天空净散热','W/m²'],['inward_W_m2','入室净热流','W/m²']]){
+            if([data.left,data.right].some(s=>s.segments[id]?.[field]!=null))
+                add(label+' · '+title,unit,r=>r.segments[id]?.[field]);
+        }
+    }
+    if(data.left.pcm||data.right.pcm){
+        for(const [field,title,unit] of [['charged_kWh','潜热吸收','kWh'],['released_kWh','潜热释放','kWh'],
+            ['initial_storage_kWh','首个时步储存的潜热','kWh'],['final_storage_kWh','末个时步储存的潜热','kWh'],
+            ['active_hours','潜热变化时长','h'],['cooling_during_activity_kWh','相变活动期间制冷需求','kWh']])
+            add(title,unit,r=>r.pcm?.[field]);
+    }
+    return rows;
+}
+async function openMaterialSummary(req,site,records){
+    const key=JSON.stringify(req);
+    if(materialSummaryView?.key!==key){
+        materialSummaryView?.dialog.remove();
+        const dialog=document.createElement('dialog');dialog.className='library-adoption response-summary';
+        dialog.setAttribute('aria-label','日照分段汇总');
+        dialog.innerHTML='<header class="viewer-head"><div><h2>日照分段汇总</h2><p>'+esc(site)+'</p></div><button>关闭</button></header><div class="mc-preview-body">正在核对并读取材料响应…</div>';
+        dialog.querySelector('button').onclick=()=>dialog.close();
+        document.body.append(dialog);materialSummaryView={key,dialog};
+    }
+    const view=materialSummaryView,dialog=view.dialog,box=dialog.lastElementChild;
+    if(!dialog.open)dialog.showModal();
+    try{
+        const receipt=await materialSummaries.read(key,false,async known=>{
+            const d=await api('/api/material-response',{...req,known});
+            return {view_token:d.view_token,summary:d.unchanged?undefined:d};
+        });
+        if(view!==materialSummaryView||view.token===receipt.view_token)return;
+        const data=receipt.summary,rows=materialSummaryRows(data),sideNames=['left','right'].map(s=>records[s].name+' v'+records[s].revision);
+        view.token=receipt.view_token;
+        box.innerHTML='<table class="table"><thead><tr><th>指标</th><th>单位</th><th>基准 · '+esc(sideNames[0])+'</th><th>研究 · '+esc(sideNames[1])+'</th></tr></thead><tbody>'+
+          rows.map(([title,unit,l,r])=>'<tr><td>'+esc(title)+'</td><td>'+esc(unit)+'</td><td>'+(l==null?'—':format(l,3))+'</td><td>'+(r==null?'—':format(r,3))+'</td></tr>').join('')+
+          '</tbody></table><p>按墙面净面积加权，平均日照超过 1 W/m² 计入有日照时段。入室净热流以传向室内为正。</p>'+
+          '<div class="response-export"><button>导出分段汇总 CSV</button><small role="status"></small></div>';
+        box.querySelector('button').onclick=e=>verifiedResponseDownload(e.currentTarget,
+          async()=>(await api('/api/material-response',{...req,known:data.view_token})).unchanged,()=>{
+            const sides=[data.left,data.right];
+            const cols=['地点','指标','单位',...sideNames,'基准原步长 / min','研究原步长 / min','模拟时段（月日）','基准批次','研究批次','基准结果 SHA-256','研究结果 SHA-256'];
+            downloadResultCsv(site+'_日照分段汇总.csv',[cols,...rows.map(row=>[site,...row,...sides.map(s=>s.step_minutes),periodLabel(data.left.period),...sides.map(s=>s.batch),...sides.map(s=>s.sha256)])]);
+          });
+    }catch(error){
+        if(view!==materialSummaryView)return;
+        view.token=null;box.innerHTML='<p role="alert">'+esc(error.message)+'</p><button>重新读取</button>';
+        box.querySelector('button').onclick=()=>openMaterialSummary(req,site,records);
+    }
+}
+document.addEventListener('click',event=>{
     const button=event.target.closest('[data-research-response]');
     if(!button)return;
-    const req={...comparisonRequest(),site_id:document.getElementById('material-response-site').value};
-    const dialog=document.createElement('dialog');
-    dialog.className='library-adoption';
-    dialog.innerHTML='<header class="viewer-head"><h2>材料响应</h2><button>关闭</button></header><div class="mc-preview-body" role="status">正在读取逐步结果…</div>';
-    dialog.querySelector('button').onclick=()=>dialog.close();
-    dialog.addEventListener('close',()=>dialog.remove(),{once:true});
-    document.body.append(dialog);dialog.showModal();
-    const box=dialog.querySelector('[role=status]');
-    try {
-        const data=await api('/api/material-response',req);
-        const rows=[];
-        const add=(title,getValue)=>rows.push('<tr><td>'+esc(title)+'</td>'+['left','right'].map(s=>'<td>'+format(getValue(data[s]),3)+'</td>').join('')+'</tr>');
-        add('覆盖净面积 / m²',r=>r.area_m2);
-        for(const [id,label] of [['day','有日照'],['night','无日照']]){
-            if(!data.left.segments[id]||!data.right.segments[id])continue;
-            add(label+' · 材料层外侧温度 / °C',r=>r.segments[id].emitter_C);
-            add(label+' · 向室内净热流 / W/m²',r=>r.segments[id].inward_W_m2);
-            if(data.left.model==='spectral_exterior_v1'&&data.right.model===data.left.model)
-                add(label+' · 暴露面温度 / °C',r=>r.segments[id].cover_C);
-        }
-        if(data.left.pcm&&data.right.pcm){
-            add('潜热吸收 / kWh',r=>r.pcm.charged_kWh);add('潜热释放 / kWh',r=>r.pcm.released_kWh);
-            add('首个时步储存的潜热 / kWh',r=>r.pcm.initial_storage_kWh);add('末个时步储存的潜热 / kWh',r=>r.pcm.final_storage_kWh);
-            add('潜热变化时长 / h',r=>r.pcm.active_hours);
-            add('相变活动期间制冷需求 / kWh',r=>r.pcm.cooling_during_activity_kWh);
-        }
-        box.innerHTML='<table class="table"><thead><tr><th>指标</th><th>参考方案</th><th>研究方案</th></tr></thead><tbody>'+rows.join('')+'</tbody></table><p>各墙按净面积加权。以所选墙面平均日照超过 1 W/m² 划分时段。入室净热流正值表示热量传向室内。</p>';
-    }catch(e){box.textContent=e.message;}
+    const site_id=button.closest('.response-tools').dataset.site;
+    const d=S.comparisonData,row=d.sites.find(r=>r.site_id===site_id);
+    const pins=[row.left_evidence,row.right_evidence].map(({batch_id,index,result_sha256})=>({batch_id,index,result_sha256}));
+    void openMaterialSummary({...comparisonRequest(),site_id,pins},row.city,d.records);
 });
 document.addEventListener('input',event=>{
     if(!['spectral.sw_reflectance','spectral.sw_transmittance','spectral.emitter_sw_reflectance'].includes(event.target.dataset.mcField))return;

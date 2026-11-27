@@ -183,7 +183,7 @@ def adoption_preview(record, target, catalog, root=ROOT, selection=None):
     if supported(row['content']) or (equivalent and (selection is not None or not materials['definitions'])):
         from surface_materials import adoption
         selection=selection or {}
-        if set(selection)-{'state_id','face','targets'}:raise ValueError('材料选用参数不受支持。')
+        if set(selection)-{'state_id','face','targets','position','after_layer'}:raise ValueError('材料选用参数不受支持。')
         return adoption(record,row,catalog,**selection)
     adapter = record['provenance']['adapter']
     if adapter not in ('global_frozen_v011', 'ordinary_building_v1'):

@@ -13,7 +13,8 @@ def raw_hash(path):
 def identity(path):return os.path.abspath(path)
 
 class Reads:
-    def __init__(self,progress=None,max_json_bytes=32*1024*1024):
+    def __init__(self,progress=None,max_json_bytes=32*1024*1024,case_started=None):
+        self.case_started=case_started
         self.hashes={};self.json_values=OrderedDict();self.json_sizes={};self.max_json_bytes=max_json_bytes;self.paths={};self.memo={};self.values={};self.progress=progress
     def watch_value(self,key,loader,expected,changed_message='核对依据的登记信息已变化'):
         if key not in self.values:self.values[key]=(loader,copy.deepcopy(expected),changed_message)
@@ -60,10 +61,10 @@ class Reads:
         out=Reads();out.hashes=self.hashes.copy();out.paths=self.paths.copy();out.values=self.values.copy();return out
 
 @contextmanager
-def reading(progress=None):
+def reading(progress=None,*,case_started=None):
     if current() is not None:
         yield current();return
-    scope=Reads(progress);token=_current.set(scope)
+    scope=Reads(progress,case_started=case_started);token=_current.set(scope)
     try:
         yield scope
         problem=scope.invalid_reason()

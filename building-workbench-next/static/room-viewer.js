@@ -32,7 +32,7 @@ function refreshRoomSaveNotice(){
   banner=document.createElement('aside');banner.id='room-unsaved-banner';banner.setAttribute('aria-label','未保存的房间配置与作息');
   banner.innerHTML='<div role="status" aria-live="polite"><strong data-unsaved-title></strong><p data-unsaved-summary></p><p data-unsaved-instruction></p></div><button class="primary" data-unsaved-return></button>';
   document.getElementById('navigation').insertAdjacentElement('afterend',banner);
-  banner.addEventListener('click',async e=>{const b=e.target.closest('[data-unsaved-return]');if(!b)return;e.stopPropagation();if(S.busy||b.disabled)return;b.disabled=true;try{if(S.usageDirty)await returnToUnsavedRooms(b);else{S.view='editor';render();const save=document.querySelector('#app [data-action="save"]');save?.scrollIntoView({block:'center'});save?.focus({preventScroll:true});}}catch(error){notice(error.message);}finally{b.disabled=false;}});
+  banner.addEventListener('click',async e=>{const b=e.target.closest('[data-unsaved-return]');if(!b)return;e.stopPropagation();if(S.busy||b.disabled)return;b.disabled=true;try{if(S.usageDirty)await returnToUnsavedRooms(b);else{S.view='editor';render();const save=document.querySelector('#app [data-action="save"]');save?.scrollIntoView({block:'center'});save?.focus({preventScroll:true});}}catch(error){notice(error.message,'error');}finally{b.disabled=false;}});
  }
  const content={title:pending?'房间配置与作息未保存':'房间配置已保存，还需保存方案版本',summary:pending?roomUnsavedDetails():'新房间配置已选入当前草稿，尚未写入方案版本。',instruction:pending?'先保存房间配置，再保存方案版本；切换方案前需保存或撤销这些修改。':'请回到方案页面点击“保存版本”，完成后再切换方案。',return:pending?'查看并保存作息':'回到方案保存版本'};
  for(const [key,text] of Object.entries(content)){const el=banner.querySelector('[data-unsaved-'+key+']');if(el.textContent!==text)el.textContent=text;}
@@ -47,7 +47,7 @@ function showRoomUnsavedWarning(intent){
   d.addEventListener('click',async e=>{
    const b=e.target.closest('button');if(!b)return;e.stopPropagation();
    const opener=d.roomOpener;d.close();
-   if(b.dataset.unsavedAction==='return'){try{await returnToUnsavedRooms(opener);}catch(error){notice(error.message);}}
+   if(b.dataset.unsavedAction==='return'){try{await returnToUnsavedRooms(opener);}catch(error){notice(error.message,'error');}}
    else opener?.isConnected&&opener.focus({preventScroll:true});
   });
  }
@@ -177,7 +177,7 @@ closeRoomTool=function(){closeRoomToolBeforeRoomViewer();roomViewerResume();};
 const closeCrossBeforeRoomViewer=closeBuildingReuse;
 closeBuildingReuse=function(){closeCrossBeforeRoomViewer();roomViewerResume();};
 const noticeBeforeRoomViewer=notice;
-notice=function(text=''){noticeBeforeRoomViewer(text);const v=buildingViewerCurrent();if(roomViewerActive()&&!v.suspended){v.message=text;const slot=buildingViewerDialog().querySelector('[data-room-message]');if(slot){slot.textContent=text;slot.hidden=!text;}}};
+notice=function(text='',kind='status'){noticeBeforeRoomViewer(text,kind);const v=buildingViewerCurrent();if(roomViewerActive()&&!v.suspended){v.message=text;const slot=buildingViewerDialog().querySelector('[data-room-message]');if(slot){slot.textContent=text;slot.hidden=!text;}}};
 
 const closeBuildingBeforeRoomViewer=closeBuildingViewer;
 closeBuildingViewer=function(restore=true){if(buildingViewerCurrent()?.roomSaving){notice('正在保存配置，请稍候；完成后可关闭。');return;}closeBuildingBeforeRoomViewer(restore);};

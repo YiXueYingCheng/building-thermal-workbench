@@ -3,6 +3,10 @@ S.libraryGroups={workspace:true,sources:false,archived:false};S.compareCatalog='
 const libraryTitles={workspace:'本工作区方案',sources:'原平台来源',archived:'已归档来源'};
 function recordGroup(r){return r.research_set?'members':r.archived?'archived':r.status==='draft'?'workspace':'sources';}
 function readableTime(value){if(!value)return '原正式来源';const d=new Date(value);return Number.isNaN(d.getTime())?String(value):new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(d);}
+function batchCountSummary(counts){
+ const labels={running:'计算中',pending:'排队',review:'待复核',failed:'失败',interrupted:'中断',cancelled:'取消',passed:'通过',reused:'复用'};
+ return Object.entries(labels).filter(([key])=>counts[key]>0).map(([key,label])=>counts[key]+' 项'+label).join(' · ')||'暂无算例状态记录';
+}
 function periodLabel(p){return !p?'时段见来源':JSON.stringify(p)==='[1,1,12,31]'?'全年':`${p[0]}月${p[1]}日—${p[2]}月${p[3]}日`;}
 function selectInitialRecord(){
  if(!S.boot.records.some(r=>r.id===S.id))S.id=S.boot.records[0]?.id;
@@ -15,7 +19,16 @@ function selectInitialRecord(){
  if(!S.boot.records.some(r=>recordGroup(r)==='workspace'))S.compareCatalog='sources';
 }
 function revealRecordGroup(id){const r=S.boot.records.find(x=>x.id===id);if(r){S.libraryGroups[recordGroup(r)]=true;if(r.archived)S.archived=true;}}
-function libraryButton(r){return `<button type="button" data-record="${esc(r.id)}" aria-pressed="${S.id===r.id}">${esc(r.name)}<small>${r.status==='draft'?'保存版本 '+r.revision:'只读来源'}${r.batch_count?' · 已有计算批次':''}</small><small>${r.site_count} 地点 · ${periodLabel(r.period)} · ${r.step_minutes} min</small></button>`;}
+function regionalOrigin(r){return S.boot.regional_plan_origins?.find(p=>p.id===r.id&&p.revision===r.revision);}
+function isRegionalDaily(r){return regionalOrigin(r)?.daily||S.boot.regional_daily_plans?.some(p=>p.id===r.id&&p.revision===r.revision);}
+function regionalOriginNote(r){
+ const p=regionalOrigin(r);if(!p)return '';
+ const source=p.parent_name?'<p>起始方案 · '+esc(p.parent_name)+' · v'+esc(p.parent_revision)+'</p>':'';
+ const group=p.group?'<p>地区组 · '+esc(p.group)+'</p>':'';
+ const role=p.daily?'准备当地 W00 逐日参考，供生成光学切换日历使用。':'研究工况为「'+esc(p.label)+'」。';
+ return `<details class="version-note"><summary>平台派生 · 查看来源</summary>${group}${source}<p>${p.group_sites?'地区组共 '+esc(p.group_sites)+' 个地点，':''}本版本覆盖 ${esc(p.sites)} 个地点。${role}</p></details>`;
+}
+function libraryButton(r){return `<button type="button" data-record="${esc(r.id)}" aria-pressed="${S.id===r.id}">${esc(r.name)}<small>${r.status==='draft'?'保存版本 '+r.revision:'只读来源'}${regionalOrigin(r)?' · 平台派生':''}${r.batch_count?' · 已有计算批次':''}</small><small>${r.site_count} 地点 · ${periodLabel(r.period)} · ${r.step_minutes} min</small></button>`;}
 function libraryList(){
  const rows=filteredRecords();
  return ['workspace','sources','archived'].map(key=>{
@@ -43,8 +56,15 @@ function resultSourceCard(side,c){
  const r=c.record_details?.[side],selected=c[side].find(x=>x.id===S.comparisonSources[side]),d=selected?.display;
  const role=side==='left'?'基准侧':'研究侧';
  const counts=d?.counts;
- return `<section class="result-source-card"><span class="source-role">${role}</span><h3>${esc(r?.name||role+'方案')}</h3><p class="muted">${r?`${esc(planVersionLabel(r))} · ${esc(periodLabel(r.period))} · ${r.step_minutes} min · ${r.site_count} 地点`:'版本由此比较关系固定'}</p>
+ const pair=S.comparisonData;
+ const site=pair?.comparison?.id===c.comparison.id && pair.left.id===S.comparisonSources.left && pair.right.id===S.comparisonSources.right &&
+   pair.mode===S.comparisonSources.mode && pair.sites.length===1 && pair.sites[0].status==='paired'?pair.sites[0]:null;
+ const heat=site?.[side+'_heating_kWh'],cool=site?.[side+'_cooling_kWh'];
+ const demand=Number.isFinite(heat)&&Number.isFinite(cool)?`<p class="source-demand"><strong>${esc(site.city)} · 时段显热需求</strong><br>供暖 ${format(heat)} kWh　制冷 ${format(cool)} kWh</p>`:'';
+ const frequency={monthly_period_v1:'逐月及时段汇总',timeseries_timestep_v1:'按求解步长',timeseries_hourly_v1:'逐小时',timeseries_daily_v1:'逐日',daily_sensible_reference_v1:'逐日参考'}[d?.output_contract];
+ return `<section class="result-source-card"><span class="source-role">${role}</span><h3>${esc(r?.name||role+'方案')}</h3><p class="muted">${r?`${esc(planVersionLabel(r))} · ${esc(periodLabel(r.period))} · 方案求解步长 ${r.step_minutes} min · ${r.site_count} 地点`:'版本由此比较关系固定'}</p>
  ${r?versionNoteMarkup(r):''}<label class="field">${role}${selected?.id?.startsWith('observed_')?'结果来源':'计算批次'}${c[side].length===1?'（已自动匹配）':''}<select id="comparison-source-${side}">${options([['','请选择计算批次'],...c[side].map(x=>[x.id,sourceOptionLabel(x,c[side].length>1)])],S.comparisonSources[side])}</select></label>
+ ${frequency?`<p class="muted">批次主输出 · ${frequency}${d.extra_probes?'，另有单独设置的测点':''}</p>`:''}${demand}
  ${d?`<div class="source-status"><strong>${esc(d.status)}</strong><span>通过 ${(counts.passed||0)+(counts.reused||0)} / ${d.case_count} 项${counts.review?' · 待复核 '+counts.review:''}${counts.pending?' · 待算 '+counts.pending:''}${counts.running?' · 运行 '+counts.running:''}${counts.failed?' · 失败 '+counts.failed:''}${counts.interrupted?' · 中断 '+counts.interrupted:''}${counts.cancelled?' · 取消 '+counts.cancelled:''}</span></div><div class="actions">${d.kind==='historical'?'<button data-view="results">查看原正式历史结果</button>':`<button data-source-batch="${esc(selected.id)}">单独查看此批结果</button>`}</div>`:c[side].length?'':'<p class="warning">该保存版本尚无可选批次。</p>'}</section>`;
 }
 function clearUnmatchedResultComparison(){

@@ -31,6 +31,13 @@ def validation_workspace(root,p):
    raise
  return target
 
+def building_weather_site(ident, site, weather):
+ from weather_quality import station_geography
+ frozen=ref(weather)
+ return dict(id=ident+'_weather',name=site['name'],eligible=True,climate=site.get('climate'),
+             weather=frozen,source_kind='checked_accdb_import',**station_geography(weather,frozen['sha256']))
+
+
 def normalise(models,d,request,donors,out,checkpoint=lambda:None):
  from usage_schedules import expanded,actual_pair,apply_gains
  seq=schedules(d);groups=index(d['ROOM_GROUP'],'ROOM_GROUP_ID');types=index(d['ROOM_TYPE_DATA'],'ID')
@@ -133,7 +140,7 @@ def convert(p,request,catalog,root):
  from workspace_setup import import_numerics
  numerics=import_numerics(catalog)
  building=dict(id=ident,name=request['name'].strip(),zones=review['rooms'],floors=review['storeys'],area_m2=review['area_m2'],conditioned_area_m2=sum(r['area_m2'] for r in usage['rooms'] if r['conditioned']),definition_status='checked_accdb_import',source_project_id=ident,model_snapshot=model_refs['controlled'],input_snapshot=ref(p/'choices.json'))
- registered_site=dict(id=ident+'_weather',name=site['name'],eligible=True,climate=site.get('climate'),weather=ref(weather),source_kind='checked_accdb_import')
+ registered_site=building_weather_site(ident,site,weather)
  audits=[p/'inspection.json',p/'door-mappings.json',p/'choices.json',p/'extraction.json',p/'converter-source.zip',model/'conversion/physical-opening-check.json',model/'conversion/model-audit.json',model/'source-mapped/conversion-audit.json',model/'source-mapped/orientation-verification.json']
  refs=[review['snapshot'],*review['table_refs'],*[ref(x) for x in audits]]
  audit=read_json(model/'conversion/model-audit.json')

@@ -3,13 +3,12 @@ import base64
 from collections import OrderedDict
 import json
 from pathlib import Path
-import shutil
 import subprocess
 from tempfile import TemporaryDirectory
 from threading import Lock
 
 from foundation import ROOT
-from result_exports import map_assets
+from result_exports import map_assets, write_regions
 from runtime_settings import figure_font, workspace_config
 from review_annotations import reviews
 
@@ -24,7 +23,7 @@ class RegionalPreviews:
         if not isinstance(view,dict):
             raise ValueError('请选择地图分区和样式。')
         division,style,metric = (view.get(k) for k in ('division','style','metric'))
-        if division not in ('country','climate') or style not in ('standard','pair') or metric not in ('heating','cooling','total'):
+        if division not in ('country','climate','china') or style not in ('standard','pair') or metric not in ('heating','cooling','total'):
             raise ValueError('未知的地图分区、样式或指标。')
         if data['blocked'] or not data['paired_sites'] or data['metric']=='temperature' or not data.get('normalized'):
             raise ValueError('地图预览需要已配对的冷热需求和温控面积。')
@@ -44,11 +43,12 @@ class RegionalPreviews:
                 if division=='climate':
                     (folder/'map.json').write_text(json.dumps(map_assets(self.root)),encoding='utf-8')
                 else:
-                    shutil.copyfile(ROOT/'static/map/regions.json',folder/'map-regions.json')
+                    write_regions(folder,division)
                 run=subprocess.run([python,'-X','utf8',str(ROOT/'plot_regional.py'),tmp,division,style,metric,str(font)],
                     capture_output=True,text=True,encoding='utf-8',timeout=60,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
                 if run.returncode:
-                    raise ValueError('地图预览失败：'+run.stderr.strip()[-400:])
+                    detail=run.stderr.strip().splitlines()
+                    raise ValueError('地图预览失败：'+(detail[-1].removeprefix('ValueError: ')[:400] if detail else '绘图程序没有返回错误说明。'))
                 encoded=base64.b64encode((folder/'preview.png').read_bytes()).decode('ascii')
             self.images[key]=encoded
             if len(self.images)>12:

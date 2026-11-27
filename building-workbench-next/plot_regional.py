@@ -1,6 +1,7 @@
 """Render a paired comparison by climate or map unit from its pinned site results."""
 import base64
 import csv
+import gzip
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -47,7 +48,29 @@ def region_for(site, aliases):
     return None
 
 
-def aggregate(data, division, metric, regions):
+def province_groups(sites, boundaries):
+    valid = [s for s in sites if s.get('longitude') is not None and s.get('latitude') is not None
+             and -180 <= s['longitude'] <= 180 and -90 <= s['latitude'] <= 90]
+    if not valid:
+        return {}
+    points = np.array([(s['longitude'],s['latitude']) for s in valid])
+    matches = [set() for _ in valid]
+    for code, polys in boundaries.items():
+        for exterior, *holes in polys:
+            path = MapPath(exterior)
+            lo, hi = path.get_extents().get_points()
+            candidates = np.flatnonzero(((points >= lo) & (points <= hi)).all(axis=1))
+            if not len(candidates):
+                continue
+            inside = path.contains_points(points[candidates])
+            for hole in holes:
+                inside &= ~MapPath(hole).contains_points(points[candidates])
+            for i in candidates[inside]:
+                matches[i].add(code)
+    return {s['site_id']:next(iter(m)) for s,m in zip(valid,matches) if len(m)==1}
+
+
+def aggregate(data, division, metric, regions, provinces=None):
     aliases = geography(regions)
     climate_ids = {c['climate'] for c in data['classes']}
     groups = defaultdict(list)
@@ -56,6 +79,8 @@ def aggregate(data, division, metric, regions):
         if s['status'] != 'paired':
             continue
         group = region_for(s, aliases) if division == 'country' else s.get('climate')
+        if division=='china':
+            group=provinces.get(s['site_id'])
         if division == 'climate' and group not in climate_ids:
             group = None
         saved = s[metric+'_saved_kWh']
@@ -74,18 +99,30 @@ def aggregate(data, division, metric, regions):
     return summary, points
 
 
-def transform(coords, curved):
-    points = np.asarray(coords)
+def transform(coords, curved, division=None):
+    points = np.asarray(coords,dtype=float)
+    if curved and division=='china':
+        points=points-[105,0]
     return PROJECTION.transform(np.deg2rad(points)) if curved else points
 
 
-def polygons(regions, curved):
+def map_extent(division,curved,regions):
+    if division!='china':
+        x,y=(2*np.sqrt(2),np.sqrt(2)) if curved else (180,90)
+        return (-x,x,-y,y)
+    points=np.concatenate([transform(p[0],curved,division) for unit in regions.values() for p in unit['polygons']])
+    lo,hi=points.min(axis=0),points.max(axis=0)
+    pad=(hi-lo)*.03
+    return (lo[0]-pad[0],hi[0]+pad[0],lo[1]-pad[1],hi[1]+pad[1])
+
+
+def polygons(regions, curved, division):
     shapes, ids = [], []
     for code, unit in regions.items():
         for poly in unit['polygons']:
             rings = []
             for ring in poly:
-                coords = transform(ring, curved)
+                coords = transform(ring, curved, division)
                 commands = np.full(len(coords),MapPath.LINETO,dtype=np.uint8)
                 commands[0], commands[-1] = MapPath.MOVETO, MapPath.CLOSEPOLY
                 rings.append(MapPath(coords,commands))
@@ -125,7 +162,7 @@ def scale(values, standard):
     return cmap, colors.Normalize(-limit if signed else 0,limit)
 
 
-def station_marks(ax, stations, field, cmap, norm, curved):
+def station_marks(ax, stations, field, cmap, norm, curved, division):
     labels = len(stations)<=12
     renderer = ax.figure.canvas.get_renderer()
     occupied = []
@@ -133,7 +170,7 @@ def station_marks(ax, stations, field, cmap, norm, curved):
         lon,lat = s['longitude'],s['latitude']
         if lon is None or lat is None or not (-180<=lon<=180 and -90<=lat<=90):
             continue
-        xy = transform([[lon,lat]],curved)[0]
+        xy = transform([[lon,lat]],curved,division)[0]
         val = s[field] if field!='MJ_m2' else s['kWh_m2']*3.6
         if val is None:
             continue
@@ -159,10 +196,17 @@ def plot(folder, division, style, metric, font, *, preview=False):
     folder = Path(folder)
     read = lambda path: json.loads(path.read_text(encoding='utf-8'))
     data = read(folder/'dataset.json')
-    regions = read(folder/'map-regions.json') if division=='country' else {}
-    summary, sites = aggregate(data,division,metric,regions)
+    regions = read(folder/'map-regions.json') if division!='climate' else {}
+    provinces={}
+    if division=='china':
+        with gzip.open(Path(__file__).parent/'static/map/china-membership.json.gz','rt',encoding='utf8') as f:
+            provinces=province_groups(data['sites'],json.load(f))
+    summary, sites = aggregate(data,division,metric,regions,provinces)
     if not summary:
-        raise ValueError('此批配对地点缺少可识别的'+('国家／地区' if division=='country' else '气候类型')+'。')
+        if division=='china' and all(s['latitude'] is None or s['longitude'] is None for s in sites):
+            raise ValueError('已配对地点缺少经核实的气象站经纬度。请检查原算例的 EPW 气象文件及其 LOCATION 表头。')
+        raise ValueError('配对地点的经纬度均未匹配到中国省级边界。' if division=='china' else
+                         '此批配对地点缺少可识别的'+('国家／地区' if division=='country' else '气候类型')+'。')
     if not preview:
         for name, rows in [('map-groups',list(summary.values())),('map-sites',sites)]:
             with (folder/(name+'.csv')).open('w',encoding='utf-8-sig',newline='') as f:
@@ -172,7 +216,7 @@ def plot(folder, division, style, metric, font, *, preview=False):
                          'pdf.fonttype':42,'svg.fonttype':'none','text.parse_math':False})
     curved = style=='pair'
     period = '全年' if data['annual'] else '%d月%d日—%d月%d日'%tuple(data['period'])
-    geography_label = '国家／地区' if division=='country' else '气候类型'
+    geography_label = {'country':'国家／地区','china':'中国省级行政区','climate':'气候类型'}[division]
     area = data['conditioned_area_m2']
     title = f'{period}建筑{METRICS[metric]}显热需求变化'
     paired = sum(r['sites'] for r in summary.values())
@@ -182,8 +226,9 @@ def plot(folder, division, style, metric, font, *, preview=False):
     fig.text(.04,.846,'\n'.join(textwrap.wrap(names,86 if curved else 57,max_lines=2,placeholder='…')),fontsize=11.5,color=MUTED)
     left_edges = [.036,.52] if curved else [.05]
     fields = ['percent','kWh_m2'] if curved else ['MJ_m2']
-    if division=='country':
-        shapes, codes = polygons(regions,curved)
+    extent=map_extent(division,curved,regions)
+    if division!='climate':
+        shapes, codes = polygons(regions,curved,division)
     else:
         assets = read(folder/'map.json'); raster=climate_raster(assets,curved)
         coasts = [transform(ring,curved) for poly in assets['land']['coordinates'] for ring in poly]
@@ -193,15 +238,18 @@ def plot(folder, division, style, metric, font, *, preview=False):
         hdr={'percent':'显热需求降低率','kWh_m2':'单位温控面积的需求降低量','MJ_m2':'单位温控面积的需求降低量'}[field]
         fig.text(x+.005,.758,hdr,fontsize=16,color=INK,weight='bold')
         xmax,ymax=(2*np.sqrt(2),np.sqrt(2)) if curved else (180,90)
-        ax.set(xlim=(-xmax,xmax),ylim=(-ymax,ymax),aspect='equal');ax.set_axis_off()
-        if curved:
+        ax.set(xlim=extent[:2],ylim=extent[2:],aspect='equal');ax.set_axis_off()
+        if curved and division!='china':
             ax.add_patch(Ellipse((0,0),2*xmax,2*ymax,fc='#f8fafb',ec='#c8d2d4',lw=.6))
             for lon in [-120,-60,0,60,120]:
                 ax.plot(*transform(np.column_stack((np.full(91,lon),np.linspace(-89.9,89.9,91))),True).T,color='#dfe8e9',lw=.4)
             for lat in [-60,-30,0,30,60]:
                 ax.plot(*transform([[-180,lat],[180,lat]],True).T,color='#dfe8e9',lw=.4)
         cmap,norm = scale([r[field] for r in summary.values()],not curved)
-        if division=='country':
+        if not curved and division=='climate':
+            from result_exports import color_limit
+            norm.vmin,norm.vmax=-color_limit(data),color_limit(data)
+        if division!='climate':
             values=np.array([summary.get(c,{}).get(field) for c in codes],dtype=float)
             ax.add_collection(PatchCollection(shapes,facecolors=cmap(norm(values)),edgecolors='#a6babb',linewidths=.25,zorder=2))
         else:
@@ -212,7 +260,7 @@ def plot(folder, division, style, metric, font, *, preview=False):
             ax.imshow(rgba,extent=(-xmax,xmax,-ymax,ymax),interpolation='nearest',origin='upper',zorder=2)
             ax.add_collection(LineCollection(coasts,colors='#9aadae',linewidths=.22,zorder=3))
         ax.apply_aspect()
-        station_marks(ax,[s for s in sites if s['group']],field,cmap,norm,curved)
+        station_marks(ax,[s for s in sites if s['group']],field,cmap,norm,curved,division)
         cbax=fig.add_axes([x+width*.13,.232,width*.74,.019])
         cb=fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm,cmap=cmap),cax=cbax,orientation='horizontal')
         cb.outline.set_visible(False);cb.ax.tick_params(labelsize=9,colors=MUTED)
@@ -224,12 +272,16 @@ def plot(folder, division, style, metric, font, *, preview=False):
     if __import__('summary_retention').notices(data):warnings.append('含保留摘要')
     if (folder/'user-review-notes.json').exists():warnings.append('含已复核警告')
     source='Natural Earth（公有领域）· 1:5000 万地图单元' if division=='country' else 'Beck et al. (2023), CC BY 4.0 · 1991–2020 · Natural Earth / @d3-maps/atlas (MIT)'
+    if division=='china':
+        source='省级边界与站点归属按 2022 年划分 · sheng2022 · 34 个省级行政区'
     fig.text(.041,.053,'参考减研究，正值表示需求降低。'+('降低率取参考需求非零站点的百分比均值。' if curved else '')+'   '+' · '.join(warnings),fontsize=9,color=MUTED)
     fig.text(.041,.018,f'{source}   |   数据 {data["dataset_sha256"][:16]}',fontsize=7.7,color=MUTED)
     if preview:
         fig.savefig(folder/'preview.png',dpi=105,facecolor='white')
         plt.close(fig)
         return
+    from origin_map_inputs import write as write_origin_inputs
+    write_origin_inputs(folder,data,division,curved,metric,regions,extent,summary,sites)
     for ext in ('svg','pdf','png'):
         fig.savefig(folder/('figure.'+ext),dpi=200,facecolor='white')
     plt.close(fig)

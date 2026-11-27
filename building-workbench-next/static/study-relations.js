@@ -68,7 +68,7 @@ async function manageStudyRelation(button) {
      else await listReadingGroups(parent);
     }
     notice(p.name+' · 已'+p.verb);
-   } catch(e) { notice('关系已解除。刷新列表时遇到问题：'+e.message); }
+   } catch(e) { notice('关系已解除。刷新列表时遇到问题：'+e.message,'warning'); }
   };
  } catch(e) {body.textContent=e.message;}
 }

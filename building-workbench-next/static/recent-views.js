@@ -1,6 +1,6 @@
 /* A receipt is valid only after the server checks the current files and registrations. */
 class RecentViewReader {
- constructor(){this.entries=new Map();this.pending=new Map();}
+ constructor(limit=3){this.limit=limit;this.entries=new Map();this.pending=new Map();}
  read(key,force,fetchView){
   const active=this.pending.get(key);
   if(active&&(!force||active.force))return active.promise;
@@ -13,7 +13,7 @@ class RecentViewReader {
    if(this.pending.get(key)===request){
     this.entries.delete(key);
     if(view.view_token)this.entries.set(key,view);
-    if(this.entries.size>3)this.entries.delete(this.entries.keys().next().value);
+    if(this.entries.size>this.limit)this.entries.delete(this.entries.keys().next().value);
    }
    return view;
   }).catch(error=>{

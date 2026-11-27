@@ -78,19 +78,22 @@ def normalize_config(value, root):
     return result
 
 
-def python_environment(executable, modules=()):
-    probe = '''import importlib,json,struct,sys
-result={'version':list(sys.version_info[:3]),'bits':struct.calcsize('P')*8,'modules':{},'errors':{}}
-for name in sys.argv[1:]:
+def python_environment(executable, modules=(), *, module_dir=None, install_hint='请在该环境安装 requirements.txt 中的依赖。'):
+    probe = '''import importlib,importlib.metadata,json,struct,sys
+if sys.argv[1]:
+    sys.path.insert(0,sys.argv[1])
+result={'executable':sys.executable,'version':list(sys.version_info[:3]),'bits':struct.calcsize('P')*8,'modules':{},'errors':{}}
+for name in sys.argv[2:]:
     try:
         module=importlib.import_module(name)
-        result['modules'][name]=getattr(module,'__version__','available')
+        try: result['modules'][name]=importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError: result['modules'][name]=getattr(module,'__version__','available')
     except Exception as error:
         result['errors'][name]=str(error)
 print(json.dumps(result))
 '''
     try:
-        run = subprocess.run([str(executable), '-X', 'utf8', '-c', probe, *modules],
+        run = subprocess.run([str(executable), '-B', '-X', 'utf8', '-c', probe, str(module_dir or ''), *modules],
                              capture_output=True, text=True, encoding='utf-8', timeout=30,
                              creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         if run.returncode:
@@ -101,8 +104,8 @@ print(json.dumps(result))
     if result['version'] < [3, 11, 0] or result['bits'] != 64:
         raise ValueError('需要 64 位 Python 3.11 或以上，当前发布准备使用 Python 3.12 验证。')
     if result['errors']:
-        names = '、'.join(result['errors'])
-        raise ValueError(f'所配置的 Python 缺少或无法加载 {names}。请在该环境安装 requirements.txt 中的依赖。')
+        errors='；'.join(f'{name}（{reason}）' for name,reason in result['errors'].items())
+        raise ValueError(f'缺少或无法加载 {errors}。'+install_hint)
     return result
 
 
@@ -118,6 +121,19 @@ def plotting_python(root=None):
     executable = workspace_config(root)['plot_python']
     python_environment(executable, ('numpy', 'matplotlib'))
     return Path(executable)
+
+
+def origin_environment(root):
+    executable=workspace_config(root)['plot_python']
+    module_dir=Path(root)/'data/origin-python'
+    try:
+        report=python_environment(executable,('numpy','OriginExt','originpro'),module_dir=module_dir,
+            install_hint='请将 config.json 的 plot_python 指向已安装 Origin 接口的 64 位 Python，或按 INSTALL.md 将接口安装到当前绘图环境。')
+    except ValueError as error:
+        raise ValueError(f'Origin 可选接口检查失败。绘图 Python：{executable}。{error}') from error
+    versions='、'.join(f'{n} {v}' for n,v in report['modules'].items())
+    return dict(executable=report['executable'],modules=report['modules'],
+                detail=f'绘图 Python：{report["executable"]}。已加载 {versions}。桌面 Origin 的连接及许可在实际生成工程时验证。')
 
 
 def figure_font(root=None):

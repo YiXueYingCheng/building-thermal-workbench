@@ -2,6 +2,6 @@
 
 请从包根目录的 [README](../README.md) 和 [安装说明](../docs/INSTALL.md) 开始。计算数据由本地工作区创建，源码包不附带私人运行记录。
 
-在「对照总览 → 读取配对结果」选好需求指标和地图分区，将图片样式设为「等积双图」，即可导出可编辑 Origin 工程。打开下载的 .opju，在 RegionValues 按分区修改 B 列（降低率，%）或 C 列（单位温控面积降低量，kWh/m²），按 Enter 后查看 RegionalPair。每一行对应一个固定的地图分区，请保留行序。图层色标可在 Origin 中双击编辑。改值只影响下载的工程。
+在「对照总览 → 读取配对结果」选择需求指标、地图分区（含中国省级行政区）和样式。标准图与等积双图均可点「导出可编辑 Origin 工程」。下载的整包包含工程、绘图数据及《Origin地图教程》。在 RegionValues 修改标准图 B 列（MJ/m²），或双图 B、C 列（%、kWh/m²），按 Enter 核对图页变化。
 
-此导出在 Windows 上调用本机已激活的 Origin。本研究端验证使用 OriginPro 2025b，以及绘图 Python 中的 originpro 1.1.15 和 OriginExt 1.2.6。普通图片及数据包可独立导出。
+Origin 接口是可选依赖。在导出入口点「检查 Origin 环境」可查看实际解释器和依赖状态。安装、升级后配置 plot_python 及专项自检步骤见 [安装说明](../docs/INSTALL.md#可选的-origin-地图工程导出)。

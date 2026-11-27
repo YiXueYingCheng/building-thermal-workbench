@@ -1,0 +1,8 @@
+#stack-response{width:min(920px,94vw);max-height:88vh;padding:0}
+#stack-response .focused-body{overflow:auto;max-height:68vh;padding:1rem 1.5rem}
+#stack-response svg{display:block;width:100%;height:auto;min-height:150px}
+#stack-response svg text{fill:currentColor;font-size:13px}
+#stack-response input[type=range]{width:100%}
+.stack-legend{display:flex;flex-wrap:wrap;gap:1.25rem}
+.stack-legend span::before{content:"";display:inline-block;width:1.4rem;border-top:3px solid #167263;vertical-align:middle;margin-right:.35rem}
+.stack-legend span+span::before{border-color:#aa532c}

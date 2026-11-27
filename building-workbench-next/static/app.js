@@ -7,11 +7,88 @@ const copy=x=>JSON.parse(JSON.stringify(x));
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const modes={controlled:'温控冷热需求',natural:'自然室温',both:'自然室温与温控',inherited:'继承原输入'};
 const factors=[['building','建筑'],['materials','材料'],['condition','工况'],['scope','范围']];
-function notice(text=''){message.textContent=text;}
+const feedback=document.getElementById('operation-feedback');
+let feedbackTimer;
+let feedbackReturnFocus=null;
+let feedbackVersion=0;
+function positionFeedback(){
+ const dialogs=document.querySelectorAll('dialog[open]');
+ const owner=document.activeElement?.closest('dialog[open]')||dialogs[dialogs.length-1]||document.body;
+ if(feedback.parentElement!==owner)owner.append(feedback);
+ if(feedback.showPopover&&!feedback.matches(':popover-open'))feedback.showPopover();
+}
+// Dialogs rebuild their contents after requests and may remove the notice with them.
+const feedbackObserver=new MutationObserver(records=>{
+ if(!feedback.isConnected||records.some(r=>r.target.tagName==='DIALOG'&&r.attributeName==='open'))positionFeedback();
+});
+function dismissFeedback(){
+ clearTimeout(feedbackTimer);
+ feedbackObserver.disconnect();
+ feedback.hidePopover?.();
+ feedback.hidden=true;
+ message.textContent='';
+ feedbackReturnFocus=null;
+ if(feedback.parentElement!==document.body)document.body.append(feedback);
+}
+function scheduleFeedbackDismissal(){
+ clearTimeout(feedbackTimer);
+ if(!feedback.hidden&&feedback.dataset.kind==='status'){
+  feedbackTimer=setTimeout(()=>{
+   if(!feedback.matches(':hover, :focus-within'))dismissFeedback();
+  },8000);
+ }
+}
+function notice(text='',kind='status'){
+ if(!text){dismissFeedback();return;}
+ feedbackVersion++;
+ feedback.dataset.kind=kind;
+ message.setAttribute('role',kind==='error'?'alert':'status');
+ feedback.hidden=false;
+ positionFeedback();
+ if(message.textContent!==text){
+  message.textContent=text;
+  message.scrollTop=0;
+ }
+ feedbackObserver.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['open']});
+ scheduleFeedbackDismissal();
+}
+async function withProgressNotice(text,operation){
+ notice(text,'progress');
+ const version=feedbackVersion;
+ try{return await operation();}
+ finally{if(feedbackVersion===version&&!feedback.hidden)notice();}
+}
+function noticeIfOutOfView(element,text,kind='status'){
+ if(!text)return;
+ if(element&&feedback.hidden){
+  const rect=element.getBoundingClientRect();
+  const x=rect.left+rect.width/2;
+  const visibleAt=y=>element.contains(document.elementFromPoint(x,y));
+  if(rect.height&&visibleAt(rect.top+1)&&visibleAt(rect.bottom-1))return;
+ }
+ notice(text,kind);
+}
+feedback.addEventListener('focusin',event=>{
+ if(!feedback.contains(event.relatedTarget))feedbackReturnFocus=event.relatedTarget;
+});
+const dismissFeedbackButton=feedback.querySelector('button');
+dismissFeedbackButton.addEventListener('pointerdown',event=>{
+ if(event.button===0)event.preventDefault();
+});
+dismissFeedbackButton.addEventListener('click',event=>{
+ event.stopPropagation();
+ const previous=feedbackReturnFocus;
+ const restoreFocus=feedback.contains(document.activeElement);
+ if(restoreFocus)document.activeElement.blur();
+ dismissFeedback();
+ if(restoreFocus&&previous?.isConnected)previous.focus({preventScroll:true});
+});
+feedback.addEventListener('pointerleave',scheduleFeedbackDismissal);
+feedback.addEventListener('focusout',scheduleFeedbackDismissal);
 async function api(route,body){
  // These readers merge changes into an explicitly pinned saved version.
  // Do not send unchanged multi-city calendar snapshots back on every view.
- if(['/api/plan-workflow','/api/capabilities','/api/preview','/api/calendar-inspections'].includes(route)&&body?.changes&&body.id===S.saved?.id&&body.revision===S.saved.revision){
+ if(['/api/plan-workflow','/api/capabilities','/api/preview','/api/calendar-inspections','/api/daily-inspections'].includes(route)&&body?.changes&&body.id===S.saved?.id&&body.revision===S.saved.revision){
   body={...body,changes:Object.fromEntries(Object.entries(body.changes).filter(([k,v])=>JSON.stringify(v)!==JSON.stringify(S.saved[k])))};
  }
  const serialized=body===undefined?undefined:JSON.stringify(body);
@@ -74,8 +151,9 @@ function generatedPanel(){
 }
 function editor(){
  const r=S.record;if(!r)return '<p>正在读取方案…</p>';
+ const dailyPlan=!S.dirty&&regionalOrigin(r)?.daily;
  const body={building:buildingPanel,materials:materialsPanel,condition:conditionPanel,scope:scopePanel}[S.factor]();
- return `<div class="workspace">${sidebar()}<div class="two-views"><section class="section"><div class="row"><div><h1>${esc(r.name)}</h1><p class="muted">${readonly()?'来源或历史版本只读':'新方案可编辑'} · ${esc(planVersionLabel(r))}${S.dirty?' · 有未保存修改':''}</p></div><div class="actions">${latestVersionButton()}<button data-action="history">查看版本记录</button><button data-action="preview">计算安排 · ${r.numerics.step_minutes} min</button><button data-action="copy">另存为研究方案</button><button data-action="save" class="primary"${readonly()||!S.dirty?' disabled':''}>保存版本</button>${S.dirty?'<button data-action="discard">撤销未保存修改</button>':''}</div></div><label class="field">方案名称<input data-path="name" value="${esc(r.name)}" maxlength="100"${disabled()}></label>${versionNoteMarkup(S.saved,true)}${versionHistoryPanel()}</section>${planningPanel()}<nav class="factor-nav" aria-label="方案四因素">${factors.map(([k,label],i)=>`<button data-factor="${k}" aria-pressed="${S.factor===k}">${i+1} · ${label}</button>`).join('')}</nav><section class="section">${capabilityPanel()}${body}</section>${inputInspectionView()}${planActivityView()}<details class="footer"><summary>来源与映射说明</summary>${r.provenance.notes.map(n=>`<p class="muted">${esc(n)}</p>`).join('')}<p class="source-path">${esc(r.provenance.source_path||'')}</p></details></div></div>`;
+ return `<div class="workspace">${sidebar()}<div class="two-views"><section class="section"><div class="row"><div><h1>${esc(r.name)}</h1><p class="muted">${readonly()?'来源或历史版本只读':'新方案可编辑'} · ${esc(planVersionLabel(r))}${S.dirty?' · 有未保存修改':''}</p></div><div class="actions">${latestVersionButton()}<button data-action="history">查看版本记录</button><button data-action="preview">计算安排 · ${dailyPlan?'查看逐日核对':esc(r.numerics.step_minutes)+' min'}</button>${!dailyPlan&&isRegionalDaily(r)?'<button data-daily-reference="open">查看逐日核对</button>':''}<button data-action="copy">另存为研究方案</button><button data-action="save" class="primary"${readonly()||!S.dirty?' disabled':''}>保存版本</button>${S.dirty?'<button data-action="discard">撤销未保存修改</button>':''}</div></div><label class="field">方案名称<input data-path="name" value="${esc(r.name)}" maxlength="100"${disabled()}></label>${regionalOriginNote(S.saved)}${versionNoteMarkup(S.saved,true)}${versionHistoryPanel()}</section>${planningPanel()}<nav class="factor-nav" aria-label="方案四因素">${factors.map(([k,label],i)=>`<button data-factor="${k}" aria-pressed="${S.factor===k}">${i+1} · ${label}</button>`).join('')}</nav><section class="section">${capabilityPanel()}${body}</section>${inputInspectionView()}${planActivityView()}<details class="footer"><summary>来源与映射说明</summary>${r.provenance.notes.map(n=>`<p class="muted">${esc(n)}</p>`).join('')}<p class="source-path">${esc(r.provenance.source_path||'')}</p></details></div></div>`;
 }
 function compactFactor(r,key){
  const f=r.factors;if(key==='building')return f.building.name+(f.building.usage_profile?'；'+f.building.usage_profile.name+' · 配置版本 '+f.building.usage_profile.revision:'；原默认作息');
@@ -121,6 +199,10 @@ async function loadComparison(savedId){
  if(epoch===comparisonEpoch){S.comparison=values[0].value;S.planHistories={left:values[1].value,right:values[2].value};S.compareVersions={left_revision:S.comparison.left.revision,right_revision:S.comparison.right.revision};clearUnmatchedResultComparison();}
 }
 async function action(button){
+ if(['read-comparison-results','refresh-comparison-results'].includes(button.dataset.action)){
+  readComparisonInBackground(button.dataset.action==='refresh-comparison-results');
+  return;
+ }
  if(await versionNoteAction(button)||await copyPlanAction(button)||await comparisonHubAction(button))return;
  if(await resultIndexAction(button)){render();finishResultIndexNavigation();return;}
  if(await sourceOverviewAction(button)){render();return;}
@@ -130,7 +212,7 @@ async function action(button){
  if(await versionHistoryAction(button)){render();if(button.dataset.action==='history')document.getElementById('version-history')?.scrollIntoView({block:'start'});return;}
  if(await comparisonLibraryAction(button)){
   render();
-  const target=button.dataset.matchedResults?document.getElementById('comparison-results'):app.querySelector('.comparison-page-tabs');
+  const target=document.getElementById('selected-common-month')||(button.dataset.matchedResults?document.getElementById('comparison-results'):app.querySelector('.comparison-page-tabs'));
   target?.scrollIntoView({block:'start'});
   return;
  }
@@ -157,12 +239,12 @@ async function action(button){
    case 'close-planning':S.planningOpen=false;break;
    case 'check-capability':await refreshCapability();break;
    case 'generate':if(S.dirty)throw new Error('请先保存版本，再生成输入。');S.generated=await api('/api/model-inputs',{id:S.id,revision:S.record.revision});await loadPlanActivity();notice(S.generated.reused?'已核对并复用已有输入包。':'模型输入与差异清单已保存，没有启动计算。');break;
-   case 'verify':notice('正在只读核对来源和历史数值…');S.boot.verification=await api('/api/verify',{});notice(S.boot.verification.passed?'来源与历史数值核对通过。':'发现差异，请查看核对内容。');break;
+   case 'verify':S.boot.verification=await withProgressNotice('正在只读核对来源和历史数值…',()=>api('/api/verify',{}));notice(S.boot.verification.passed?'来源与历史数值核对通过。':'发现差异，请查看核对内容。',S.boot.verification.passed?'status':'warning');break;
    case 'save-comparison':{const c=S.comparison;capturePlanComparisonDraft();const saved=await api('/api/comparisons',{name:S.planComparisonDraft.name,metric:S.planComparisonDraft.metric,left:{id:c.left.id,revision:c.left.revision},right:{id:c.right.id,revision:c.right.revision}});await bootstrap();await openSavedComparison(saved.id);notice(saved.reused_comparison?'已打开原比较，没有新增重复记录。':'已保存比较关系；现在可直接选择双方已有批次查看结果。');break;}
  }
  render();
 }
-document.addEventListener('click',async event=>{const button=event.target.closest('button');if(!button||button.disabled||S.busy)return;if(button.closest('.map-preview-dialog')||handleMapPreview(button))return;S.busy=true;app.inert=true;nav.inert=true;notice();try{await action(button);}catch(error){notice(error.message);}finally{S.busy=false;app.inert=false;nav.inert=false;}});
+document.addEventListener('click',async event=>{const button=event.target.closest('button');if(!button||button.disabled||S.busy)return;if(button.closest('.map-preview-dialog')||handleMapPreview(button))return;S.busy=true;app.inert=true;nav.inert=true;try{await action(button);}catch(error){notice(error.message,'error');}finally{S.busy=false;app.inert=false;nav.inert=false;}});
 document.addEventListener('change',async event=>{
  const t=event.target;try{
    if(t.id==='archived'){S.archived=t.checked;render();return;}
@@ -176,13 +258,13 @@ document.addEventListener('change',async event=>{
    if(t.dataset.between!==undefined){setPath(`factors.materials.applications.${t.dataset.between}.between_layers`,t.value.split('/').map(x=>x.trim()).filter(Boolean));updateDirtyStatus();return;}
    if(t.dataset.period){const parts=t.value.split('-').map(Number);const p=copy(S.record.factors.scope.period);p.splice(t.dataset.period==='start'?0:2,2,...(parts.length===2?parts:[null,null]));setPath('factors.scope.period',p);updateDirtyStatus();return;}
    if(t.dataset.site){const ids=new Set(S.record.factors.scope.site_ids),site=t.dataset.site,list=t.closest('.scope-site-list'),listY=list?.scrollTop,mainY=scrollY;t.checked?ids.add(site):ids.delete(site);setPath('factors.scope.site_ids',[...ids]);render();if(listY!==undefined){const current=document.querySelector('.scope-site-list');if(current)current.scrollTop=listY;}document.querySelector(`[data-site="${CSS.escape(site)}"]`)?.focus({preventScroll:true});scrollTo({top:mainY,behavior:'instant'});}
- }catch(error){notice(error.message);}
+ }catch(error){notice(error.message,'error');}
 });
 document.addEventListener('input',event=>{const t=event.target;if(t.id==='search'){S.search=t.value;const list=document.querySelector('.record-list');list.innerHTML=libraryList();}else if(t.matches('input[data-path]')&&!readonly()){setPath(t.dataset.path,t.type==='number'?(t.value===''?null:Number(t.value)):t.value);updateDirtyStatus();}});
 async function startWorkbench(){
  try{await bootstrap();if(S.boot.records.length){selectInitialRecord();await loadRecord(S.id);}else{S.id=null;S.view='workspace';}render();}
  catch(error){
-  notice('工作区未能完整加载，请重新加载后重试。');
+  notice('工作区未能完整加载，请重新加载后重试。','error');
   const explanation=document.createElement('p'),retry=document.createElement('button');
   explanation.textContent=error instanceof ReferenceError?'页面功能尚未完整载入，已停止初始化。':error.message;
   retry.textContent='重新加载工作区';retry.dataset.startupRetry='true';

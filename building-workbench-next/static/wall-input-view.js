@@ -76,6 +76,10 @@ function wallApplicationSummary(w, data) {
    if(c.channel==='orientation' && c.mode==='calendar')return '光学组按日历切换';
    return c.mode;
   };
+  if(d?.model==='layer_stack_v1'){
+   const fb=controls.find(c=>c.mode==='feedback');
+   return '<strong>'+esc(d.name)+'</strong>'+stackWallInfo(d,a,controls.find(c=>c.channel==='orientation'))+(fb?'<p>第 '+esc(fb.layer_number)+' 层参与热阻反馈 · 初始 '+esc(stackInitialName(d,fb.layer_number))+'</p>':'<p>本构件各层使用组合中选定的固定状态。</p>');
+  }
   const hasBase=['Material','Material:NoMass'].includes(outer?.kind)&&outer.values;
   const fallback=['fixed_surface_material_v1','fixed_exterior_movable_v1'].includes(a.placement_basis)?
    (hasBase?(outer.values.visible_absorptance??0.7)+'（沿用外表面）':'沿用基础外表面'):a.surface_model?.visible_absorptance;

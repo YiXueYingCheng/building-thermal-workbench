@@ -5,6 +5,7 @@
 | 随包内容 | 署名与许可 | 详细说明 |
 | --- | --- | --- |
 | destep 转换规则参考与源码归档 | Copyright (c) 2024 Hongyuan Jia，MIT | [参考作用与实际使用方式](docs/DESTEP_REFERENCE.md)；[原许可](dependencies/dest_compatibility/destep-LICENSE.md)；[项目](https://github.com/hongyuanjia/destep) |
+| 中国省级边界 | 政府公开的 2022 年数据，后续边界调整可能影响站点归属 | [来源、处理和适用范围](building-workbench-next/third_party/CHINA_PROVINCES.md) |
 | Köppen–Geiger 地图 | Beck et al. (2023)，CC BY 4.0 | [地图来源、论文、数据与修改](building-workbench-next/third_party/THIRD_PARTY_MAPS.md) |
 | 陆地轮廓 | @d3-maps/atlas 1.0.0，Copyright © 2026 Georgii Bukharov，MIT；底层 Natural Earth 数据为公有领域 | [atlas 原许可](building-workbench-next/third_party/atlas-LICENSE.txt) |
 

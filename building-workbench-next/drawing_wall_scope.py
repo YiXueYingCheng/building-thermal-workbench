@@ -50,6 +50,11 @@ def select(record, wall_ids, covered, feedback_ids):
         raise ValueError('请至少铺设一段室外墙，反馈组只能从已铺墙中选择。')
     if not set(record['factors']['materials']['applications'][0]['target_ids']) <= set(wall_ids):
         raise ValueError('当前材料应用包含屋面。请在材料库单独选用外墙，再按墙段调整。')
+    if f['materials']['definitions'][0]['model']=='layer_stack_v1':
+        from composite_materials import configure_feedback
+        previous=next((c for c in f['condition']['controls'] if c['mode']=='feedback'),{})
+        ordered=[w for w in wall_ids if w in covered]
+        return configure_feedback(record,previous.get('layer_number'),feedback_ids,ordered)
     if fixed_equivalent:
         if feedback_ids:raise ValueError('固定热学状态不使用反馈墙组。')
         from surface_materials import fixed_assignments

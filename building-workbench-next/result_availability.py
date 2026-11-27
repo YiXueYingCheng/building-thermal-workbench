@@ -2,7 +2,8 @@
 from pathlib import Path
 from contextlib import closing
 import hashlib,json,re,sqlite3,time,stat
-from foundation import now
+from foundation import digest,now
+from recent_batch_views import RecentViews
 import output_storage
 from storage_management import safe_child
 
@@ -22,7 +23,11 @@ def listing(root,batch):
   note='登记状态保留当时结论；逐项核对现在的文件。打开列表不扫描全部原始结果。')
 
 def stamp(p):
- s=p.stat();return (s.st_size,s.st_mtime_ns,s.st_ino,s.st_dev)
+ s=p.stat();return (s.st_size,s.st_mtime_ns,s.st_ctime_ns,s.st_ino,s.st_dev)
+
+def file_state(p):
+ try:return stamp(p)
+ except FileNotFoundError:return None
 
 def path_checked(root,path):
  raw=Path(path)
@@ -36,7 +41,7 @@ def check_file(root,path,checksum,deadline):
   if not isinstance(checksum,str) or not re.fullmatch('[a-f0-9]{64}',checksum):raise ValueError('原登记校验值无效。')
   # Verify an external location before deciding that a file is missing.
   p=path_checked(root,path)
-  if not p.exists():row.update(status='missing',reason='保存位置可访问，但未找到文件。');return row,None
+  if not p.exists():row.update(status='missing',reason='保存位置可访问，但未找到文件。');return row,(p,None)
   if not stat.S_ISREG(p.stat().st_mode):raise ValueError('不是普通文件。')
   before=stamp(p);row['bytes']=before[0];h=hashlib.sha256()
   with p.open('rb') as f:
@@ -50,7 +55,7 @@ def check_file(root,path,checksum,deadline):
   return row,(p,before)
  except (OSError,ValueError,TypeError) as e:row['reason']=str(e);return row,None
 
-def inspect(root,batch,index,budget_seconds=30):
+def inspect(root,batch,index,budget_seconds=30,reads=None):
  root=Path(root).resolve()
  if type(index) is not int or index<0:raise ValueError('算例序号无效。')
  row=next((j for j in jobs(root,batch) if j['idx']==index),None)
@@ -79,7 +84,12 @@ def inspect(root,batch,index,budget_seconds=30):
  # Detect writes during the multi-file read, without changing any source.
  for item,(p,before) in watches:
   try:
-   if stamp(p)!=before:raise ValueError('核对期间资料变化，请重新核对。')
+   if file_state(p)!=before:raise ValueError('核对期间资料变化，请重新核对。')
+   if reads is not None:
+    def current_source(path=item['path']):
+     resolved=path_checked(root,path)
+     return str(resolved),file_state(resolved)
+    reads.watch_value(('availability',item['path']),current_source,(str(p),before),'结果文件或保存位置已变化')
   except (OSError,ValueError) as e:item.update(status='unknown',reason=str(e));issues.append(str(e))
  if next((j for j in jobs(root,batch) if j['idx']==index),None)!=row:issues.append('核对期间任务登记发生变化，请重新核对。')
  summary_ok=raw is not None and not issues
@@ -110,3 +120,32 @@ def inspect(root,batch,index,budget_seconds=30):
    lost=['经受控清理后可继续读取、比较及导出已有汇总；不扩展原接受范围，也不生成缺失的逐时信息','依赖原始明细的复核、自动复用及逐日／日历参考核对将受影响','未输出的逐时变量不能从汇总还原；恢复需找回原文件或另行计算，不会自动重跑']),
   note='这是本次只读核对，不改写历史接受状态。保留汇总读取需匹配受控清理记录，复核及复用仍要求所需原始资料完整。外置位置不可访问时显示未知。')
  return report
+
+
+class RecentAvailability(RecentViews):
+    """Reuse a display receipt while this case's registration, paths and files match."""
+    workspace_files = ()
+
+    def registry(self, scope):
+        batch, index = scope
+        rows = jobs(self.root, batch)
+        if index is None:
+            return digest([(r['idx'], r['status'], r['attempt'], bool(r['result'])) for r in rows]), []
+        row = next((r for r in rows if r['idx'] == index), None)
+        if row is None:
+            raise ValueError('未找到该算例。')
+        return digest(row), [row]
+
+    def build(self, scope, catalog):
+        from inspection_io import current
+        batch, index = scope
+        if index is None:
+            return listing(self.root, batch)
+        return inspect(self.root, batch, index, reads=current())
+
+    def cacheable_summary(self, report):
+        # An interrupted or inaccessible read must be able to recover on reopen.
+        files = report.get('files', [])
+        if 'summary_file' in report:
+            files = [report['summary_file'], *files]
+        return not report.get('issues') and all(f['status'] != 'unknown' for f in files)

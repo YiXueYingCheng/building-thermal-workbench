@@ -5,6 +5,41 @@ from foundation import owned,read_json,sha,digest,now
 from preparation_recovery import saved_input,submitted
 
 
+def stack_readback(model, application):
+    """Join the saved layer identities to their actual slots in the selected case."""
+    layers = application['layers']
+    actuators = {a['actuated_component_unique_name'].casefold()
+                 for a in model.get('EnergyManagementSystem:Actuator', {}).values()
+                 if a['actuated_component_control_type'].casefold() == 'thermal conductivity'
+                 and a['actuated_component_type'].casefold() == 'condfd surface material layer'}
+    phase = model.get('MaterialProperty:PhaseChange', {})
+    groups = [{} for _ in layers]
+    for surface in application['surfaces']:
+        name = surface['surface']
+        construction = model['Construction'][model['BuildingSurface:Detailed'][name]['construction_name']]
+        slots = [construction['outside_layer'], *(construction['layer_'+str(i)] for i in range(2,len(construction)+1))]
+        solid_index = 0
+        for i, layer in enumerate(layers):
+            coating = layer['model'] == 'optical_surface_v1'
+            solid = surface['inserted_layers'][solid_index]
+            if solid not in slots:
+                raise ValueError(f'{name} 的生成记录与构造层序不一致，请核对原模型输入。')
+            material = model['Material'][solid]
+            props = dict(slot=slots.index(solid)+1)
+            if coating or (i==0 and props['slot']==1 and application.get('position')=='exterior'):
+                props.update(solar_absorptance=material['solar_absorptance'],emissivity=material['thermal_absorptance'])
+            if not coating:
+                solid_index += 1
+                props.update(thickness_mm=material['thickness']*1000, conductivity=material['conductivity'],
+                             feedback=(name+':'+solid).casefold() in actuators,
+                             enthalpy_points=len(phase.get(solid,{}).get('values',[])))
+            key = tuple(props.values())
+            groups[i].setdefault(key,dict(**props,surfaces=[]))['surfaces'].append(name)
+    return dict(surface_count=len(application['surfaces']),calendar_optics=application.get('calendar_optics'), layers=[
+        dict(name=l['name'],revision=l['revision'],model=l['model'],groups=list(group.values()))
+        for l,group in zip(layers,groups)])
+
+
 def wall_model(root, ident, index, store, expected):
     """Return only case choices or the wall stacks of one verified saved input."""
     manifest, _, _ = saved_input(root, ident, store, expected)
@@ -84,10 +119,18 @@ def case_detail(root,ident,index,store):
     if not 0<=index<len(m['cases']):raise ValueError('算例序号无效。')
     folder=owned(Path(root)/'data/model-inputs'/ident,root);row=m['cases'][index]
     model=owned(folder/row['model_file'],folder)
-    if sha(model)!=row['model_sha256'] or digest(read_json(model))!=row['generated_model_digest']:raise ValueError('所选模型内容变化，请保留并核查。')
+    if sha(model)!=row['model_sha256']:raise ValueError('所选模型内容变化，请保留并核查。')
+    values=read_json(model)
+    if digest(values)!=row['generated_model_digest']:raise ValueError('所选模型内容变化，请保留并核查。')
     fields=('city','mode','period','step_minutes','wall_assignments','wall_assignments_basis','differences',
         'usage_configuration','usage_version','operation_overrides','control_groups','source_model','weather','dependencies','calendar_binding','orientation_calendar','drawing_wall_scope')
-    complete=read_audit(folder,row);report={k:copy.deepcopy(complete[k]) for k in fields if k in complete};del complete
+    complete=read_audit(folder,row);report={k:copy.deepcopy(complete[k]) for k in fields if k in complete}
+    application=complete.get('material_application') or {}
+    if application.get('surfaces'):
+        report['applied_surfaces']=[surface['surface'] for surface in application['surfaces']]
+    if application.get('model')=='layer_stack_v1':
+        report['stack_readback']=stack_readback(values,application)
+    del complete,values
     if isinstance(report.get('usage_version'),dict):report['usage_version']={k:report['usage_version'][k] for k in ('id','revision','name') if k in report['usage_version']}
     url=f'/api/model-inputs/{ident}/'+row.get('audit',{}).get('file','manifest.json')
     # Keep all paths and counts visible, read long values only on demand.

@@ -6,7 +6,6 @@ renderNav=function(){
  if(S.record)beforeSetupNav();
  else nav.innerHTML='<button type="button" data-view="material-library" aria-pressed="'+(S.view==='material-library')+'">公用材料库</button>';
  nav.insertAdjacentHTML('afterbegin','<button type="button" data-view="workspace" aria-pressed="'+(S.view==='workspace')+'">工作区设置</button>');
- const legacy=document.querySelector('.legacy-link');if(legacy)legacy.hidden=!!S.boot.workspace?.standalone;
 };
 function workspaceSetupView(){
  const w=S.boot.workspace,e=w.engine;
@@ -37,7 +36,7 @@ action=async function(button){
  if(op==='refresh'){await bootstrap();render();return;}
  const path=document.getElementById('setup-engine-path')?.value||'';S.enginePath=path;
  if(op==='browse-engine'){const result=await api('/api/workspace/engine/browse',{path});if(result.path)S.enginePath=result.path;render();return;}
- if(op==='register-engine'){notice('正在核验引擎版本与文件…');await api('/api/workspace/engine',{path});await bootstrap();render();notice('引擎已登记，可以继续导入气象和建筑。');}
+ if(op==='register-engine'){await withProgressNotice('正在核验引擎版本与文件…',()=>api('/api/workspace/engine',{path}));await bootstrap();render();notice('引擎已登记，可以继续导入气象和建筑。');}
 };
 document.addEventListener('input',e=>{if(e.target.id==='setup-engine-path')S.enginePath=e.target.value;});
 

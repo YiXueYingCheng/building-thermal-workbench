@@ -71,7 +71,7 @@ class MaterialRegistrationTests(unittest.TestCase):
     with self.assertRaises(ValueError):
      verify(store.draft_payload(base,wrong)['factors']['materials']['definition_reference'])
  def test_registration_modes_and_no_implied_dynamic_support(self):
-  data=inventory();self.assertEqual({m['id'] for m in data['modes']},{'optical','storage','resistance','pcm','spectral'})
+  data=inventory();self.assertEqual({m['id'] for m in data['modes']},{'optical','storage','resistance','pcm','spectral','stack'})
   for d in (template('film'),resistance_template()):
    self.assertFalse(describe(d)['storage']);self.assertIn('不能用于新版可调热阻',describe(d)['capability'])
   self.assertTrue(describe(template('solid'))['storage']);self.assertIn('可在工况中启用统一热阻反馈',describe(template('variable'))['capability'])

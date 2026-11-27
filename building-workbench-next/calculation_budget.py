@@ -36,10 +36,13 @@ def verified_result(root, path, checksum, identity):
 
 def sample_key(plan, record, case):
     # Conservative: changed building/material/controls get no inherited estimate.
-    return digest(dict(factors={k:v for k,v in record['factors'].items() if k!='scope'},
+    sample=dict(factors={k:v for k,v in record['factors'].items() if k!='scope'},
         numerics=record['numerics'], mode=case['mode'], period=case['period'],
         step_minutes=case['step_minutes'], engine=plan['engine_files'],
-        code=plan['code_hashes'], output=plan['output_contract']))
+        code=plan['code_hashes'], output=plan['output_contract'])
+    if plan.get('observation_followup'):
+        sample['probes']={k:plan['observation_followup'][k] for k in ('wall','zone','fields')}
+    return digest(sample)
 
 
 def range_of(values):

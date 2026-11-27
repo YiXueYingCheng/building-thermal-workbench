@@ -86,7 +86,7 @@ def rule_detail(rule):
     return ''
 
 
-def preview(store, db, design, cell, selected):
+def preview(store, db, design, cell, selected, *, expected_recipe=None, expected_ref=None, check_model=True):
     want = choices_for_cell(design,cell)
     source = store.get(design['base']['id'],design['base']['revision'])
     app = installation(source)
@@ -116,6 +116,8 @@ def preview(store, db, design, cell, selected):
                 variants.setdefault(setting_key(rule),(describe(record),rule))
         if not all(facts[f]==v for f,v in want.items()):continue
         if not all(setting_key(setting(record,f))==key for f,key in expected_keys.items()):continue
+        if expected_ref and pin(record)!=expected_ref:continue
+        if expected_recipe and recipe(record)!=expected_recipe:continue
         if pin(record) in design['cells']:
             occupied=True
         else:
@@ -128,6 +130,7 @@ def preview(store, db, design, cell, selected):
                 sites=source['factors']['scope']['site_ids'])
     if matches:
         return dict(common,kind='existing',matches=matches,token=digest([coordinates,matches])),None
+    require(not expected_ref,'追问指定的保存版本与本格当前输入不再匹配，请返回追问重新核对。')
     require(not occupied,'匹配的版本已绑定在本设计的其他格，请先核对工况设置。')
     options={}
     origins={}
@@ -154,13 +157,15 @@ def preview(store, db, design, cell, selected):
         condition['reference_runs']=refs
     name=(source['factors']['building']['name']+' · '+ ' · '.join(want.get(f,source_facts[f]) for f in CHANNEL))[:100]
     target=store.update_payload(source,dict(name=name,factors=factors))
+    require(not expected_recipe or recipe(target)==expected_recipe,'所选规则与原追问的工况不符，请重新核对。')
     after=design_facts(target)
     require(basis(target)==source_basis and all(after[f]==v for f,v in want.items()) and
             all(setting_key(setting(target,f))==setting_key(rule) for f,rule in expected.items()),
             '实际输入与预期改动不一致，请核对来源。')
     require(recipe(source)!=recipe(target),'来源版本已具有这项输入。')
-    with reading():supported=capability(target,store.catalog)
-    require(supported['supported'],'；'.join(supported.get('reasons',[])) or '当前模型尚不支持此工况。')
+    if check_model:
+        with reading():supported=capability(target,store.catalog)
+        require(supported['supported'],'；'.join(supported.get('reasons',[])) or '当前模型尚不支持此工况。')
     changes=[dict(label={'thermal':'热阻策略','optical':'表面光学策略'}[f],before=source_facts[f],after=after[f])
              for f in CHANNEL if setting_key(setting(source,f))!=setting_key(expected[f])]
     states=source['factors']['materials']['definitions'][0]['states']
@@ -194,7 +199,7 @@ def resolve_cell(store,body,confirm=False):
         if confirm and design['revision']==revision+1 and receipt.get('cell')==cell and receipt.get('token')==body.get('token') and receipt.get('choice')==body.get('choice'):
             return design
         require(design['revision']==revision and not design['cells'][cell],'设计版本或所选工况已变化，请重新打开。')
-        result,target=preview(store,db,design,cell,selected)
+        result,target=preview(store,db,design,cell,selected,expected_recipe=body.get('expected_recipe'),expected_ref=body.get('expected_ref'))
         if not confirm:return result
         require(result.get('token') and result['token']==body.get('token'),'来源或可用版本已变化，请重新预览。')
         if result['kind']=='existing':

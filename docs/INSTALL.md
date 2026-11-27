@@ -1,6 +1,6 @@
 # 安装与首次使用
 
-> 当前版本为 v0.73.15 公开预览版。已有 v0.72.2、v0.73.11 至 v0.73.14 或 v0.73.14-rc.1 至 rc.9 用户请看 [升级与备份恢复](UPGRADE_TO_0_73_15.md)，使用新包中的 Upgrade Workbench.cmd；不要直接覆盖旧工作区。
+> 当前版本为 v0.73.16 公开预览版。已有 v0.72.2、v0.73.11 至 v0.73.15 或 v0.73.14-rc.1 至 rc.9 用户请看 [升级与备份恢复](UPGRADE_TO_0_73_16.md)，使用新包中的 Upgrade Workbench.cmd；不要直接覆盖旧工作区。
 
 > 普通建筑导入可使用 [Drawing26 门洞修补版](../examples/drawing26-repaired/README.md)。
 
@@ -44,6 +44,30 @@ PowerShell 提取脚本使用进程级 RemoteSigned；组织策略仍然有效�
 图表缺字时在配置中填写有权使用的 `plot_font`；本包不复制 Windows 字体。依赖检查可用 `launch.py --check --json`，服务日志位于 `data/server.stderr.log`。端口冲突时修改配置，不关闭其他工作区。
 
 ## 自检
+
+### 可选的 Origin 地图工程导出
+
+普通地图和数据包使用 NumPy、Matplotlib 和随 Matplotlib 安装的 Pillow。生成可编辑 OPJU 还需要 Windows 桌面版 Origin（已激活），以及**绘图 Python** 能加载的 `originpro` 和 `OriginExt`。本机验证组合为 OriginPro 2025b、64 位 Python 3.12、originpro 1.1.15 和 OriginExt 1.2.6。
+
+1. 在普通 Windows 用户会话中打开一次桌面 Origin，完成激活和首次启动提示，再关闭窗口。
+2. 选择绘图解释器。用随包启动器运行且 `plot_python` 为 `null` 时，通常使用平台自己的 `.venv\Scripts\python.exe`。如果系统 Python 已经具备普通绘图和 Origin 接口，在**工作区实际使用的** `building-workbench-next/config.json` 中仅修改该字段，例如 `"plot_python": "C:/Tools/Python312/python.exe"`，路径换成本机实际值。保留其余设置。系统解释器路径可用 `python -c "import sys; print(sys.executable)"` 核对。若使用平台虚拟环境，可在**包根目录**执行：
+
+   ```powershell
+   .\.venv\Scripts\python.exe -m pip install "originpro==1.1.15" "OriginExt==1.2.6"
+   ```
+
+3. 重新打开工作台，在出图处点「检查 Origin 环境」，或在包根目录执行以下自检。输出列出实际解释器及可加载的版本，发现缺包或二进制模块加载失败时会带上模块名。常规 `--check` 将 Origin 单列为可选项。专项自检成功返回 0、失败返回 1。
+
+   ```powershell
+   .\.venv\Scripts\python.exe -B -X utf8 .\building-workbench-next\launch.py --check-origin
+   .\.venv\Scripts\python.exe -B -X utf8 .\building-workbench-next\launch.py --check --json
+   ```
+
+4. 在已配对结果中选择地图和样式，点「导出可编辑 Origin 工程」。成功打开 OPJU 才同时验证了桌面 Origin 的连接和工程写入。接口可加载但生成失败时，请看导出入口的原始错误。
+
+发布包默认不附带 Origin、商业许可或 `data/origin-python` 目录。通常直接安装到选定解释器即可。需要单工作区离线部署时，可预先下载适配同一 Windows 架构与 Python 版本的 wheel，在包根目录使用目标解释器执行 `-m pip install --no-index --find-links D:/wheels --target .\building-workbench-next\data\origin-python originpro OriginExt`。专项自检与实际导出都会优先读取这个目录。升级会保留工作区的配置和 data，请在升级后再做一次专项自检。[OriginLab 外部 Python 接口说明](https://docs.originlab.com/externalpython/)
+
+### 工作区与导入检查
 
 在包根目录运行：
 

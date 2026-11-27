@@ -55,8 +55,17 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--no-browser',action='store_true')
     parser.add_argument('--check',action='store_true')
+    parser.add_argument('--check-origin',action='store_true',help='仅核对可编辑 Origin 工程所用的 Python 接口')
     parser.add_argument('--json',action='store_true',help='以 JSON 输出依赖检查结果')
     args=parser.parse_args()
+    if args.check_origin:
+        from runtime_settings import origin_environment
+        try:
+            report=dict(available=True,**origin_environment(ROOT))
+        except (ValueError,OSError) as error:
+            report=dict(available=False,detail=str(error))
+        print(json.dumps(report,ensure_ascii=False,indent=2) if args.json else report['detail'])
+        sys.exit(0 if report['available'] else 1)
     if args.check:
         from runtime_check import check,format_report
         report=check(ROOT)

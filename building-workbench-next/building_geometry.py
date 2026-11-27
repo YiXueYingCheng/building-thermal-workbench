@@ -50,7 +50,7 @@ def normal(points):
     return n
 
 
-def build(model,settings):
+def build(model,settings=None):
     rules=list(model.get('GlobalGeometryRules',{}).values())
     if len(rules)!=1 or rules[0].get('coordinate_system')!='World' or rules[0].get('vertex_entry_direction')!='Counterclockwise':
         raise ValueError('此坐标或顶点规则尚未接入平面查看；请沿用原参数核对。')
@@ -58,6 +58,8 @@ def build(model,settings):
     if len(buildings)!=1 or not math.isfinite(float(buildings[0].get('north_axis',0))) or abs(float(buildings[0].get('north_axis',0)))>1e-8:
         raise ValueError('非零建筑北轴尚未接入平面查看。')
     surfaces=model['BuildingSurface:Detailed'];zones=model['Zone'];rooms=[];walls=[];openings=[];warnings=[]
+    if settings is None:
+        settings=[dict(id=z,zone=z,conditioned=None) for z in zones]
     if {r['zone'] for r in settings}!=set(zones) or len(settings)!=len(zones):
         raise ValueError('房间配置与模型热区不一一对应。')
     for setting in settings:
@@ -71,9 +73,10 @@ def build(model,settings):
             polygons.append(poly);elevations.append(xyz[0][2]);floor_ids.append(ident)
         if not polygons or max(elevations)-min(elevations)>1e-6:raise ValueError(zone+' 缺少单一地面标高，暂不能明确分层。')
         projected=sum(area(p) for p in polygons)
-        if abs(projected-setting['area_m2'])>max(.01,.001*setting['area_m2']):warnings.append(zone+' 输入面积与投影面积不同，分别保留。')
+        room_area=setting.get('area_m2',projected)
+        if abs(projected-room_area)>max(.01,.001*room_area):warnings.append(zone+' 输入面积与投影面积不同，分别保留。')
         if zones[zone].get('multiplier',1)!=1:warnings.append(zone+' 含热区倍数；图中仅绘制原几何。')
-        rooms.append(dict(id=setting['id'],zone=zone,area_m2=setting['area_m2'],conditioned=setting['conditioned'],polygons=polygons,
+        rooms.append(dict(id=setting['id'],zone=zone,area_m2=room_area,conditioned=setting['conditioned'],polygons=polygons,
                           floor_surfaces=floor_ids,elevation=elevations[0],projected_area_m2=projected,label=label_point(max(polygons,key=area))))
     levels=[]
     for r in sorted(rooms,key=lambda r:r['elevation']):

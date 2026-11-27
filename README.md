@@ -2,10 +2,10 @@
 
 在 Windows 本机整理建筑、材料、作息和气象，核对输入后调用 EnergyPlus，比较不同工况下的建筑显热需求，并导出结果。
 
-**[下载 v0.73.15 公开预览版（ZIP）](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/download/v0.73.15/building-workbench-v0.73.15.zip)** · [SHA-256 校验文件](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/download/v0.73.15/building-workbench-v0.73.15.zip.sha256) · [本版更新](docs/RELEASE_NOTES.md)
+**[下载 v0.73.16 公开预览版（ZIP）](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/download/v0.73.16/building-workbench-v0.73.16.zip)** · [SHA-256 校验文件](https://github.com/YiXueYingCheng/building-thermal-workbench/releases/download/v0.73.16/building-workbench-v0.73.16.zip.sha256) · [本版更新](docs/RELEASE_NOTES.md)
 
 - **第一次使用**　[安装工作台](docs/INSTALL.md)，然后按[首次试用指南](docs/FIRST_TRIAL.md)完成一个两日算例。
-- **升级已有工作区**　将新包解压到独立目录，从新包运行 `Upgrade Workbench.cmd`。支持的旧版本和备份步骤见[升级与恢复](docs/UPGRADE_TO_0_73_15.md)。
+- **升级已有工作区**　将新包解压到独立目录，从新包运行 `Upgrade Workbench.cmd`。支持的旧版本和备份步骤见[升级与恢复](docs/UPGRADE_TO_0_73_16.md)。
 - **查操作或找源码**　按任务查[使用文档](docs/README.md)，按功能查[仓库目录与模块地图](building-workbench-next/MAP.md)。
 
 ![工作台的方案编辑界面与计算流程](docs/images/workbench-editor.jpg)

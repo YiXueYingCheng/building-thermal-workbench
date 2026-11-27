@@ -47,13 +47,13 @@ def inspection_key(record,catalog,transition_confirmations):
         transition_confirmations=[checked[k] for k in sorted(checked)]
     return digest([record,catalog,transition_confirmations]),transition_confirmations
 
-class Inspections:
-    def __init__(self,root,prepare=None):
-        self.root=Path(root);self.prepare=prepare or calendar_library.prepare
-        self.lock=RLock();self.pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='calendar-view')
+class InspectionJobs:
+    """One bounded read worker per tool; reopening joins a matching active job."""
+    def __init__(self,root,thread_name):
+        self.root=Path(root)
+        self.lock=RLock();self.pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix=thread_name)
         self.jobs=OrderedDict();self.cache=OrderedDict();self.closed=False
-    def start(self,record,catalog,force=False,transition_confirmations=None):
-        key,transition_confirmations=inspection_key(record,catalog,transition_confirmations)
+    def enqueue(self,key,record,catalog,*args):
         with self.lock:
             for job in self.jobs.values():
                 if job['key']==key and job['state'] in ('queued','running'):return self.public(job)
@@ -65,7 +65,7 @@ class Inspections:
                 self.jobs.pop(old)
             job=dict(id=uuid.uuid4().hex,key=key,state='queued',progress=dict(stage='等待核对',completed=0,total=len(record['factors']['scope']['site_ids']),city=''),created=now())
             self.jobs[job['id']]=job
-            self.pool.submit(self.run,job,copy.deepcopy(record),copy.deepcopy(catalog),force,copy.deepcopy(transition_confirmations))
+            self.pool.submit(self.run,job,copy.deepcopy(record),copy.deepcopy(catalog),*copy.deepcopy(args))
             return self.public(job)
     def public(self,job):return copy.deepcopy({k:v for k,v in job.items() if k not in ('key','validated_monotonic')})
     def get(self,ident):
@@ -74,6 +74,15 @@ class Inspections:
             return self.public(self.jobs[ident])
     def update(self,job,**values):
         with self.lock:job.update(values)
+    def close(self):self.pool.shutdown(wait=True,cancel_futures=True)
+
+class Inspections(InspectionJobs):
+    def __init__(self,root,prepare=None):
+        super().__init__(root,'calendar-view')
+        self.prepare=prepare or calendar_library.prepare
+    def start(self,record,catalog,force=False,transition_confirmations=None):
+        key,transition_confirmations=inspection_key(record,catalog,transition_confirmations)
+        return self.enqueue(key,record,catalog,force,transition_confirmations)
     def run(self,job,record,catalog,force,transition_confirmations=None):
         start=time.perf_counter();key=job['key'];self.update(job,state='running')
         try:
@@ -136,4 +145,3 @@ class Inspections:
         if action not in ('save','apply') or accept is not True:raise ValueError('请明确接受本轮展示的参考来源、原警告和已有规则。')
         fresh=self.for_adoption(ident,record,catalog,transition_confirmations)
         return calendar_library._save_prepared(record,catalog,self.root,expected,accept,action,record_sha256,fresh,parent)
-    def close(self):self.pool.shutdown(wait=True,cancel_futures=True)

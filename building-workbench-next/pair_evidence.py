@@ -54,6 +54,23 @@ def monthly_detail(cases, original):
                 month_evidence=evidence)
 
 
+def site_reason(records, cases, sid, mode, metric, *, archive=False):
+    """Check the same result conditions for a saved pair and a design's neighbouring cells."""
+    a,b = cases
+    reason = results.pair_reason(a,b)
+    if reason:return reason
+    if a['mode']!=mode:return '结果与所选运行模式不一致'
+    if archive:
+        for record,row in zip(records,cases):
+            scope=record['factors']['scope']
+            if (sid not in scope['site_ids'] or not row['weather_sha256'] or row['period']!=scope['period']
+                    or row['step_minutes']!=record['numerics']['step_minutes']):
+                return '组导出与所选版本的运行条件不符'
+    elif metric!='temperature' and {m['month'] for m in a['monthly']}!={m['month'] for m in b['monthly']}:
+        return '双方月度覆盖不一致'
+    return None
+
+
 def read(left, right, request, catalog, root, *, index=None, store=None, reference_cache=None, archive=None, monthly_observation=None):
     metric = request.get('metric', 'total')
     require(metric in ('total','heating','cooling','temperature'), '请选择有效指标。')
@@ -122,14 +139,7 @@ def read(left, right, request, catalog, root, *, index=None, store=None, referen
     for sid in sites:
         a,b = [s['cases'].get(sid) if s else None for s in sources]
         meta = catalog['sites'].get(sid,{})
-        reason = '、'.join(blocked) or results.pair_reason(a,b)
-        if not reason and a['mode']!=mode: reason='结果与所选运行模式不一致'
-        if not reason and archive and any(sid not in s['site_ids'] or not row['weather_sha256']
-                or row['period']!=s['period'] or row['step_minutes']!=r['numerics']['step_minutes']
-                for r,s,row in zip(records,scopes,(a,b))):
-            reason='组导出与所选版本的运行条件不符'
-        if not reason and not archive and metric!='temperature' and {m['month'] for m in a['monthly']}!={m['month'] for m in b['monthly']}:
-            reason='双方月度覆盖不一致'
+        reason = '、'.join(blocked) or site_reason(records, (a,b), sid, mode, metric, archive=bool(archive))
         if not meta.get('eligible',True): reason = '地点暂缓接受'
         if reason:
             excluded.append(dict(site=sid,city=meta.get('name',sid),reason=reason))
@@ -184,6 +194,7 @@ def archive_alternative(reader,left,right,request,exports,notices):
 def fixed_optics_candidate(left,right,catalog,root,*,group=None,index=None):
     """Match actual saved recipes, including independently named versions."""
     from controlled_experiment import propose
+    from design_derivation import setting, setting_key
     sets = Sets(catalog,root)
     refs = [pin(left),pin(right)]
     if group is None:
@@ -223,8 +234,9 @@ def fixed_optics_candidate(left,right,catalog,root,*,group=None,index=None):
             if rank>best_rank:
                 best_rank=rank
                 best=dict(state='result' if evidence['sites'] else 'saved',right=pin(r),relation=ident,evidence=evidence)
-        result = dict(title='全年固定 A 时，按反馈调节热阻是否同样有益？',left=pin(fixed))
-        return dict(**result,**(best or dict(state='missing',text='可补充固定 A＋热阻调节，与已有固定蓬松态配对。')))
+        result = dict(title='全年固定 A 时，按反馈调节热阻是否同样有益？',left=pin(fixed),target_recipe=wanted)
+        return dict(**result,**(best or dict(state='missing',target_rules={'thermal':setting_key(setting(target,'thermal'))},
+                                             text='可补充固定 A＋热阻调节，与已有固定蓬松态配对。')))
     return None
 
 

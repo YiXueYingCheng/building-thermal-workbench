@@ -9,12 +9,12 @@ function drawingScopeEnabled(){
    f.condition.controls.every(c=>c.mode==='fixed')&&!f.condition.reference_runs.length;
  return wallScopeSource()&&
    f.materials.definitions.length===1&&
-   (['fixed_surface_material_v1','legacy_outer_equivalent_model','fixed_exterior_movable_v1'].includes(a?.placement_basis)||(equivalent&&a?.position==='exterior'))&&a.target_ids.every(id=>wallIds?.length?wallIds.includes(id):(!envelope||envelope[id]?.type==='Wall'&&envelope[id]?.boundary==='Outdoors'));
+   (['layer_stack_v1','fixed_surface_material_v1','legacy_outer_equivalent_model','fixed_exterior_movable_v1'].includes(a?.placement_basis)||(equivalent&&a?.position==='exterior'))&&a.target_ids.every(id=>wallIds?.length?wallIds.includes(id):(!envelope||envelope[id]?.type==='Wall'&&envelope[id]?.boundary==='Outdoors'));
 }
 function drawingApplicationMarkup(){
  const f=S.record.factors,a=f.materials.applications[0],ref=f.materials.definition_reference;
  const count=new Set(f.condition.controls.filter(c=>c.mode==='feedback').flatMap(c=>c.target_ids)).size;
- return `<h3>外墙铺设与控制范围</h3><p>${esc(ref?.name||f.materials.definitions[0].name)}${ref?' · 材料版本 '+esc(ref.revision):''} · 已铺 ${a.target_ids.length} 段${count?'，其中 '+count+' 段参与反馈':''}。</p><button class="primary" data-material-view="wall-scope">查看与选择铺设墙段</button>`;
+ return `<h3>外墙铺设与控制范围</h3><p>${esc(ref?.name||f.materials.definitions[0].name)}${ref?' · 材料版本 '+esc(ref.revision):''} · 已铺 ${a.target_ids.length} 段${a.placement_basis==='layer_stack_v1'?' · '+(a.position==='between'?'原构造第 '+esc(a.after_layer)+' 层后':a.position==='interior'?'内侧':'外侧'):''}${count?'，其中 '+count+' 段参与反馈':''}。</p><button class="primary" data-material-view="wall-scope">查看与选择铺设墙段</button>`;
 }
 function currentWallInventory(){
  return api('/api/material-library/wall-inventory',{id:S.id,revision:S.saved.revision,changes:changes()});
@@ -65,6 +65,7 @@ async function openDrawingWalls(initialTab){
  const ids=(list)=>list.map(w=>w.id).join('、');
  const usage=w=>w.conditioned===true?'空调房':w.conditioned===false?'非空调房':'归属待核';
  function opticsPreview(installed){
+   if(app.placement_basis==='layer_stack_v1')return stackWallInfo(f.materials.definitions[0],app);
    const groupsByOptics=new Map();
    for(const wall of installed){
      const optical=opticalFor(wall);

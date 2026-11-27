@@ -117,6 +117,9 @@ def submit(q, parent, index, attempt, step, purpose='recovery'):
     case['weather'] = rebound[case['weather']]
     case['dependencies'] = {rebound[p]:h for p,h in deps.items()}
     change_model_step(model, record, case['step_minutes'], step, purpose)
+    if case.get('stack_response') and step!=case['step_minutes']:
+        from stack_response import change_step
+        change_step(model,case,original['output_contract'])
     sharing = case.get('schedule_sharing') or share_files(
         model, case['dependencies'], trusted_observer=OBSERVER if case.get('warmup_observer') else None)
     codes = code_hashes()

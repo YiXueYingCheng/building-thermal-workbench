@@ -1,6 +1,7 @@
 """Site calendar and heat-flux feedback for a scheme's selected physical surface layers."""
 import copy
 import math
+import composite_materials as stack
 from foundation import digest
 from ordinary_materials import measure
 
@@ -16,7 +17,7 @@ def fixed(record):
     cond['reference_runs'] = []
     for c in cond['controls']:
         c['mode'] = 'fixed'
-        for key in ('reference_id', 'rule', 'policy', 'update','reference_step_minutes'):
+        for key in ('reference_id', 'rule', 'policy', 'update','reference_step_minutes','layer_number'):
             c.pop(key, None)
     return r
 
@@ -58,11 +59,19 @@ def initial_application(model, record):
     from surface_materials import apply
     groups, optical = thermal_groups(record)
     audits = []
+    definition=record['factors']['materials']['definitions'][0]
+    binding=None
+    if definition['model']==stack.MODEL and groups[0]['mode']=='feedback':
+        binding=stack.feedback_layer(definition,record['factors']['materials']['applications'][0],groups[0].get('layer_number'),
+                                     optical['face_id'] if optical.get('face_basis')=='exposed_layer' else None)
     for group in groups:
         initial = fixed(group_record(record, group, optical)) if len(groups) > 1 else fixed(record)
         audit = apply(model, initial)
         for row in audit['surfaces']:
-            row.update(thermal_mode=group['mode'], initial_state=group['state_id'], orientation_mode=optical['mode'])
+            row.update(thermal_mode=group['mode'], initial_state=binding[0]['state']['id'] if binding else group['state_id'], orientation_mode=optical['mode'])
+            if binding and group['mode']=='feedback':
+                layer=row['inserted_layers'][binding[1]]
+                row.update(controlled_material=layer,controlled_construction_layer=row['layers_after'].index(layer)+1)
         audits.append(audit)
     result = audits[0]
     if len(audits) > 1:
@@ -85,14 +94,32 @@ def controls(record):
     cond = record['factors']['condition']
     common = {'application_id', 'target_ids', 'mode', 'channel'}
     thermal, flip = tc['mode'] == 'feedback', oc['mode'] == 'calendar'
-    if set(tc) != common | {'state_id'} | ({'policy','rule','update','reference_step_minutes'} if thermal else set()):
+    stacked = d['model'] == stack.MODEL
+    if stacked and flip:
+        if oc.get('face_basis')!='exposed_layer':
+            raise ValueError('组合日历须绑定外侧铺设的最外层 A、B 光学组。')
+        outer=stack.unpack(d)[0]
+        spec['calendar_optics']={face:stack.outer_optics(outer,face) for face in ('A','B')}
+    if stacked and thermal:
+        app = record['factors']['materials']['applications'][0]
+        part, index = stack.feedback_layer(d,app,tc.get('layer_number'),spec.get('outer_face'))
+        if flip and tc.get('layer_number')==1:
+            for face in ('A','B'):stack.feedback_layer(d,app,1,face)
+        leaf = part['leaf']
+        states = [dict(s,resistance_m2K_W=s['thickness_mm']/1000/s['conductivity_W_mK']) for s in leaf['states']]
+        d = dict(leaf,states=states)
+        initial = next(s for s in states if s['id']==part['state']['id'])
+        spec = dict(spec,controlled_definition=d,controlled_index=index,state=initial,
+                    controlled_version=part['row']['sha256'])
+    if set(tc) != common | ({'layer_number'} if stacked and thermal else set()) | {'state_id'} | ({'policy','rule','update','reference_step_minutes'} if thermal else set()):
         raise ValueError('请核对热学控制的规则与初始状态。')
-    if set(oc) != common | {'face_id'} | ({'reference_id'} if flip else set()):
+    if set(oc) != common | {'face_id'} | ({'face_basis'} if 'outer_face' in spec else set()) | ({'reference_id'} if flip else set()) | ({'calendar_step_minutes'} if stacked and 'calendar_step_minutes' in oc else set()):
         raise ValueError('请核对外表面光学参数组及其绑定的日历。')
     refs = active_references(record)
     if len(refs) != int(flip) or cond['reference_runs'] != refs:
         raise ValueError('按日历切换表面光学参数须采用本方案唯一的逐日日历。')
-    if flip and d.get('faces') != ['A','B']:
+    if stacked and not thermal:return spec,tc,oc
+    if flip and not stacked and d.get('faces') != ['A','B']:
         raise ValueError('表面光学切换需要在材料版本中填写 A、B 两组表面光学参数。')
     if d['model'] == 'optical_surface_v1':
         raise ValueError('此组合工况使用有蓄热的实体材料层。')
@@ -116,6 +143,8 @@ def controls(record):
             raise ValueError('实体反馈使用 1 min 求解，并单独记录原构造日历的参考步长。')
         if set(update) != {'kind','minutes'} or update['kind'] != 'minutes' or type(update['minutes']) is not int or update['minutes'] <= 0 or update['minutes'] % step:
             raise ValueError('反馈判断间隔须为正数且为求解步长的整数倍。')
+    if stacked:
+        return spec, tc, oc
     for sid in (states if thermal else [tc['state_id']]):
         for face in (('A','B') if flip else [oc['face_id']]):
             optics = d['optics'].get(face + '_' + (sid if d['optics_depend_on_state'] else 'R'), {})
@@ -144,11 +173,15 @@ def apply(model, record, calendar=None):
         return var(name)
     def number(value):
         return format(value,'.15g')
-    d = spec['definition']
+    stacked = spec['definition'].get('model')==stack.MODEL
+    d = spec.get('controlled_definition',spec['definition'])
     states = {s['id']:s for s in d['states']}
-    start = int(tc['state_id'] == 'C')
+    start = int(spec['state']['id'] == 'C')
     init = [f'SET NX_SC_State = {start}', 'SET NX_SC_Age = 0', 'SET NX_SC_Clock = 0', 'SET NX_SC_Ready = 0']
     globals_ = ['State','Age','Clock','Ready','Vote','Face']
+    if stacked and feedback:
+        globals_ += ['PreviousState','Changed']
+        init.append('SET NX_SC_Changed = 0')
     votes, capture, setters = [], [], []
     area_sum = 0.
     openings = {}
@@ -157,8 +190,10 @@ def apply(model, record, calendar=None):
         if parent in spec['targets']:
             openings[parent] = openings.get(parent,0.) + measure(item)[0] * item.get('multiplier',1)
     opt_actions = {}
+    stack_actions = {'A':[], 'B':[]}
     for idx, row in enumerate(audit['surfaces']):
-        ident, layer = row['surface'], row['layers_after'][0]
+        ident = row['surface']
+        layer = row['inserted_layers'][spec['controlled_index']] if stacked and feedback else row['layers_after'][0]
         surface = model['BuildingSurface:Detailed'][ident]
         mat = model['Material'][layer]
         participates = row['thermal_mode'] == 'feedback'
@@ -175,7 +210,7 @@ def apply(model, record, calendar=None):
             if not any(setting['surface_name'].casefold()==ident.casefold() for setting in algorithms.values()):
                 algorithms[var('FD'+str(idx))] = dict(surface_name=ident,algorithm='ConductionFiniteDifference')
             # A fixed coordinate preserves R and heat capacity per unit area in both states.
-            ref_length = min(s['thickness_mm'] for s in states.values()) / 1000
+            ref_length = (spec['state']['thickness_mm'] if stacked else min(s['thickness_mm'] for s in states.values())) / 1000
             mat.update(thickness=ref_length, conductivity=ref_length/spec['state']['resistance_m2K_W'],
                 density=spec['state']['density_kg_m3']*spec['state']['thickness_mm']/(1000*ref_length))
             kact = actuator('K'+str(idx), ident+':'+layer, 'CondFD Surface Material Layer', 'Thermal Conductivity')
@@ -192,6 +227,18 @@ def apply(model, record, calendar=None):
             votes += [f'IF {q} > {deadband} || {q} < (0 - {deadband})',f'IF {t} < {number(p["cold_C"])}',
                 f'SET NX_SC_Vote = NX_SC_Vote - ({q} * {number(weight)})',f'ELSEIF {t} > {number(p["hot_C"])}',
                 f'SET NX_SC_Vote = NX_SC_Vote + ({q} * {number(weight)})','ENDIF','ENDIF']
+        if stacked:
+            if flip:
+                outer=row['layers_after'][0]
+                base=row['layers_before'][0]
+                original=next((model[k][base] for k in ('Material','Material:NoMass') if base in model.get(k,{})),{})
+                for prop,suffix,ep in [('solar_absorptance','S','Solar'),('emissivity','E','Thermal'),('visible_absorptance','V','Visible')]:
+                    values={face:o.get(prop) for face,o in spec['calendar_optics'].items()}
+                    values={f:v if v is not None else original.get('visible_absorptance',.7) for f,v in values.items()}
+                    if values['A']==values['B']:continue
+                    act=actuator(suffix+str(idx),outer,'Material','Surface Property '+ep+' Absorptance')
+                    for face,value in values.items():stack_actions[face].append(f'SET {act} = {number(value)}')
+            continue
         inherited=row['visible_absorptance']['original_value']
         for prop, suffix, ep in [('solar_absorptance','S','Solar'),('emissivity','E','Thermal'),('visible_absorptance','V','Visible')]:
             values={}
@@ -219,12 +266,18 @@ def apply(model, record, calendar=None):
             f'SET NX_SC_State = {hi}','SET NX_SC_Age = 0',
             f'ELSEIF NX_SC_Vote < (0 - {number(area_sum*p["flux_deadband_W_m2"])}) && NX_SC_State <> {1-hi}',
             f'SET NX_SC_State = {1-hi}','SET NX_SC_Age = 0','ENDIF','ENDIF','ENDIF','ENDIF']
-    update.append(f'SET NX_SC_Face = {calendar[0] if flip else int(oc["face_id"]=="A")}')
+    fixed_face=audit['face'] if stacked else oc['face_id']
+    update.append(f'SET NX_SC_Face = {calendar[0] if flip else int(fixed_face=="A")}')
     if flip:
         for i in range(1,365):
             if calendar[i]!=calendar[i-1]:
                 update += [f'IF DayOfYear >= {i+1}',f'SET NX_SC_Face = {calendar[i]}','ENDIF']
+    if stacked and feedback:
+        update.insert(0,'SET NX_SC_PreviousState = NX_SC_State')
+        update += ['SET NX_SC_Changed = 0','IF NX_SC_PreviousState <> NX_SC_State','SET NX_SC_Changed = 1','ENDIF']
     update.extend(setters)
+    for face,lines in stack_actions.items():
+        if lines:update.extend([f'IF NX_SC_Face == {int(face=="A")}',*lines,'ENDIF'])
     for (sid,face),lines in opt_actions.items():
         update.extend([f'IF NX_SC_State == {int(sid=="C")} && NX_SC_Face == {int(face=="A")}',*lines,'ENDIF'])
     add('EnergyManagementSystem:GlobalVariable','Globals',dict(variables=[dict(erl_variable_name=var(v)) for v in globals_]))
@@ -235,10 +288,19 @@ def apply(model, record, calendar=None):
     for name,lines,point in programs:
         add('EnergyManagementSystem:Program',name,dict(lines=[dict(program_line=l) for l in lines]))
         add('EnergyManagementSystem:ProgramCallingManager',name+'Manager',dict(energyplus_model_calling_point=point,programs=[dict(program_name=var(name))]))
-    for name in ('State','Face'):
-        output=var(name+'Output')
-        add('EnergyManagementSystem:OutputVariable',name+'Output',dict(ems_variable_name=var(name),type_of_data_in_variable='Averaged',update_frequency='ZoneTimestep'))
+    signals=['State','Face']
+    if stacked:
+        signals=['State','Changed'] if feedback else []
+        if flip:signals.append('Face')
+    for name in signals:
+        identifier=('Stack' if stacked and name!='Face' else '')+name+'Output'
+        output=var(identifier)
+        add('EnergyManagementSystem:OutputVariable',identifier,dict(ems_variable_name=var(name),type_of_data_in_variable='Summed' if name=='Changed' else 'Averaged',update_frequency='ZoneTimestep'))
         add('Output:Variable',name+'Daily',dict(key_value='*',variable_name=output,reporting_frequency='Daily'))
+    if stacked and feedback:
+        audit.update(controlled_layer=tc['layer_number'],controlled_version=spec['controlled_version'],
+                     signal='zone_air_temperature_and_surface_outside_face_conduction',initial_layer_state=spec['state']['id'])
+    if stacked and flip:audit['calendar_optics']=spec['calendar_optics']
     audit.update(thermal_mode=tc['mode'],orientation_mode=oc['mode'],feedback_area_m2=area_sum,
         note='按所选构件、材料物性和方案控制生成输入。',calendar_sha256=digest(calendar) if flip else None)
     return audit

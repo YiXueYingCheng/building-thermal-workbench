@@ -31,7 +31,7 @@ Copyright (c) 2026 Zhao Bencheng。
 
 ## 署名与引用
 
-引用时填写实际使用的版本号。使用 v0.73.15 时，可写作 **Zhao Bencheng (2026), 建筑热环境工作台 / Building Thermal Environment Workbench, v0.73.15**。数据或文档分享时标注 CC BY 4.0、附 [许可链接](https://creativecommons.org/licenses/by/4.0/)，并注明是否修改。对具体示例可补充 Drawing26、ECA 或结果文件名。项目公开网址为 [GitHub 仓库](https://github.com/YiXueYingCheng/building-thermal-workbench)；DOI 尚未注册。
+引用时填写实际使用的版本号。使用 v0.73.16 时，可写作 **Zhao Bencheng (2026), 建筑热环境工作台 / Building Thermal Environment Workbench, v0.73.16**。数据或文档分享时标注 CC BY 4.0、附 [许可链接](https://creativecommons.org/licenses/by/4.0/)，并注明是否修改。对具体示例可补充 Drawing26、ECA 或结果文件名。项目公开网址为 [GitHub 仓库](https://github.com/YiXueYingCheng/building-thermal-workbench)；DOI 尚未注册。
 
 作者信息见[项目作者页](../AUTHORS.md)。
 

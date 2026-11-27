@@ -1,5 +1,6 @@
 """Small immutable comparison exports, with an explicit plotting subprocess."""
 import csv
+import gzip
 import io
 import json
 import math
@@ -17,6 +18,15 @@ def map_assets(root=ROOT):
     for ref in manifest['files']:
         if sha(owned(folder/ref['file'],folder))!=ref['sha256']:raise ValueError('地图底图校验不一致。')
     return dict(manifest=manifest,grid=read_json(folder/'display-grid.json'),land=read_json(folder/'land.json'))
+
+
+def write_regions(folder,division):
+    maps=ROOT/'static/map'
+    if division=='china':
+        with gzip.open(maps/'china-provinces.json.gz','rb') as src,(folder/'map-regions.json').open('wb') as dest:
+            shutil.copyfileobj(src,dest)
+    else:
+        shutil.copyfile(maps/'regions.json',folder/'map-regions.json')
 
 
 def color_limit(data):
@@ -61,16 +71,16 @@ def load_export(ident,root=ROOT):
     return folder,receipt
 
 
-def export(data, root=ROOT, map_view=None):
+def export(data, root=ROOT, map_view=None, *, before_prepare=None):
     root=Path(root).resolve()
     if data['blocked'] or not data['paired_sites']:raise ValueError('当前没有可导出的有效配对，请先检查结果来源和排除原因。')
     if map_view is not None and not isinstance(map_view,dict):
         raise ValueError('请选择有效的地图分区和样式。')
     view=map_view or {}
     division=view.get('division','climate');style=view.get('style','standard');metric=view.get('metric',data['metric'])
-    if division not in ('climate','country') or style not in ('standard','pair') or (view and metric not in ('heating','cooling','total')):
+    if division not in ('climate','country','china') or style not in ('standard','pair') or (view and metric not in ('heating','cooling','total')):
         raise ValueError('未知的地图分区或样式。')
-    custom=division=='country' or style=='pair' or bool(view and figure_kind(data)!='climate')
+    custom=bool(view)
     if custom and (data['metric']=='temperature' or not data.get('normalized') or metric not in ('total','heating','cooling')):
         raise ValueError('分区需求图需要已核实温控面积及配对的冷热需求。')
     if custom and division=='climate' and not any(c['valid_sites'] for c in data['classes']):
@@ -88,13 +98,18 @@ def export(data, root=ROOT, map_view=None):
             regions=ROOT/'static/map/regions.json'
             regional_options['regions_sha256']=sha(regions)
             notices['MAP_ATTRIBUTION.md']=ROOT/'third_party/THIRD_PARTY_MAPS.md'
+        if division=='china':
+            regional_options['province_assets']=[sha(ROOT/'static/map'/name) for name in ('china-membership.json.gz','china-provinces.json.gz')]
+            notices['MAP_ATTRIBUTION.md']=ROOT/'third_party/CHINA_PROVINCES.md'
+        regional_options['origin_files']=[sha(ROOT/name) for name in ('origin_pair.py','origin_session.py','origin_map_inputs.py','Origin地图教程.md')]
     key=digest(dict(annotations=sha(ROOT/'review_annotations.py'),dataset=data['dataset_sha256'],map=assets['manifest'] if assets else None,notices={k:sha(v) for k,v in notices.items()},figure=kind,exporter=sha(ROOT/'result_exports.py'),plotter=sha(ROOT/'plot_comparison.py'),**regional_options))
     ident='comparison_export_'+key[:32];folder=owned(root/'data/comparison-exports'/ident,root)
     if folder.exists():return load_export(ident,root)[1]
+    if before_prepare is not None:before_prepare()
     stage=folder.parent/('.preparing_'+uuid.uuid4().hex);stage.mkdir(parents=True)
     write_json(stage/'dataset.json',data,root)
     if assets:write_json(stage/'map.json',assets,root)
-    if custom and division=='country':shutil.copyfile(regions,stage/'map-regions.json')
+    if custom and division!='climate':write_regions(stage,division)
     for name,source in notices.items():
         (stage/name).write_bytes(source.read_bytes())
     summaries=data.get('pairing_summaries')
@@ -195,6 +210,9 @@ map-groups.csv 中的 sites 和 percent_sites 分别表示单位面积降低量�
 percent 为百分比，kWh_m2 与 MJ_m2 是所选时段单位温控面积降低量。短时段不作年度外推。
 figure.svg、figure.pdf、figure.png 对应页面所选地图。绘图数据来自同一份 dataset.json。
 '''
+        for filename in ('origin_pair.py','origin_session.py','Origin地图教程.md'):
+            shutil.copyfile(ROOT/filename,stage/filename)
+        readme+='\nOrigin 原生工程可从出图页下载，或在已解压的数据包内按《Origin地图教程.md》从头生成。\n'
     from research_input_notes import export_text
     notes=[('参考' if side=='left' else '研究')+'：'+export_text(note) for side,note in data.get('research_input_notes',{}).items() if note]
     if notes:readme='研究输入适用性\n'+'\n'.join(notes)+'\n数值警告接受与研究输入是否符合约定分别核对。\n\n'+readme

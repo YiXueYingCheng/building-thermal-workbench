@@ -3,6 +3,7 @@ from unittest.mock import patch
 import unittest,json,sqlite3,os
 from foundation import digest,sha,write_json,read_json
 from record_store import Store,Conflict
+from component_library import Library
 import test_version_notes as fixture
 from execution_queue import Queue
 import version_notes as notes
@@ -19,6 +20,23 @@ class PlanDeletionTests(unittest.TestCase):
   before=sha(self.store.path);p=self.preview();self.assertFalse(p['inspection']['blocked']);self.assertEqual(before,sha(self.store.path));self.assertEqual(pd.history(self.root),[])
   with self.assertRaises(ValueError):pd.execute(self.root,self.catalog,p['id'],p['sha256'],False)
   self.assertEqual(self.revisions(),[1]);self.assertEqual(before,sha(self.store.path))
+ def test_preview_identifies_referring_versions_and_historical_files(self):
+  child=self.store.create(self.ident,1,{'name':'后续研究'})
+  self.store.save(self.ident,1,{'name':'第二版'})
+  library=Library(self.root)
+  calendar=library.save('calendar','日历',{'reference_record':{'id':self.ident,'revision':1}})
+  library.save('calendar','日历',{'reference_record':{'id':self.ident,'revision':2}},parent=calendar)
+  archive=self.root/'data/history-locations/files/aa/snapshot.json'
+  write_json(archive,child,self.root)
+  for cleanup in (False,True):
+   preview=pd.preview(self.root,self.catalog,self.ident,'record',cleanup=cleanup)['inspection']
+   self.assertTrue(preview['blocked'])
+   refs=preview['references']
+   objects={(obj['id'],obj['revision']):(obj['kind'],ref['relations']) for ref in refs if (obj:=ref.get('source_object'))}
+   self.assertEqual(objects[(child['id'],1)],('方案',['另存／来源追溯 · v1']))
+   for rev in (1,2):
+    self.assertEqual(objects[(calendar['id'],rev)],('日历',['方案引用 · v'+str(rev)]))
+   self.assertEqual([Path(ref['history_file']) for ref in refs if ref.get('history_file')],[archive])
  def test_delete_whole_plan_notes_and_atomic_receipt_no_file_removal(self):
   self.store.save(self.ident,1,{'name':'第二版'});other=self.store.create(self.source['id'],self.source['revision'],{'name':'其他方案'})
   notes.save(self.store,self.ident,1,'第一版备注',0);notes.save(self.store,self.ident,2,'第二版备注',0)

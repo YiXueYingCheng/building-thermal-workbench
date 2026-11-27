@@ -248,11 +248,16 @@ class Store:
             if row is None:raise KeyError('没有该草案。')
             if row['revision']!=expected_revision:raise Conflict('方案已在另一处更新；当前修改未覆盖已保存内容。')
             out=self.update_payload(loads(row['payload']),changes)
-            highwater=expected_revision
-            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='plan_deleted_versions'").fetchone():
-                highwater=max(highwater,db.execute('SELECT COALESCE(MAX(revision),0) FROM plan_deleted_versions WHERE record_id=?',(ident,)).fetchone()[0])
-            out.update(revision=highwater+1,saved_at=now())
-            out['record_sha256']=record_digest(out)
-            db.execute('INSERT INTO versions VALUES (?,?,?,?)',(ident,out['revision'],canonical(out),out['saved_at']))
-            db.execute('INSERT INTO events(at,action,record_id,revision) VALUES (?,?,?,?)',(out['saved_at'],'save',ident,out['revision']))
+            return self.insert_revision(db,out,expected_revision)
+
+    def insert_revision(self,db,out,head):
+        """Append a validated snapshot after checking the head in the caller's write transaction."""
+        ident=out['id']
+        highwater=head
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='plan_deleted_versions'").fetchone():
+            highwater=max(highwater,db.execute('SELECT COALESCE(MAX(revision),0) FROM plan_deleted_versions WHERE record_id=?',(ident,)).fetchone()[0])
+        out.update(revision=highwater+1,saved_at=now())
+        out['record_sha256']=record_digest(out)
+        db.execute('INSERT INTO versions VALUES (?,?,?,?)',(ident,out['revision'],canonical(out),out['saved_at']))
+        db.execute('INSERT INTO events(at,action,record_id,revision) VALUES (?,?,?,?)',(out['saved_at'],'save',ident,out['revision']))
         return out

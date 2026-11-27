@@ -79,19 +79,24 @@ def child(root,name):
     if p==root or not p.is_relative_to(root):fail('文件超出指定目录：'+name)
     return p
 
-def scan(root):
+def backup_files(root):
     root=safe_path(root)
     if not root.is_dir():fail('文件夹不存在或不能访问：'+str(root))
-    files={}
-    for folder,dirs,names in os.walk(root,followlinks=False):
+    def raise_walk_error(error):
+        raise error
+    for folder,dirs,names in os.walk(root,onerror=raise_walk_error,followlinks=False):
         dirs[:]=[n for n in dirs if n not in EXCLUDED]
         for n in dirs:safe_path(Path(folder)/n)
         for n in names:
             if n.endswith(('.pyc','.pyo')):continue
             p=safe_path(Path(folder)/n)
             if not p.is_file():fail('不是普通文件：'+str(p))
-            files[p.relative_to(root).as_posix()]=dict(sha256=sha(p),bytes=p.stat().st_size)
-    return files
+            yield p
+
+def scan(root):
+    root=safe_path(root)
+    return {p.relative_to(root).as_posix():dict(sha256=sha(p),bytes=p.stat().st_size)
+            for p in backup_files(root)}
 
 def manifest(root,verify=True):
     root=safe_path(root);rows={};seen=set()
@@ -184,6 +189,8 @@ def compatibility_plan(source,target,oldversion,incoming):
     # This is an explicit, hash-bound metadata update; no plan/result is rewritten.
     contract_path=child(source,'EXECUTOR_COMPATIBILITY.json')
     contract=read(contract_path) if contract_path.exists() else {}
+    if oldversion.removeprefix('v')=='0.73.15' and contract.get('schema')!=2:
+        fail('缺少 v0.73.15 的结果读取兼容清单。')
     if contract.get('schema')==2:
         version=oldversion.removeprefix('v')
         baselines=contract['historical_baselines'];after=contract['to_code_hashes']
@@ -211,6 +218,7 @@ def compatibility_plan(source,target,oldversion,incoming):
         # Reading older frozen results is distinct from submitting their old plans.
         # Include earlier official baselines for workspaces upgraded more than once.
         for prior,hashes in baselines.items():
+            if prior==contract['to_version'] and hashes==after:continue
             entry=dict(id='public-'+prior+'-to-'+contract['to_version']+'-results',
                 kind='audited_historical_result_read',historical_only=True,
                 from_code_hashes={str(app/n):h for n,h in hashes.items()},
@@ -240,9 +248,9 @@ def plan(source,target):
     if source==target or source.is_relative_to(target) or target.is_relative_to(source):fail('新包必须解压在旧平台之外的独立文件夹。')
     incoming=manifest(source);old=manifest(target,False)
     oldversion=(target/'building-workbench-next/VERSION').read_text('utf8').strip()
-    supported = ('0.72.2', '0.73.11', '0.73.12', '0.73.13', '0.73.14') + tuple(f'0.73.14-rc.{i}' for i in range(1, 10))
+    supported = ('0.72.2', '0.73.11', '0.73.12', '0.73.13', '0.73.14', '0.73.15') + tuple(f'0.73.14-rc.{i}' for i in range(1, 10))
     if oldversion.removeprefix('v') not in supported:
-        fail('本工具支持 v0.72.2、v0.73.11 至 v0.73.14，以及 v0.73.14-rc.1 至 rc.9 原路径升级。检测到 '+oldversion)
+        fail('本工具支持 v0.72.2、v0.73.11 至 v0.73.15，以及 v0.73.14-rc.1 至 rc.9 原路径升级。检测到 '+oldversion)
     if not (target/'building-workbench-next/config.json').is_file():fail('请选择含旧配置的完整平台包根目录。')
     if sha(source/'requirements-lock.txt')!=sha(target/'requirements-lock.txt'):fail('锁定依赖已变化，本版工具不自动升级 Python 环境。')
     writes=[];conflicts=[]
@@ -279,15 +287,95 @@ def copy_files(source,dest,files):
         a=child(source,n);b=child(dest,n);b.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(a,b)
     verify_copy(dest,files)
 
+def legacy_windows_paths():
+    if os.name!='nt':
+        return False
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,r'SYSTEM\CurrentControlSet\Control\FileSystem') as key:
+            return winreg.QueryValueEx(key,'LongPathsEnabled')[0]!=1
+    except OSError:
+        return True
+
+def path_units(path):
+    return len(str(path).encode('utf-16-le','surrogatepass'))//2
+
+def backup_prefix(index):
+    return 'workspace' if index==0 else 'external-'+str(index)
+
+def backup_limits(sets):
+    # Include the longest journal temporary filename, also used during recovery.
+    longest_file=Path('RESTORE-'+stamp()+'.json.tmp-'+'0'*32)
+    longest_dir=Path('.')
+    for item in sets:
+        prefix=Path(item['folder'])
+        if path_units(prefix)>path_units(longest_dir):
+            longest_dir=prefix
+        for name in item['files']:
+            rel=prefix/name
+            if path_units(rel)>path_units(longest_file):
+                longest_file=rel
+            if path_units(rel.parent)>path_units(longest_dir):
+                longest_dir=rel.parent
+    return [(longest_file,259,'文件'),(longest_dir,248,'目录')]
+
+def check_backup_length(folder,limits):
+    for rel,limit,kind in limits:
+        path=folder/rel
+        size=path_units(path)
+        if size>limit:
+            fail(f'备份{kind}路径过长（{size} 个 UTF-16 单位，Windows 常规上限 {limit}）：{path}\n请使用更短的备份目录。')
+
+def check_backup_location(folder,roots):
+    if any(folder==r or folder.is_relative_to(r) or r.is_relative_to(folder) for r in roots):
+        fail('备份位置必须位于平台、新包和结果文件夹之外。')
+    if folder.exists():
+        fail('备份文件夹已存在，请使用新的空路径。')
+
+def choose_backup(target,external,source):
+    roots=[target,*external]
+    limits=[]
+    classic_required=legacy_windows_paths()
+    if os.name=='nt' or classic_required:
+        print('正在核对平台与外置结果的备份路径长度…',flush=True)
+        limits=backup_limits(dict(folder=backup_prefix(i),files=(p.relative_to(r) for p in backup_files(r)))
+                             for i,r in enumerate(roots))
+    protected=[*roots,source]
+    def validate(path,check_length=True):
+        if check_length:check_backup_length(path,limits)
+        folder=safe_path(path)
+        check_backup_location(folder,protected)
+        return folder
+    default=None
+    for path in (target.with_name(target.name+'-upgrade-backups')/stamp(),Path.home()/'wbup'/uuid.uuid4().hex[:8]):
+        try:
+            default=validate(path)
+            break
+        except (UpgradeError,OSError) as error:
+            print(error)
+    while True:
+        prompt=(f'建议备份到 {default}。回车采用，或输入其他完整路径：' if default else
+                '请填写新的短备份目录（例如 D:\\wbup\\b1），或回车退出：')
+        raw=input(prompt).strip().strip('"')
+        if not raw:
+            if default is None:
+                fail('未选择可用的备份位置，升级已退出。')
+            return default
+        try:
+            return validate(Path(raw).absolute(),check_length=classic_required)
+        except (UpgradeError,OSError) as error:
+            print(error)
+
 def backup(target,folder):
     target=safe_path(target);folder=safe_path(folder);stopped(target)
     roots=[target,*external_roots(target)]
-    if any(folder==r or folder.is_relative_to(r) or r.is_relative_to(folder) for r in roots):fail('备份位置必须位于平台和结果文件夹之外。')
-    if folder.exists():fail('备份文件夹已存在，请使用新的空路径。')
+    check_backup_location(folder,roots)
     sets=[]
     for i,r in enumerate(roots):
         print('核对备份内容：'+str(r),flush=True);files=scan(r)
-        sets.append(dict(original=str(r),folder='workspace' if i==0 else 'external-'+str(i),files=files))
+        sets.append(dict(original=str(r),folder=backup_prefix(i),files=files))
+    if legacy_windows_paths():
+        check_backup_length(folder,backup_limits(sets))
     room_for(folder,sum(v['bytes'] for s in sets for v in s['files'].values()))
     folder.mkdir(parents=True)
     metadata=dict(schema=1,state='copying',created=stamp(),target=str(target),sets=sets,
@@ -412,20 +500,19 @@ def _restore(folder):
     return receipt
 
 def prompt_path(text):return safe_path(input(text).strip().strip('"'))
-def wizard():
-    print('建筑热环境工作台 · 升级与恢复助手\n支持 v0.72.2 或 v0.73.11 原路径升级；不会自动计算或上传。')
+def wizard(source=PACKAGE):
+    print('建筑热环境工作台 · 升级与恢复助手\n将在旧平台原路径升级。')
     mode=input('输入 1 升级旧平台；输入 2 从备份恢复：').strip()
     if mode=='1':
         target=prompt_path('旧平台包根目录（含 Start Workbench.cmd）：')
-        p=plan(PACKAGE,target)
+        p=plan(source,target)
         print(json.dumps({k:v for k,v in p.items() if k!='writes'},ensure_ascii=False,indent=2))
         print('将更新 '+str(len(p['writes']))+' 个文件，先完整备份平台资料和已登记外置结果。')
-        folder=target.with_name(target.name+'-upgrade-backups')/stamp()
-        entered=input('备份保存到 '+str(folder)+'；如需修改请输入完整路径，直接回车使用此位置：').strip().strip('"')
-        if entered:folder=safe_path(entered)
+        folder=choose_backup(target,[Path(r) for r in p['external_roots']],source)
+        print('本次备份位置：'+str(folder))
         print('请保存编辑，等计算、核对和导出完成，关闭其他访问此平台的页面。')
         if input('确认后输入“升级”（其他输入退出）：').strip()!='升级':return
-        stop(target);result=apply(PACKAGE,target,folder)
+        stop(target);result=apply(source,target,folder)
         print('升级完成。备份：'+str(folder)+'\n请在原目录双击 Start Workbench.cmd，按升级说明核对方案与结果。')
     elif mode=='2':
         folder=prompt_path('备份目录（含 BACKUP.json）：');folder,info=load_backup(folder)
@@ -445,7 +532,7 @@ def main():
     parser.add_argument('--yes',action='store_true',help='明确执行已检查的升级/停止/恢复；交互用户建议使用 wizard')
     args=parser.parse_args()
     try:
-        if args.action=='wizard':wizard();return 0
+        if args.action=='wizard':wizard(args.source.resolve());return 0
         if args.action in ('apply','stop','restore') and not args.yes:fail('需要 --yes 才执行；也可双击 Upgrade Workbench.cmd 使用逐步向导。')
         if args.action in ('plan','apply','stop') and args.target is None:fail('请提供旧平台 --target 路径。')
         if args.action in ('apply','restore') and args.backup is None:fail('请提供 --backup 路径。')

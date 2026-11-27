@@ -58,6 +58,22 @@ def definition(record,catalog):
 def snapshot_reference(snapshot):
     return dict(id=snapshot['id'],kind=KIND,snapshot=copy.deepcopy(snapshot))
 
+def basis_differences(saved,current):
+    labels={'building':'建筑与构造','usage':'房间作息与温控','adapter':'建筑来源',
+            'source_snapshot':'建筑来源版本','source_model':'原墙模型','original_constructions':'原墙构造'}
+    differences=[]
+    for key in sorted(set(saved)|set(current)):
+        if key in saved and key in current and saved[key]==current[key]:continue
+        if key=='numerics':
+            old,new=saved.get(key,{}),current.get(key,{})
+            for field in sorted(set(old)|set(new)):
+                if field in old and field in new and old[field]==new[field]:continue
+                if field=='step_minutes':
+                    differences.append(f'原墙参考步长：日历 {old.get(field)} min，当前 {new.get(field)} min')
+                else:differences.append('数值设置 · '+field)
+        else:differences.append(labels.get(key,key))
+    return differences
+
 def verify_reference(ref):
     if not isinstance(ref,dict) or set(ref)!={'id','kind','snapshot'} or ref['kind']!=KIND:
         raise ValueError('工作区日历引用不完整。')
@@ -80,7 +96,9 @@ def verify_reference(ref):
 
 def bound(record,catalog,ref):
     s=verify_reference(ref);c=s['content']
-    if definition(record,catalog)!=c['basis']:raise ValueError('建筑使用、温控、构造或步长等参考条件已变化，日历需重新核对。')
+    current_basis=definition(record,catalog)
+    if c['basis']!=current_basis:
+        raise ValueError('日历参考条件不同：'+'；'.join(basis_differences(c['basis'],current_basis) or ['参考版本结构'])+'。')
     rows={x['site_id']:x for x in c['sites']}
     for sid in record['factors']['scope']['site_ids']:
         if sid not in rows:raise ValueError('新增地点没有此版本的日历，请重新核对范围。')
@@ -130,7 +148,10 @@ def with_reference(record,snapshot):
     if not r['factors']['materials']['applications'] or not any(c['channel']=='orientation' for c in controls):
         raise ValueError('可先保存日历版本；启用光学切换需先配置材料应用及两组表面光学参数。')
     for c in controls:
-        if c['channel']=='orientation':c.update(mode='calendar',reference_id=snapshot['id'])
+        if c['channel']=='orientation':
+            c.update(mode='calendar',reference_id=snapshot['id'])
+            if any(d.get('model')=='layer_stack_v1' for d in r['factors']['materials']['definitions']):
+                c.update(face_basis='exposed_layer',face_id='A')
     r['factors']['condition']['reference_runs']=[snapshot_reference(snapshot)]
     return r
 
@@ -150,6 +171,17 @@ def _prepare(record,catalog,root=ROOT,transition_confirmations=None):
     except (ValueError,KeyError,TypeError,OSError) as exc:
         out['issues'].append(str(exc))
         return out
+    sites=set(record['factors']['scope']['site_ids'])
+    out['reference_differences']=[]
+    for version in Library(root).all('calendar'):
+        prior=version['content']
+        shared=[s for s in prior['sites'] if s['site_id'] in sites]
+        if not shared:continue
+        differences=basis_differences(prior['basis'],basis)
+        for s in shared:
+            weather=catalog['sites'][s['site_id']].get('weather') or {}
+            if s.get('weather_sha256')!=weather.get('sha256'):differences.append(s['city']+' · 气象文件版本')
+        if differences:out['reference_differences'].append(dict(name=version['name'],revision=version['revision'],differences=differences))
     if record['provenance']['adapter']=='ordinary_building_v1' or (catalog.get('example_controls') and record['provenance']['adapter']=='global_frozen_v011'):
         from queue_calendar import prepare as queue_prepare
         return queue_prepare(record,catalog,root,out,basis,transition_confirmations)

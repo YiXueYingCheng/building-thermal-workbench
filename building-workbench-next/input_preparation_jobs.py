@@ -43,10 +43,14 @@ class Jobs:
     if values.get('stage')=='算例清单已保存' and j.get('_case_started') is not None:
      j.setdefault('case_seconds',[]).append(round(time.monotonic()-j.pop('_case_started'),3))
    j.update(values,updated_epoch=time.time());write_json(self.folder/(j['id']+'.json'),j,self.root)
- def latest(self,ident,revision,kind=None):
+ def latest(self,ident,revision,kind=None,prefer_active=False):
   if kind is not None and kind not in ('generate','prepare','daily'):raise ValueError('准备记录类型无效。')
   with self.lock:
-   rows=[j for j in self.jobs.values() if (j['record_id'],j['revision'])==(ident,revision) and (j['kind']==kind if kind else j['kind'] in ('generate','prepare'))]
+   rows=[j for j in self.jobs.values() if (j['record_id'],j['revision'])==(ident,revision)]
+   if prefer_active:
+    active=next((j for j in rows if j['state'] in ('queued','running')),None)
+    if active:return self.public(active)
+   rows=[j for j in rows if (j['kind']==kind if kind else j['kind'] in ('generate','prepare'))]
    return self.public(max(rows,key=lambda j:j['started_epoch'])) if rows else None
  def get(self,ident):
   with self.lock:
@@ -69,6 +73,8 @@ class Jobs:
   with self.lock:
    for j in self.jobs.values():
     if j['key']==key and j['state'] in ('queued','running'):return self.public(j)
+    if (j['record_id'],j['revision'])==(record['id'],record['revision']) and j['state'] in ('queued','running'):
+     raise ValueError('此版本正在准备'+('逐日参考' if j['kind']=='daily' else '常规计算输入')+'，请重新打开计算安排查看进度。')
    if any(j['state'] in ('queued','running') for j in self.jobs.values()):raise ValueError('已有输入准备正在进行；完成后再开始下一份，避免叠加内存。')
    total=len(record['factors']['scope']['site_ids'])*(2 if record['factors']['condition']['operation']['mode']=='both' else 1)
    j=dict(id='job_'+uuid.uuid4().hex,key=key,kind=kind,record_id=record['id'],revision=record['revision'],record_name=record['name'],bundle_id=bundle_id,

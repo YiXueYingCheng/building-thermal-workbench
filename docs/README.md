@@ -3,7 +3,7 @@
 ## 安装或升级
 
 - **第一次运行**　[安装与依赖配置](INSTALL.md) · [首次试用，从示例到两日算例](FIRST_TRIAL.md) · [核对下载文件](VERIFY_DOWNLOAD.md)
-- **已有方案和计算结果**　[升级到 v0.73.15、备份和恢复](UPGRADE_TO_0_73_15.md)
+- **已有方案和计算结果**　[升级到 v0.73.16、备份和恢复](UPGRADE_TO_0_73_16.md)
 - **启动或调度遇到问题**　[普通 Windows 启动、后台诊断与批次恢复](START_AND_RECOVER.md) · [运行依赖](DEPENDENCIES.md)
 
 ## 建模与计算

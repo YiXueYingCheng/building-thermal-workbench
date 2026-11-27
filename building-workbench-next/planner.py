@@ -2,6 +2,7 @@
 import copy
 from contracts import validate, normalize, recipe_digest
 from foundation import digest
+from material_types import supported as has_physical_model
 
 def original_match(record,catalog):
     ident=record['provenance'].get('origin_id',record['id'])
@@ -39,6 +40,16 @@ def preview(record,catalog):
         app=applications.get(control.get('application_id'))
         if not app:continue
         material=definitions[app['material_id']]
+        if control.get('channel')=='orientation' and control.get('mode')=='calendar':
+            references={r.get('id') for r in f['condition'].get('reference_runs',[])}
+            if control.get('reference_id') not in references:
+                requirements.append('光学切换日历规则需要绑定参考计算及其日历。')
+        update=control.get('update',{})
+        if update.get('kind')=='minutes' and update['minutes']%record['numerics']['step_minutes']:
+            requirements.append('当前更新间隔不是求解步长的整数倍，需明确执行时序。')
+        # Physical models validate their own layers and surface properties in capability().
+        if has_physical_model(material):
+            continue
         if control.get('channel')=='thermal':
             states=material.get('states',[])
             used=states if control.get('mode')=='feedback' else [s for s in states if s['id']==control.get('state_id')]
@@ -61,13 +72,6 @@ def preview(record,catalog):
                     if optical.get('solar_absorptance') is None or optical.get('emissivity') is None:
                         requirements.append(material['name']+' / '+str(face)+' 组 / '+str(state)+' 态：缺少所选组的光学参数。')
             if app['position']=='interior':notes.append('内侧应用需要核对室内侧表面与控制方向，不能沿用外侧表面光学切换执行映射。')
-        if control.get('channel')=='orientation' and control.get('mode')=='calendar':
-            references={r.get('id') for r in f['condition'].get('reference_runs',[])}
-            if control.get('reference_id') not in references:
-                requirements.append('光学切换日历规则需要绑定参考计算及其日历。')
-        update=control.get('update',{})
-        if update.get('kind')=='minutes' and update['minutes']%record['numerics']['step_minutes']:
-            requirements.append('当前更新间隔不是求解步长的整数倍，需明确执行时序。')
     original=original_match(record,catalog)
     source_adapter=record['provenance']['adapter']
     candidates=[];held=[]

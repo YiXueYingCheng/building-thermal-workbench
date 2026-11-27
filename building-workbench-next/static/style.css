@@ -214,7 +214,7 @@
  .reading-entry .reading-remove { margin-inline-start:0; }
 }
 
-.group-candidates-dialog { width:min(1120px,94vw); }
+.rs-month-dialog.group-candidates-dialog { width:min(1080px,94vw); }
 .candidate-group { margin-bottom:18px; }
 .candidate-group h3,.candidate-columns h3,.candidate-priority h4 { margin:0; }
 .candidate-group p { margin:3px 0; color:var(--sub); }
@@ -239,12 +239,55 @@
 .candidate-direction i { font-style:normal; }
 .candidate-pending summary>small { display:block; color:var(--sub); }
 .candidate-group p { overflow-wrap:anywhere; }
-.candidate-related { margin:20px 0 5px; font-size:1rem; }
+.candidate-focus { min-width:0; padding:16px 18px; border:1px solid var(--line,#cdddd4); border-radius:8px; }
+.candidate-focus h3 { font-size:1rem; color:#365b49; }
+.candidate-focus h4 { font-size:1.18rem; line-height:1.5; margin:0; }
+.candidate-condition,.candidate-evidence-note,.candidate-library h3 small,.candidate-catalogue>summary small { color:var(--sub); }
+.candidate-condition,.candidate-evidence-note { font-size:.92rem; }
+.candidate-measures { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; margin:14px 0; }
+.candidate-measures dt { font-size:.88rem; color:var(--sub); }
+.candidate-measures dd { margin:2px 0 0; font-size:clamp(.95rem,1.8vw,1.35rem); font-variant-numeric:tabular-nums; font-weight:650; overflow-wrap:anywhere; }
+.candidate-measures .down { color:#196345; }
+.candidate-measures .up { color:#90441e; }
+.candidate-priority { overflow-wrap:anywhere; }
+.candidate-priority .candidate-gap { margin:12px 0; padding:10px 12px; background:#fff; border:1px solid #d4e1d7; border-radius:6px; }
+.candidate-priority .candidate-gap span { font-weight:600; font-size:1rem; color:inherit; margin-top:4px; }
+.candidate-gap small,.candidate-gap p { color:var(--sub); font-size:.9rem; }
+.candidate-gap p,.candidate-gain p { margin:4px 0 0; }
+.candidate-gain { margin:14px 0; }
+.candidate-strategies { margin-top:10px; padding:12px 0; border-block:1px solid var(--line,#cdddd4); }
+.candidate-strategies.strategy-lead { margin-top:0; padding:16px 18px; border:1px solid var(--line,#cdddd4); }
+.strategy-sources { margin-top:.8rem; }
+.strategy-sources h5 { margin:.8rem 0 .25rem; }
+.strategy-sources summary { cursor:pointer; }
+.candidate-strategies>summary { font-weight:600; cursor:pointer; }
+.candidate-strategies label { display:flex; flex-wrap:wrap; gap:.4rem .8rem; align-items:center; margin:.5rem 0; }
+.candidate-strategies select { width:auto; max-width:100%; min-width:0; }
+.candidate-strategies table { width:100%; table-layout:fixed; }
+.candidate-strategies caption { text-align:left; color:var(--sub); padding:.5rem 0; }
+.candidate-strategies th,.candidate-strategies td { text-align:right; padding:.55rem .3rem; font-variant-numeric:tabular-nums; }
+.candidate-strategies th:first-child { text-align:left; }
+.candidate-strategies .strategy-month { display:block; margin-top:.25rem; border:0; padding:0; min-height:0; background:transparent; color:var(--accent,#365b49); text-decoration:underline; }
+@media(max-width:740px) {
+ .candidate-strategies { grid-row:3; margin-top:0; }
+ .candidate-strategies.strategy-lead { grid-row:1; padding:14px 10px; }
+ .candidate-strategies table { font-size:.85rem; }
+ .candidate-strategies th,.candidate-strategies td { padding:.45rem .12rem; overflow-wrap:anywhere; }
+}
+.candidate-library { margin-top:22px; }
+.candidate-library h3 { margin:0 0 8px; }
+.candidate-library h3 small,.candidate-catalogue>summary small { font-size:.85rem; font-weight:400; margin-left:.4rem; }
+.candidate-catalogue { padding:10px 0; border-top:1px solid var(--line,#cdddd4); }
+.candidate-catalogue>summary { font-weight:600; cursor:pointer; }
+.candidate-catalogue>.candidate-answer { margin:8px 0 0 12px; }
 .candidate-pending { margin-top:16px; }
 .candidate-pending>details { padding:8px; }
 @media(max-width:740px) {
  .candidate-columns { grid-template-columns:minmax(0,1fr); gap:16px; }
- .group-candidates-dialog { width:96vw; }
+ .rs-month-dialog.group-candidates-dialog { width:96vw; }
+ .candidate-left { display:contents; }
+ .candidate-next { grid-row:2; }
+ .candidate-library { margin-top:0; }
 }
 
 .theme-dialog .rs-month-body { overflow-wrap:anywhere; }

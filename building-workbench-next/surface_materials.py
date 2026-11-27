@@ -8,6 +8,7 @@ import math
 from foundation import digest
 import material_types
 import research_materials as research
+import composite_materials as stack
 
 FIXED_MOVABLE='fixed_exterior_movable_v1'
 
@@ -46,18 +47,37 @@ def specification(record):
     if errors:raise ValueError('；'.join(errors))
     a=m['applications'][0]
     placements=('fixed_surface_material_v1',FIXED_MOVABLE) if equivalent else ('fixed_surface_material_v1',)
-    if set(a)!={'id','material_id','component','position','target_ids','placement_basis'} or a['position']!='exterior' or a['component']!='opaque_exterior' or a['placement_basis'] not in placements or a['material_id']!=d['id']:
+    if d['model'] == stack.MODEL:
+        extra = {'after_layer'} if a['position']=='between' else set()
+        if (set(a) != {'id','material_id','component','position','target_ids','placement_basis'} | extra
+                or a['component']!='opaque_exterior' or a['material_id']!=d['id'] or a['placement_basis']!=stack.MODEL
+                or a['position'] not in ('exterior','interior','between')
+                or (extra and (type(a['after_layer']) is not int or a['after_layer']<1))):
+            raise ValueError('请核对组合材料的构件与安装层位。')
+    elif set(a)!={'id','material_id','component','position','target_ids','placement_basis'} or a['position']!='exterior' or a['component']!='opaque_exterior' or a['placement_basis'] not in placements or a['material_id']!=d['id']:
         raise ValueError('此入口只支持不透明墙面／屋面的外表面。')
     if not a['target_ids'] or len(a['target_ids'])!=len(set(a['target_ids'])):raise ValueError('请选择不重复的外墙或屋面。')
     controls=f['condition']['controls']
     if f['condition']['reference_runs'] or len(controls)!=2 or any(c.get('mode')!='fixed' for c in controls):
         raise ValueError('新实体材料当前支持固定状态计算；表面光学切换或动态热阻需相应材料专项校准，不能沿用 ECA 控制。')
-    states={s['id']:s for s in d['states']}; chosen={}
+    states={s['id']:s for s in d['states']}; chosen={}; outer_face=None
     for c in controls:
         channel=c.get('channel');key='state_id' if channel=='thermal' else 'face_id'
-        if channel not in ('thermal','orientation') or channel in chosen or set(c)!={'application_id','channel','mode','target_ids',key} or c['application_id']!=a['id'] or set(c['target_ids'])!=set(a['target_ids']):raise ValueError('请为全部应用表面指定唯一的固定状态和外表面光学参数组。')
+        fields={'application_id','channel','mode','target_ids',key}
+        if d['model']==stack.MODEL and channel=='orientation' and 'calendar_step_minutes' in c:
+            stack.calendar_step(c)
+            fields.add('calendar_step_minutes')
+        if d['model']==stack.MODEL and channel=='orientation' and c.get('face_basis')=='exposed_layer':
+            fields.add('face_basis')
+            outer_face=c.get('face_id')
+            if a['position']!='exterior':
+                raise ValueError('只有位于原构造外侧的组合才能指定室外表面光学组。')
+        if channel not in ('thermal','orientation') or channel in chosen or set(c)!=fields or c['application_id']!=a['id'] or set(c['target_ids'])!=set(a['target_ids']):raise ValueError('请为全部应用表面指定唯一的固定状态和外表面光学参数组。')
         chosen[channel]=c[key]
     faces=('A','B') if equivalent else d['faces']
+    if outer_face is not None:
+        outer=stack.unpack(d)[0]
+        faces=outer['leaf']['faces']
     if chosen.get('thermal') not in states or chosen.get('orientation') not in faces:raise ValueError('材料状态或表面不存在。')
     state=states[chosen['thermal']]
     if equivalent:
@@ -70,13 +90,17 @@ def specification(record):
             raise ValueError('活动保温层需用完整的状态热阻确定参考值及展开比例。')
     key=chosen['orientation']+'_'+(chosen['thermal'] if equivalent or d['optics_depend_on_state'] else 'R')
     optics=d['optics'].get(key,{})
+    if outer_face is not None:
+        optics=stack.outer_optics(outer,outer_face)
     if d['model']==research.SPECTRAL:
         from spectral_boundary import NATIVE_EPS
         p=d['spectral']
         alpha=1-p['emitter_sw_reflectance'] if p['variant']=='bare' else sum(research.solar_split(p))
         optics=dict(solar_absorptance=alpha,emissivity=NATIVE_EPS)
-    if any(optics.get(k) is None for k in ('solar_absorptance','emissivity')):raise ValueError('请补齐所选光学参数组的有效太阳吸收率和长波发射率。')
-    return dict(definition=d, state=state, optics=optics, targets=a['target_ids'], face=chosen['orientation'])
+    if d['model']!=stack.MODEL and any(optics.get(k) is None for k in ('solar_absorptance','emissivity')):raise ValueError('请补齐所选光学参数组的有效太阳吸收率和长波发射率。')
+    spec=dict(definition=d, state=state, optics=optics, targets=a['target_ids'], face=chosen['orientation'])
+    if outer_face is not None:spec['outer_face']=outer_face
+    return spec
 
 
 def target_rows(model):
@@ -135,6 +159,8 @@ def apply(model, record):
     movable=record['factors']['materials']['applications'][0]['placement_basis']==FIXED_MOVABLE
     eligible={r['id'] for r in target_rows(model)}
     if not set(spec['targets'])<=eligible:raise ValueError('应用范围包含非不透明外墙／屋面。')
+    if d['model']==stack.MODEL:
+        return stack.install(model,spec,record['factors']['materials']['applications'][0])
     advanced=d['model'] in research.TYPES
     if advanced and any(model['BuildingSurface:Detailed'][k]['surface_type']!='Wall' for k in spec['targets']):
         raise ValueError('此材料接法适用于室外不透明墙，请核对选面。')
@@ -242,7 +268,7 @@ def apply(model, record):
 
 
 def check_step(record):
-    if any(d.get('model')==research.PCM for d in record['factors']['materials']['definitions']) and record['numerics']['step_minutes']>3:
+    if any(d.get('model')==research.PCM or stack.has_pcm(d) for d in record['factors']['materials']['definitions']) and record['numerics']['step_minutes']>3:
         raise ValueError('EnergyPlus 相变有限差分需要每小时至少 20 步。请在计算安排中选择 1 或 2 分钟。')
 
 
@@ -304,7 +330,7 @@ def compile_case(record,site_id,catalog,reader=None,operation_mode=None):
     return model,report
 
 
-def adoption(record,row,catalog,state_id='R',face='A',targets=None):
+def adoption(record,row,catalog,state_id='R',face='A',targets=None,position='exterior',after_layer=None):
     from contracts import normalize,validate
     from model_adapter import compile_case,VerifiedReader,changes
     if record['factors']['condition']['reference_runs'] or any(c.get('mode')!='fixed' for c in record['factors']['condition']['controls']):raise ValueError('当前方案有反馈或光学切换日历；请先另存并明确改为固定工况，再采用新类别材料。')
@@ -313,6 +339,12 @@ def adoption(record,row,catalog,state_id='R',face='A',targets=None):
     rows=target_rows(model);targets=targets if targets is not None else [r['id'] for r in rows if r['type']=='Wall']
     out=copy.deepcopy(record);f=out['factors'];d=copy.deepcopy(row['content'])
     f['materials']=dict(definitions=[d],definition_reference=copy.deepcopy(row),applications=[dict(id='surface_material',material_id=d['id'],component='opaque_exterior',position='exterior',target_ids=targets,placement_basis='fixed_surface_material_v1')])
+    app=f['materials']['applications'][0]
+    if d['model']==stack.MODEL:
+        app.update(position=position,placement_basis=stack.MODEL)
+        if after_layer is not None:app['after_layer']=after_layer
+    elif position!='exterior' or after_layer is not None:
+        raise ValueError('所选材料接法仅支持外侧。')
     f['condition']['controls']=[dict(application_id='surface_material',channel='thermal',mode='fixed',target_ids=targets,state_id=state_id),dict(application_id='surface_material',channel='orientation',mode='fixed',target_ids=targets,face_id=face)]
     out=normalize(out);errors=validate(out,catalog['sites'])
     if errors:raise ValueError('；'.join(errors))

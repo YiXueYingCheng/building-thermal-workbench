@@ -11,7 +11,7 @@ from model_adapter import VerifiedReader
 
 OUTPUT_CONTRACT = 'monthly_period_v1'
 DAILY_CONTRACT = 'daily_sensible_reference_v1'
-CODE_FILES = ('execution_inputs.py','execution_results.py','execution_queue.py','execution_worker.py','resources.py','cpu_budget.py','worker_runtime.py','daily_reference.py','resource_history.py','output_storage.py','output_resolution.py','wb_warmup.py','site_recalculation.py','schedule_sharing.py','history_locations.py')
+CODE_FILES = ('execution_inputs.py','execution_results.py','execution_queue.py','execution_worker.py','resources.py','cpu_budget.py','worker_runtime.py','daily_reference.py','resource_history.py','output_storage.py','output_resolution.py','wb_warmup.py','site_recalculation.py','schedule_sharing.py','history_locations.py','stack_response.py')
 
 OBSERVER = {'WB Daily Warmup': {'run_during_warmup_days':'Yes',
             'python_module_name':'wb_warmup','plugin_class_name':'DailyRoomTemperatures'}}
@@ -35,6 +35,8 @@ def stage_observer(folder, codes):
     shutil.copyfile(source, target)
     if sha(target) != codes[str(source)]:
         raise ValueError('预热记录程序与冻结版本不一致，请重新准备。')
+
+CODE_FILES += ('wall_observations.py',)
 
 def code_hashes():
     return {str(ROOT/n):sha(ROOT/n) for n in CODE_FILES}
@@ -174,6 +176,10 @@ def bundle(root,ident,expected=None,output_contract=OUTPUT_CONTRACT,*,observe_wa
             prepared=prepare_model(model)
         elif output_contract in output_resolution.CONTRACTS:prepared=output_resolution.prepare(model,output_contract)
         else:prepared=compact_model(model)
+        from stack_response import attach
+        probes=attach(prepared,folder,row,record,output_contract)
+        from wall_observations import attach as attach_walls
+        observations=attach_walls(prepared,record,output_contract)
         # Verify every external schedule is already registered, never implicit cwd search.
         refs={str(Path(r['path']).resolve()):r['sha256'] for r in manifest['verified_sources']}
         weather=row['weather']['path'] if isinstance(row['weather'],dict) else row['weather']
@@ -193,9 +199,13 @@ def bundle(root,ident,expected=None,output_contract=OUTPUT_CONTRACT,*,observe_wa
         if output_contract==DAILY_CONTRACT and (mode!='controlled' or row['period']!=[1,1,12,31]):raise ValueError('逐日参考算例必须为全年温控。')
         identity=dict(model=digest(prepared),dependencies=required,engine_files=engine_files,output_contract=output_contract)
         if sharing:identity['schedule_sharing']=sharing
+        if probes:identity['stack_response']=probes
+        if observations:identity['wall_observations']=observations
         cases.append(dict(site_id=row['site_id'],city=row['city'],mode=mode,period=row['period'],step_minutes=row['step_minutes'],
             weather=weather,dependencies=required,model=prepared,physical_digest=digest(physical),identity=digest(identity)))
         if observer:cases[-1]['warmup_observer']=observer
+        if probes:cases[-1]['stack_response']=probes
+        if observations:cases[-1]['wall_observations']=observations
         if sharing:cases[-1]['schedule_sharing']=sharing
         if output_contract!=OUTPUT_CONTRACT:cases[-1]['output_contract']=output_contract
     reader.unchanged()

@@ -2,6 +2,7 @@
 import copy
 
 MODELS={
+ 'layer_stack_v1':'stack',
  'phase_change_layer_v1':'pcm',
  'spectral_exterior_v1':'spectral',
  'optical_surface_v1':'optical',
@@ -10,6 +11,7 @@ MODELS={
  'equivalent_resistance_no_layer_storage':'resistance',
 }
 MODES=[
+ dict(id='stack',name='多层组合材料',storage=True,resistance=True,description='按室外至室内的顺序采用各层材料版本，分别计算传热。',inputs='各层的材料版本、固定状态和朝外光学面。',capability='实体层可铺于外侧、内侧或层间。工况可指定一层两态实体参与热阻反馈。纯光学涂层须暴露在室外。'),
  dict(id='pcm',name='相变材料 PCM',storage=True,resistance=True,description='表面光学层覆盖相变层，向内连接原墙体。',inputs='有效热物性、固液相线、有效潜热或含量。',capability='外墙固定相变层，逐步计算焓与温度。'),
  dict(id='spectral',name='辐射界面解耦与对照',storage=True,resistance=True,description='分别计算 PE 外层、发射层与天空的分波段换热。',inputs='载体热物性、PE 热阻、短波及长波窗口参数。',capability='室外不透明墙，可比较覆盖层、裸层和常规宽带面。'),
  dict(id='optical',name='仅表面光学',storage=False,resistance=False,

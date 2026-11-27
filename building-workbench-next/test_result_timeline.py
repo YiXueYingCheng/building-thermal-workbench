@@ -38,6 +38,8 @@ class TimelineTests(unittest.TestCase):
 
     def save(self):
         self.raw['artifacts']={str(self.sql):sha(self.sql)}
+        model=self.summary.with_name('model.epJSON')
+        if model.exists():self.raw['artifacts'][str(model)]=sha(model)
         self.summary.write_text(json.dumps(self.raw),encoding='utf8')
         with self.q.db() as db:db.execute('UPDATE jobs SET result=?,result_sha256=?',(str(self.summary),sha(self.summary)))
 
@@ -111,6 +113,37 @@ class TimelineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'缺失'):building()
         self.mutate("DELETE FROM ReportDataDictionary WHERE KeyValue='SYSTEM B'")
         with self.assertRaisesRegex(ValueError,'全部系统'):building()
+        self.assertEqual(self.daily(end='01-01')['rows'][0]['total_kWh'],3)
+
+    def test_daily_rooms_use_verified_model_and_include_multiple_systems_per_room(self):
+        model=self.summary.with_name('model.epJSON')
+        equipment=['system a','SyStEm B']
+        connections={'zone_name':'room west','zone_conditioning_equipment_list_name':'group'}
+        group={'equipment':[dict(zone_equipment_object_type='ZoneHVAC:IdealLoadsAirSystem',zone_equipment_name=s) for s in equipment]}
+        data={'Zone':{'Room West':{}},'ZoneHVAC:EquipmentList':{'Group':group},
+              'ZoneHVAC:EquipmentConnections':{'supply':connections}}
+        model.write_text(json.dumps(data),encoding='utf8')
+        self.raw['rooms']=[dict(system=s) for s in equipment]
+        with closing(sqlite3.connect(self.sql)) as db, db:
+            for idx,name,value in ((4,rt.HEAT,3.6e6),(5,rt.COOL,7.2e6)):
+                db.execute("INSERT INTO ReportDataDictionary VALUES(?,0,'Sum','SYSTEM B',?,'Daily','J')",(idx,name))
+                db.execute('INSERT INTO ReportData SELECT TimeIndex,?,? FROM Time WHERE WarmupFlag IS NULL',(idx,value))
+        self.save()
+        def read(known=None):
+            return rt.daily_rooms(self.root,self.batch,0,'01-01','01-03',known)
+        result=read()
+        self.assertEqual(result['rows'][0]['rooms'],[dict(room='Room West',heating_kWh=2,cooling_kWh=4,total_kWh=6)])
+        with patch.object(rt,'daily_points',side_effect=AssertionError('unexpected second SQL read')):
+            self.assertTrue(read(result['view_token'])['unchanged'])
+        data['ZoneHVAC:EquipmentConnections']['duplicate']=connections
+        model.write_text(json.dumps(data),encoding='utf8')
+        with self.assertRaisesRegex(ValueError,'登记不一致'):read(result['view_token'])
+        self.save()
+        with self.assertRaisesRegex(ValueError,'不唯一'):read()
+        data['ZoneHVAC:EquipmentConnections'].clear()
+        model.write_text(json.dumps(data),encoding='utf8')
+        self.save()
+        with self.assertRaisesRegex(ValueError,'SYSTEM A'):read()
         self.assertEqual(self.daily(end='01-01')['rows'][0]['total_kWh'],3)
 
     def test_daily_closed_values_and_preserved_calendar(self):

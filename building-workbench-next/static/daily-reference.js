@@ -1,9 +1,25 @@
 /* Read-only next-step preparation. A preview is never a submitted calculation. */
+const dailyReadingPositions=new Map();
+function rememberDailyReading(dialog){
+ const m=S.dailyReference;if(!m?.result)return;
+ const body=dialog.querySelector('.calendar-preview-body');
+ dailyReadingPositions.delete(m.key);
+ dailyReadingPositions.set(m.key,{checked:m.result.checked_at,y:body.scrollTop,
+  open:[...body.querySelectorAll('details[open]')].map(d=>d.querySelector('summary')?.textContent)});
+ if(dailyReadingPositions.size>6)dailyReadingPositions.delete(dailyReadingPositions.keys().next().value);
+}
+function restoreDailyReading(m){
+ const pos=dailyReadingPositions.get(m.key);
+ if(!pos||m.result?.checked_at!==pos.checked)return;
+ const body=dailyReferenceDialog().querySelector('.calendar-preview-body');
+ body.querySelectorAll('details').forEach(d=>{d.open=pos.open.includes(d.querySelector('summary')?.textContent);});
+ body.scrollTop=pos.y;
+}
 function dailyReferenceDialog(){
  let d=document.querySelector('#daily-reference-dialog');
  if(!d){d=document.createElement('dialog');d.id='daily-reference-dialog';d.className='room-tool calendar-preview-dialog';d.setAttribute('aria-labelledby','daily-reference-title');document.body.append(d);
-  d.addEventListener('cancel',()=>{S.dailyReference=null;});
-  d.addEventListener('click',e=>{const a=e.target.closest('[data-daily-reference-tool]')?.dataset.dailyReferenceTool;if(!a)return;e.stopPropagation();if(a==='close'){S.dailyReference=null;d.close();return;}
+  d.addEventListener('cancel',()=>{rememberDailyReading(d);S.dailyReference=null;});
+  d.addEventListener('click',e=>{const a=e.target.closest('[data-daily-reference-tool]')?.dataset.dailyReferenceTool;if(!a)return;e.stopPropagation();if(a==='close'){rememberDailyReading(d);S.dailyReference=null;d.close();return;}
    const m=S.dailyReference;if(a==='download'&&m?.result&&m.key===referenceContext()){const u=URL.createObjectURL(new Blob([JSON.stringify(m.result,null,2)],{type:'application/json;charset=utf-8'})),link=document.createElement('a');link.href=u;link.download='daily-reference-preparation-'+m.result.record.sha256.slice(0,12)+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
   });
  }
@@ -20,16 +36,45 @@ async function openDailyReference(){
  if(S.usageDirty)throw Error('房间配置还有独立编辑，请先保存配置或撤销后再准备。');
  const old=document.querySelector('#calendar-library-dialog');if(old?.open){S.calendarLibrary=null;old.close();}
  const m={id:S.id,revision:S.saved.revision,recovering:!S.dirty,key:referenceContext(),label:S.record.name+' · v'+S.saved.revision,dirty:S.dirty,result:null,message:'正在核对原构造参考输入及逐日输出规模…'};S.dailyReference=m;renderDailyReference();
- if(!m.dirty){await recoverDailyPreparation(m);if(!dailyPreparationCurrent(m)||m.recovering||m.freezing||m.prepared)return;}
- try{const result=await api('/api/reference-readiness/daily-preparation',{id:S.id,revision:S.saved.revision,changes:changes()});if(S.dailyReference===m&&m.key===referenceContext()){m.result=result;m.message='已核对输入、已有清单与批次。本次核对未提交计算或修改方案。';}}
- catch(e){if(S.dailyReference===m)m.message=e.message;}
- finally{if(S.dailyReference===m){if(m.key!==referenceContext()){m.result=null;m.message='方案已变化，请关闭后重新准备。';}renderDailyReference();}}
+ if(!m.dirty){await recoverDailyPreparation(m);if(!dailyPreparationCurrent(m)||m.recoverError||m.freezing||m.prepared)return;}
+ try{
+  let job=await api('/api/daily-inspections',{id:m.id,revision:m.revision,changes:changes()});
+  const progress=dailyReferenceDialog().querySelector('#daily-preparation-progress');
+  let last='';
+  while(dailyPreparationCurrent(m)&&['queued','running'].includes(job.state)){
+   const p=job.progress,stamp=JSON.stringify(p);
+   if(stamp!==last){
+    last=stamp;
+    const counting=p.stage==='核对原构造输入'||p.completed>0;
+    const message=progress.previousElementSibling;
+    message.textContent=p.city?'正在核对 '+p.city:p.stage;
+    progress.innerHTML=(counting?'<div class="daily-inspection-count"><strong>已核对 '+p.completed+' / '+p.total+' 个地点</strong><progress aria-label="已核对地点" value="'+p.completed+'" max="'+p.total+'"></progress></div>':'')+
+     '<p class="muted">可以关闭窗口，重新打开此版本会接着显示。</p>';
+   }
+   await new Promise(resolve=>setTimeout(resolve,900));
+   if(!dailyPreparationCurrent(m))break;
+   job=await api('/api/daily-inspections/'+encodeURIComponent(job.id));
+  }
+  if(!dailyPreparationCurrent(m))return;
+  if(job.state!=='ready')throw Error(job.error||'本次核对未完成。');
+  m.result=job.result;
+  m.message=job.reused?'已恢复本版本的输入核对结果。':'已完成逐日参考输入核对。';
+ }catch(e){if(dailyPreparationCurrent(m)){m.message=e.message;m.inspectError=true;}}
+ finally{if(S.dailyReference===m){
+  if(m.key!==referenceContext()){m.result=null;m.message='方案已变化，请重新核对。';m.inspectError=true;}
+  renderDailyReference();if(m.result)restoreDailyReading(m);
+  if(m.inspectError){
+   const retry=document.createElement('button');retry.dataset.dailyReference='refresh';retry.textContent='重新核对';
+   dailyReferenceDialog().querySelector('.calendar-preview-body').append(retry);
+  }
+ }}
 }
 const beforeDailyReferenceAction=configurationAction;
-configurationAction=async function(b){if(!b.dataset.dailyReference)return beforeDailyReferenceAction(b);const a=b.dataset.dailyReference;if(a==='freeze'){void freezeDailyReference().catch(e=>notice(e.message));return true;}if(a==='prepared'){const m=S.dailyReference;if(m?.prepared&&!S.dirty&&m.key===referenceContext())await showDailyPrepared(m,m.prepared);return true;}if(a==='restore'){await restoreDailyReference(b.dataset.reviewId);return true;}if(a==='batch'){const m=S.dailyReference;if(!m?.result?.workflow?.batches.some(x=>x.id===b.dataset.batchId)||m.key!==referenceContext())throw Error('方案内容已变化，请重新核对。');S.dailyReference=null;dailyReferenceDialog().close();await loadExecution();S.executionReview=null;S.view='execution';await loadBatchResults(b.dataset.batchId,true);return true;}void openDailyReference().catch(e=>notice(e.message));return true;};
+configurationAction=async function(b){if(!b.dataset.dailyReference)return beforeDailyReferenceAction(b);const a=b.dataset.dailyReference;if(a==='freeze'){void freezeDailyReference().catch(e=>notice(e.message,'error'));return true;}if(a==='prepared'){const m=S.dailyReference;if(m?.prepared&&!S.dirty&&m.key===referenceContext())await showDailyPrepared(m,m.prepared);return true;}if(a==='restore'){await restoreDailyReference(b.dataset.reviewId);return true;}if(a==='batch'){const m=S.dailyReference;if(!m?.result?.workflow?.batches.some(x=>x.id===b.dataset.batchId)||m.key!==referenceContext())throw Error('方案内容已变化，请重新核对。');S.dailyReference=null;dailyReferenceDialog().close();await loadExecution();S.executionReview=null;S.view='execution';await loadBatchResults(b.dataset.batchId,true);return true;}void openDailyReference().catch(e=>notice(e.message,'error'));return true;};
 
 const beforeDailyFreezeRender=renderDailyReference;
 renderDailyReference=function(){beforeDailyFreezeRender();const m=S.dailyReference,r=m?.result;if(!m)return;const d=dailyReferenceDialog(),footer=d.querySelector('.calendar-preview-footer');
+ if(m.recoverError){const b=document.createElement('button');b.dataset.dailyReference='refresh';b.textContent='重试读取进度';footer.prepend(b);return;}
  if(m.prepared){const b=document.createElement('button');b.className='primary';b.dataset.dailyReference='prepared';b.textContent='前往预算与提交';b.disabled=m.dirty||m.key!==referenceContext();footer.querySelector('[data-daily-reference-tool="close"]').before(b);}if(!r)return;
  const w=r.workflow,existing=w&&(w.preparations.length||w.batches.some(x=>x.same_saved_version)||w.state==='available');
  const note=document.createElement('p');note.className='muted';note.textContent=m.dirty?'当前有未保存修改，请先保存方案，再创建或恢复对应版本的参考清单。':w?.state==='available'?'已有匹配且已接受的逐日参考，可直接下载；日历生成与采用另行操作。':existing?'已有清单或批次保留，请使用上方入口继续查看。':r.freeze_issue||'创建清单不启动计算；随后进入统一队列核对预算，再明确提交。';d.querySelector('.calendar-preview-body').append(note);
@@ -38,21 +83,28 @@ renderDailyReference=function(){beforeDailyFreezeRender();const m=S.dailyReferen
 async function showDailyPrepared(m,prepared){if(S.dailyReference!==m||m.key!==referenceContext()){notice(prepared.existing_batch?'已找到原批次，未重复提交。':'清单已保留，未提交。重新打开相同版本可恢复。');return;}
  S.dailyReference=null;dailyReferenceDialog().close();await loadExecution();S.executionReview=prepared;S.executionResults=null;resetBatchResults();S.view='execution';await refreshCalculationBudget();notice(prepared.existing_batch?'已找到原逐日参考批次，未重复提交。':'逐日参考清单已保留；收起后可从“准备逐日参考”恢复。');}
 async function restoreDailyReference(id){const m=S.dailyReference,p=m?.result?.workflow?.preparations.find(p=>p.id===id&&p.valid);if(!p||m.dirty||S.dirty||m.key!==referenceContext()||m.freezing)throw Error('请先保存并重新核对原清单。');m.freezing=true;renderDailyReference();
- try{await showDailyPrepared(m,await api('/api/reference-readiness/daily-restore',{id:S.id,revision:S.saved.revision,record_sha256:m.result.record.sha256,review_id:p.id,plan_sha256:p.plan_sha256}));}catch(e){if(S.dailyReference===m)m.message=e.message;else notice(e.message);}finally{if(S.dailyReference===m){m.freezing=false;renderDailyReference();}}}
+ try{await showDailyPrepared(m,await api('/api/reference-readiness/daily-restore',{id:S.id,revision:S.saved.revision,record_sha256:m.result.record.sha256,review_id:p.id,plan_sha256:p.plan_sha256}));}catch(e){if(S.dailyReference===m)m.message=e.message;else notice(e.message,'error');}finally{if(S.dailyReference===m){m.freezing=false;renderDailyReference();}}}
 function dailyPreparationMarkup(m){return m.job?inputProgressMarkup(m)+(m.job.error?'<p class="warning">'+esc(m.job.error)+'</p>':'')+'<p class="muted">关闭窗口后准备继续；重新打开相同方案版本可查看进度。准备完成不自动提交计算。</p>':m.recovering?'<p>正在查找本版本的后台准备记录…</p>':'';}
 function dailyPreparationCurrent(m){return S.dailyReference===m&&m.key===referenceContext();}
 async function pollDailyPreparation(m,job){
  for(;;){m.job=job;m.freezing=['queued','running'].includes(job.state);
   if(!dailyPreparationCurrent(m))return;
   const el=document.getElementById('daily-preparation-progress');if(el)el.innerHTML=dailyPreparationMarkup(m);
+  if(!m.freezing&&job.kind!=='daily'){await openDailyReference();return;}
   if(!m.freezing){if(job.state==='ready'){m.prepared=job.result;m.message='逐日参考清单准备完成。下一步核对预算，再明确提交计算。';}else m.message='本次准备未完成，成功项已保留，可核对后继续。';renderDailyReference();return;}
   await new Promise(resolve=>setTimeout(resolve,1500));if(!dailyPreparationCurrent(m))return;
   job=await api('/api/input-preparations/'+job.id);
  }
 }
 async function recoverDailyPreparation(m){
- try{const job=await api('/api/input-preparations/latest?id='+encodeURIComponent(m.id)+'&revision='+m.revision+'&kind=daily');if(!dailyPreparationCurrent(m))return;m.recovering=false;if(job){m.job=job;m.freezing=['queued','running'].includes(job.state);m.message=m.freezing?'已恢复后台准备进度；关闭窗口不会停止准备。':'已读取本版本的准备记录。';renderDailyReference();void pollDailyPreparation(m,job).catch(e=>{if(dailyPreparationCurrent(m)){m.message='后台进度暂未读取：'+e.message+'；可关闭后重新打开查看。';renderDailyReference();}});}}
- catch(e){if(dailyPreparationCurrent(m))m.message='后台准备状态暂未读取：'+e.message+'；可关闭后重新打开查看。';}
+ try{
+  const job=await api('/api/input-preparations/latest?id='+encodeURIComponent(m.id)+'&revision='+m.revision+'&kind=daily&prefer_active=1');
+  if(!dailyPreparationCurrent(m)||!job)return;
+  m.job=job;m.freezing=['queued','running'].includes(job.state);
+  m.message=job.kind!=='daily'?'此版本正在准备常规输入，完成后将继续读取逐日参考。':m.freezing?'已恢复后台准备进度；关闭窗口不会停止准备。':'已读取本版本的准备记录。';
+  renderDailyReference();
+  void pollDailyPreparation(m,job).catch(e=>{if(dailyPreparationCurrent(m)){m.message='进度读取失败，请重试。'+e.message;m.recoverError=true;renderDailyReference();}});
+ }catch(e){if(dailyPreparationCurrent(m)){m.message='准备记录读取失败，请重试。'+e.message;m.recoverError=true;}}
  finally{m.recovering=false;if(dailyPreparationCurrent(m))renderDailyReference();}
 }
 async function freezeDailyReference(){const m=S.dailyReference;if(!m?.result?.can_freeze||!m.result.input_ready||m.dirty||S.dirty||m.key!==referenceContext()||m.freezing||m.recovering)throw Error('请先保存并重新核对全年温控原构造方案。');m.freezing=true;m.message='正在后台生成逐日参考输入与预算清单；不提交计算。';renderDailyReference();

@@ -51,13 +51,25 @@ def verify(folder,case,returncode,elapsed):
             cumulative+=expected[t['Month']]//1440
             require(t['SimulationDays']==cumulative and t['Interval']==calendar.monthrange(2025,t['Month'])[1]*1440,'分月累计模拟天数不符。')
         trace=[t for t in ts if t['IntervalType'] not in ((2,3,4) if contract=='daily_sensible_reference_v1' else (3,4))]
+        probes=case.get('stack_response',[])
+        observations=case.get('wall_observations')
+        extra_intervals={-1} if probes else set()
+        if observations:
+            from wall_observations import FREQUENCIES,verify as verify_walls
+            extra_intervals.add(FREQUENCIES[observations['frequency']][1])
+            verify_walls(db,observations,case['step_minutes'],days)
+        if probes:
+            from stack_response import verify as verify_stack
+            stack_detail=verify_stack(db,out,probes,days*1440//case['step_minutes'])
+            detail_times=[t for t in ts if t['IntervalType']==-1]
+            require(len(detail_times)==days*1440//case['step_minutes'] and all(t['Interval']==case['step_minutes'] for t in detail_times),'分层响应时段不完整。')
         if contract in output_resolution.CONTRACTS:
             it=output_resolution.CONTRACTS[contract][1]
-            require(all(t['IntervalType'] in (3,4,it) for t in ts),'明细包含非预期频率。')
+            require(all(t['IntervalType'] in (3,4,it) or t['IntervalType'] in extra_intervals for t in ts),'明细包含非预期频率。')
             time_detail=output_resolution.verify(db,case,model)
         elif case.get('validation_trace'):
             require(len(trace)==days*24*60//case['step_minutes'] and all(t['Interval']==case['step_minutes'] for t in trace),'验证轨迹的求解步数不符。')
-        else:require(not trace,'存在非预期的详细时序输出。')
+        else:require(all(t['IntervalType'] in extra_intervals for t in trace),'存在非预期的详细时序输出。')
         data=rows("select d.*,r.Value,t.Month,t.Interval,e.MinValue,e.MaxValue from ReportData r join ReportDataDictionary d using(ReportDataDictionaryIndex) join Time t using(TimeIndex) left join ReportExtendedData e using(ReportDataIndex) WHERE d.ReportingFrequency IN ('Monthly','Run Period')")
         require(all(math.isfinite(x['Value']) for x in data),'结果包含非有限数值。')
         def variable(name,freq):return [x for x in data if x['Name']==name and x['ReportingFrequency']==freq]
@@ -108,6 +120,8 @@ def verify(folder,case,returncode,elapsed):
         checks=dict(process_exit_zero=True,err_end_success=True,sqlite_quick_check='ok',full_period=True,monthly_reconciliation=True,sqlite_completion_flags=flags,
             completion_basis='Process + end/err + independent full-period coverage + monthly reconciliation; SQL flags retained unmodified.'),artifacts=artifacts)
     if case.get('schedule_sharing'):result['schedule_sharing']=case['schedule_sharing']
+    if probes:result['stack_response']=stack_detail
+    if observations:result['wall_observations']=observations
     if daily:result.update(output_contract=contract,daily_reference=daily)
     if contract in output_resolution.CONTRACTS:result.update(output_contract=contract,time_detail=time_detail)
     return result

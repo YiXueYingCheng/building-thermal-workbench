@@ -79,7 +79,7 @@ document.addEventListener('change',event=>{
   if(t.id==='schedule-basis'&&!readonly()){convertScheduleBasis();markScheduleDirty();render();}
   if(t.id==='schedule-unit'&&!readonly()){const {room,rule}=selectedUsage();if(!Number.isFinite(rule.minimum)||!Number.isFinite(rule.maximum)||rule.minimum<0||rule.minimum>rule.maximum){t.value=rule.unit;throw Error('请先补齐有效上下限，再切换单位。');}const before=rule.unit.endsWith('/m2')?room.area_m2:1,after=t.value.endsWith('/m2')?room.area_m2:1;rule.minimum*=before/after;rule.maximum*=before/after;rule.unit=t.value;rule.basis='单位换算；实际计划保持等价';markScheduleDirty();render();}
   if(t.matches('[data-profile-choice]')){const row=S.dailyProfiles.find(r=>r.snapshot.id+':'+r.snapshot.revision===t.value);const el=t.closest('.schedule-controls').querySelector('.profile-description');if(el)el.textContent=row?'来源：'+row.origin+'；别名：'+row.aliases.map(a=>typeof a==='string'?a:a.name).join('、'):'';}
- }catch(error){if(t.id==='schedule-basis')t.value=selectedUsage().rule.kind==='scaled'?'scaled':'actual';notice(error.message);}
+ }catch(error){if(t.id==='schedule-basis')t.value=selectedUsage().rule.kind==='scaled'?'scaled':'actual';notice(error.message,'error');}
 });
 document.addEventListener('input',event=>{
  const t=event.target;if(readonly())return;

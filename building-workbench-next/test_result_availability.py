@@ -56,4 +56,30 @@ class ResultAvailabilityTests(unittest.TestCase):
   with self.q.db() as db:db.execute("UPDATE jobs SET result=NULL,status='pending'")
   self.assertFalse(self.check()['summary_verified'])
 
+ def test_recent_detail_reuses_verified_files_and_refresh_rechecks(self):
+  views=ra.RecentAvailability(self.root);scope=(self.batch,0)
+  first=views.get(scope,None)
+  with patch.object(ra,'check_file',side_effect=AssertionError('unchanged files should not be rehashed')):
+   hit=views.get(scope,None,known=first['view_token'])
+  self.assertTrue(hit['reused']);self.assertNotIn('summary',hit)
+  with patch.object(ra,'check_file',wraps=ra.check_file) as check:
+   refreshed=views.get(scope,None,force=True)
+  self.assertEqual(check.call_count,2);self.assertNotEqual(first['view_token'],refreshed['view_token'])
+  self.sql.unlink()
+  missing=views.get(scope,None,known=refreshed['view_token'])
+  self.assertEqual(missing['summary']['files'][0]['status'],'missing')
+  self.sql.write_bytes(b'original data')
+  self.assertTrue(views.get(scope,None,known=missing['view_token'])['summary']['artifacts_verified'])
+
+ def test_recent_views_follow_registration_and_retry_inaccessible_files(self):
+  views=ra.RecentAvailability(self.root);scope=(self.batch,0)
+  old_list=views.get((self.batch,None),None);old_detail=views.get(scope,None)
+  with self.q.db() as db:db.execute("UPDATE jobs SET status='review'")
+  self.assertEqual(views.get((self.batch,None),None,known=old_list['view_token'])['summary']['cases'][0]['status'],'review')
+  self.assertEqual(views.get(scope,None,known=old_detail['view_token'])['summary']['registered_status'],'review')
+  with patch.object(ra,'path_checked',side_effect=OSError('offline')):
+   offline=views.get(scope,None)
+   self.assertIsNone(offline['view_token'])
+  self.assertTrue(views.get(scope,None)['summary']['artifacts_verified'])
+
 if __name__=='__main__':unittest.main()

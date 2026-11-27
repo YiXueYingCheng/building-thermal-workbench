@@ -67,6 +67,7 @@ function viewerMaterial(wall){
   const thermal=controls.find(c=>c.channel==='thermal'),optical=controls.find(c=>c.channel==='orientation');
   const stateLabel=thermal?.mode==='fixed'?'固定 '+(d.states.find(s=>s.id===thermal.state_id)?.name||thermal.state_id):thermal?.mode==='feedback'?'热学状态按反馈切换':'热学状态尚未明确';
   const faceLabel=optical?.mode==='fixed'?'固定 '+optical.face_id:optical?.mode==='calendar'?'按日历切换表面光学参数':'外表面光学参数组尚未明确';
+  if(d.model==='layer_stack_v1')return '<article><h4>'+esc(d.name)+'</h4>'+stackWallInfo(d,a)+'</article>';
   if(d.spectral)return '<article><h4>'+esc(d.name)+'</h4><p>'+esc(stateLabel+' · '+faceLabel)+'</p>'+wallMaterialOptics(d,controls)+'</article>';
   const rows=d.states.flatMap(s=>['A','B'].filter(face=>d.optics[face+'_'+s.id]).map(face=>{
    const o=d.optics[face+'_'+s.id],R=s.thermal_input==='conductivity_thickness'?(s.conductivity_W_mK>0&&s.thickness_mm!=null?s.thickness_mm/1000/s.conductivity_W_mK:null):s.resistance_m2K_W;

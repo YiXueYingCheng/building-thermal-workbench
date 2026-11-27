@@ -117,7 +117,7 @@ document.addEventListener('click',async event=>{
   }
   await loadBatchResults(d.id);render();
   const status=document.querySelector('#result-viewer [data-site-message]');if(status)status.textContent=message;
- }catch(e){if(msg)msg.textContent=e.message;else notice(e.message);}
+ }catch(e){if(msg)msg.textContent=e.message;else notice(e.message,'error');}
  finally{b.disabled=false;}
 },true);
 function batchDetail(d){

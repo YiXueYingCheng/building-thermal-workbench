@@ -155,7 +155,7 @@ document.addEventListener('change',async event=>{
    if(current?.id===row.id&&row.revision>current.revision&&typeof openComponentVersionUpdate==='function'){t.value=String(S.componentLists[kind].findIndex(v=>v.id===current.id&&v.revision===current.revision&&v.sha256===current.sha256));await openComponentVersionUpdate(row);return;}
    if(kind==='usage'){if(row.content.building_id!==S.configuration.data.base.building_id)throw Error('请选择同一建筑的配置版本。');setPath('factors.building.usage_profile',copy(row));resetUsageDraft();}else await openMaterialCatalog(Boolean(materialViewerCurrent()),row);render();
   }
- }catch(error){notice(error.message);}
+ }catch(error){notice(error.message,'error');}
 });
 document.addEventListener('input',event=>{
  const t=event.target;if(readonly())return;

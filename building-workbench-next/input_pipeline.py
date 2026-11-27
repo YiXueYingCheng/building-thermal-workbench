@@ -68,7 +68,7 @@ def verify_case(folder,row):
 
 def code_identity():
     import model_adapter
-    names=('research_materials.py','spectral_boundary.py','spectral_solar.py','construction_library.py','material_types.py','surface_materials.py','surface_controls.py','model_adapter.py','dynamic_adapter.py','calendar_library.py','calendar_preview.py',
+    names=('composite_materials.py','research_materials.py','spectral_boundary.py','spectral_solar.py','construction_library.py','material_types.py','surface_materials.py','surface_controls.py','model_adapter.py','dynamic_adapter.py','calendar_library.py','calendar_preview.py',
         'weather_import.py','source_locations.py','building_configuration.py','component_library.py',
         'drawing_wall_scope.py','usage_schedules.py','ordinary_building.py','ordinary_envelope.py','ordinary_materials.py',
         'ordinary_orientation.py','solid_eca.py','solid_feedback.py','queue_calendar.py','transition_confirmation.py','workspace_setup.py')
@@ -185,6 +185,10 @@ def prepare(root,ident,output_contract='monthly_period_v1'):
         elif output_contract in ex.output_resolution.CONTRACTS:
             model=ex.output_resolution.prepare(original,output_contract)
         else:model=ex.compact_model(original)
+        from stack_response import attach
+        probes=attach(model,folder,row,record,output_contract)
+        from wall_observations import attach as attach_walls
+        observations=attach_walls(model,record,output_contract)
         del original
         weather=row['weather']['path'] if isinstance(row['weather'],dict) else row['weather']
         required={str(Path(weather).resolve()):None}
@@ -199,11 +203,15 @@ def prepare(root,ident,output_contract='monthly_period_v1'):
         if output_contract==ex.DAILY_CONTRACT and (mode!='controlled' or row['period']!=[1,1,12,31]):raise ValueError('逐日参考仅支持全年温控。')
         observer=ex.add_warmup_observer(model,engines[0])
         identity=digest(dict(model=digest(model),dependencies=required,engine_files=engine,output_contract=output_contract))
+        if probes:identity=digest(dict(inputs=identity,stack_response=probes))
+        if observations:identity=digest(dict(inputs=identity,wall_observations=observations))
         name=f'{index:03d}.epJSON';compact_write(staging/name,model,root)
         case=dict(site_id=row['site_id'],city=row['city'],mode=mode,period=row['period'],step_minutes=row['step_minutes'],
             weather=weather,dependencies=required,physical_digest=digest({k:v for k,v in model.items() if not k.startswith('Output')}),
             identity=digest(dict(inputs=identity,executor=codes)),index=index,model_file=name,model_sha256=sha(staging/name))
         if observer:case['warmup_observer']=observer
+        if probes:case['stack_response']=probes
+        if observations:case['wall_observations']=observations
         if output_contract!=ex.OUTPUT_CONTRACT:case['output_contract']=output_contract
         cases.append(case);del model;gc.collect()
         emit(stage='算例清单已保存',completed=index+1,total=len(manifest['cases']),city=row['city'])

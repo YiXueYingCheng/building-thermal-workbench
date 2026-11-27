@@ -130,7 +130,7 @@ async function changePlanSelection(t){
   if(t.dataset.compare){const side=t.dataset.compare;S[side]=t.value;delete S.compareVersions[side+'_revision'];}
   else{const side=t.dataset.compareVersion,row=S.planHistories[side].find(r=>String(r.revision)===t.value);if(!row)throw Error('没有找到该版本，请重新读取方案。');S.compareVersions[side+'_revision']=row.revision;}
   await loadComparison();notice();
- }catch(error){S.left=old.left;S.right=old.right;S.compareVersions=old.versions;S.comparison=old.comparison;S.planHistories=old.histories;notice(error.message);}
+ }catch(error){S.left=old.left;S.right=old.right;S.compareVersions=old.versions;S.comparison=old.comparison;S.planHistories=old.histories;notice(error.message,'error');}
  finally{render();S.busy=false;app.inert=false;nav.inert=false;}
 }
 document.addEventListener('change',event=>{

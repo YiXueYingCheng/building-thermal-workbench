@@ -76,6 +76,10 @@ class Entry:
 
 class RecentViews:
     watch_failure_logs = False
+    workspace_files = ('drafts.sqlite', 'drafts.sqlite-wal', 'output-storage.json', 'current.json', 'coverage-results/index.json')
+
+    def cacheable_summary(self, summary):
+        return True
 
     def __init__(self, root, limit=3, max_bytes=16*1024*1024):
         self.root = Path(root).resolve()
@@ -106,8 +110,7 @@ class RecentViews:
                     return response
 
             data = self.root / 'data'
-            optional = [data / name for name in ('drafts.sqlite', 'drafts.sqlite-wal', 'output-storage.json',
-                                                'current.json', 'coverage-results/index.json')]
+            optional = [data / name for name in self.workspace_files]
             cacheable = True
             with reading() as reads:
                 for job in jobs:
@@ -137,7 +140,7 @@ class RecentViews:
             else:
                 cacheable = False
             token = None
-            if cacheable:
+            if cacheable and self.cacheable_summary(summary):
                 payload = json.dumps(summary, ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode('utf8')
                 if len(payload) <= self.max_bytes:
                     token = uuid.uuid4().hex

@@ -35,7 +35,7 @@
     revision:v.group.revision,set_sha256:v.group.sha256,preview_sha256:v.payload?.preview_sha256});
    if(current===v){v.payload=p;v.error='';}
    if(p.saved && action==='save'){
-    try{await bootstrap();}catch(e){notice('实验已保存，方案列表可稍后刷新。');}
+    try{await bootstrap();}catch(e){notice('实验已保存，方案列表可稍后刷新。','warning');}
    }
   }catch(e){if(current===v)v.error=e.message;}
   finally{if(current===v){v.saving=false;draw(v);}}
@@ -64,6 +64,6 @@
  }
  document.addEventListener('click',e=>{
   const b=e.target.closest('button[data-experiment]');if(!b||b.disabled)return;
-  e.preventDefault();e.stopImmediatePropagation();void click(b.dataset.experiment,b).catch(e=>notice(e.message));
+  e.preventDefault();e.stopImmediatePropagation();void click(b.dataset.experiment,b).catch(e=>notice(e.message,'error'));
  },true);
 })();

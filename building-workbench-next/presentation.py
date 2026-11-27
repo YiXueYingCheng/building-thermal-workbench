@@ -44,6 +44,7 @@ def describe_sources(data,store,catalog,index):
  for side in ('left','right'):
   r,_=store.comparison_input(data['comparison'],side);f=r['factors']
   data['record_details'][side]=dict(id=r['id'],name=r['name'],revision=r['revision'],period=f['scope']['period'],step_minutes=r['numerics']['step_minutes'],site_count=len(f['scope']['site_ids']))
+  data['record_details'][side]['original_envelope']=f['materials'].get('applications')==[] and f['materials'].get('definitions')==[]
   for choice in data[side]:
    if choice['id']=='historical':
     jobs=[j for j in catalog['global_bundle']['jobs'].values() if j['case']==r['provenance']['case'] and j['site_id'] in f['scope']['site_ids']]
@@ -56,5 +57,7 @@ def describe_sources(data,store,catalog,index):
     p=b['plan'];adopted=b.get('adopted',{});counts=b['counts'].copy()
     if adopted:counts.update(failed=counts.get('failed',0)-len(adopted),passed=counts.get('passed',0)+len(adopted))
     meta=dict(kind='execution',step_label=step_label(adopted.get(i,c.get('step_minutes',r['numerics']['step_minutes'])) for i,c in enumerate(p['cases'])),status=batch_status(counts,p['case_count'],b['mode']),case_count=p['case_count'],site_count=len({c['site_id'] for c in p['cases']}),counts=counts,created=b['created'])
+    meta['output_contract']=p.get('output_contract','monthly_period_v1')
+    meta['extra_probes']=any(c.get('wall_observations') or c.get('stack_response') for c in p['cases'])
    choice['display']=dict(**meta,period=f['scope']['period'],step_minutes=r['numerics']['step_minutes'])
  return data

@@ -7,7 +7,7 @@ from pathlib import Path
 from itertools import groupby
 import datetime as dt
 import calendar
-import json, math, sqlite3, time
+import hashlib, json, math, sqlite3, time
 from foundation import digest, now
 from schedule_sharing import display_dictionary
 from execution_results import HEAT, COOL
@@ -55,10 +55,10 @@ def ensure_closed_sql(p):
 
 
 @contextmanager
-def source(root, batch, index, budget=30):
+def source(root, batch, index, budget=30, registered=None):
     """Verify the registered summary and its exact SQL; guard concurrent changes."""
     started=time.monotonic();deadline=started+budget
-    job,raw,review_info,sw,p,checksum,expected,token=registered_source(root,batch,index,deadline)
+    job,raw,review_info,sw,p,checksum,expected,token=registered or registered_source(root,batch,index,deadline)
     sql,watch=check_file(root,p,checksum,deadline)
     require(sql['status']=='verified', '原始 SQL 明细不可用（缺失、已清理或未通过核对）。'+sql.get('reason','')+' 汇总不能还原明细。')
     require(watch[1]==expected,'读取期间结果资料发生变化，请重新读取。')
@@ -117,6 +117,8 @@ def signal(name):
 
 # Output names and binary conventions defined by the material adapters.
 CONTROL_OUTPUTS = {
+    'NX_SC_StackStateOutput': ('layer_state_c', 'Avg'),
+    'NX_SC_StackChangedOutput': ('switches', 'Sum'),
     'NX_SC_StateOutput': ('compressed', 'Avg'),
     'NX_SC_FaceOutput': ('face_a', 'Avg'),
     'NX_FiveStorey_Flip_FaceOutput': ('face_a', 'Avg'),
@@ -190,13 +192,18 @@ def monthly_controls(db, env, raw, dictionary_rows):
     return result
 
 
+def registration_unchanged(root,batch,index,registered):
+    job,_,_,summary_watch,sql,_,sql_stamp,_=registered
+    ensure_closed_sql(sql)
+    return (stamp(summary_watch[0])==summary_watch[1] and stamp(sql)==sql_stamp
+            and next((j for j in jobs(root,batch) if j['idx']==index),None)==job)
+
+
 def inventory(root,batch,index,known=None):
     if known:
-        job,_,_,summary_watch,sql,_,sql_stamp,token=registered_source(root,batch,index,time.monotonic()+30)
-        if known==token and stamp(summary_watch[0])==summary_watch[1] and stamp(sql)==sql_stamp:
-            ensure_closed_sql(sql)
-            if next((j for j in jobs(root,batch) if j['idx']==index),None)==job:
-                return dict(view_token=token,unchanged=True)
+        registered=registered_source(root,batch,index,time.monotonic()+30)
+        if known==registered[-1] and registration_unchanged(root,batch,index,registered):
+            return dict(view_token=known,unchanged=True)
     with source(root,batch,index) as (db,raw,env,out):
         rows=display_dictionary(dictionary(db),raw)
         times=[dict(t) for t in db.execute('''SELECT IntervalType,MIN(Interval) AS min_minutes,MAX(Interval) AS max_minutes,
@@ -213,6 +220,7 @@ def inventory(root,batch,index,known=None):
         detailed=any(t['IntervalType'] in (-1,0,1) for t in times)
         daily=systems(rows) if any(t['IntervalType']==2 for t in times) else {}
         out['monthly_loads'] = raw.get('monthly') or []
+        out['stack_selections'] = raw.get('stack_response',{}).get('selections',[])
         out['monthly_controls'] = monthly_controls(db, env, raw, rows)
         out.update(frequencies=times,coverage=coverage,dictionary=rows,systems=sorted(daily),
                    building_daily_issue=building_daily_issue(rows,raw,daily),
@@ -286,10 +294,12 @@ def building_daily_issue(rows, raw, paired):
     return ''
 
 
-def daily_points(db, env, raw, selected, first, last):
+def daily_points(db, env, raw, selected, first, last, room_by_system=None):
     """Sum a complete pair from every selected system at each formal daily timestamp."""
     kinds = {pair[HEAT]:'heating_kWh' for pair in selected.values()}
     kinds.update({pair[COOL]:'cooling_kWh' for pair in selected.values()})
+    if room_by_system is not None:
+        room_for_id = {i:room_by_system[system] for system,pair in selected.items() for i in pair.values()}
     require(bool(kinds), '缺少成对的系统逐日冷热需求。')
     ids = ','.join(str(int(i)) for i in kinds)
     rows = db.execute(f'''SELECT t.TimeIndex,t.Year,t.Month,t.Day,t.Hour,t.Minute,t.Dst,t.Interval,
@@ -304,6 +314,7 @@ def daily_points(db, env, raw, selected, first, last):
         require(day==first+len(points), '逐日记录缺失或重复。')
         stamp = None
         energy = {'heating_kWh':[], 'cooling_kWh':[]}
+        by_room = {}
         seen = set()
         for r in readings:
             require((r['Month'],r['Day'])==(expected.month,expected.day) and r['Interval']==1440,
@@ -316,9 +327,18 @@ def daily_points(db, env, raw, selected, first, last):
                     '逐日需求包含无效数值。')
             seen.add(ident)
             energy[kinds[ident]].append(r['Value'])
+            if room_by_system is not None:
+                room_values = by_room.setdefault(room_for_id[ident], {'heating_kWh':[], 'cooling_kWh':[]})
+                room_values[kinds[ident]].append(r['Value'])
         require(seen==kinds.keys(), '逐日冷热记录缺失，无法核对所选系统。')
         point = {k:math.fsum(v)/3.6e6 for k,v in energy.items()}
         points.append(dict(date=expected.strftime('%m-%d'),time=stamp,**point,total_kWh=sum(point.values())))
+        if room_by_system is not None:
+            rooms = []
+            for name,values in by_room.items():
+                loads = {k:math.fsum(v)/3.6e6 for k,v in values.items()}
+                rooms.append(dict(room=name,total_kWh=sum(loads.values()),**loads))
+            points[-1]['rooms'] = rooms
     require(len(points)==last-first+1,'所选范围的逐日记录缺失。')
     return points
 
@@ -335,6 +355,57 @@ def check_daily_months(raw, points):
             for key in ('heating_kWh','cooling_kWh'):
                 require(math.isclose(math.fsum(p[key] for p in days), m[key], rel_tol=1e-8, abs_tol=1e-7),
                         f'{month} 月建筑逐日冷热需求之和与原月度汇总不符。')
+
+
+def system_rooms(model, systems):
+    """Resolve reported systems through the simulated equipment connections."""
+    reported = {system.upper():system for system in systems}
+    equipment = {name.upper():item for name,item in model.get('ZoneHVAC:EquipmentList',{}).items()}
+    zones = {name.upper():name for name in model.get('Zone',{})}
+    mapped = {}
+    for connection in model.get('ZoneHVAC:EquipmentConnections',{}).values():
+        group = connection.get('zone_conditioning_equipment_list_name','').upper()
+        zone = zones.get(connection.get('zone_name','').upper())
+        for entry in equipment.get(group,{}).get('equipment',[]):
+            if entry.get('zone_equipment_object_type','').lower()!='zonehvac:idealloadsairsystem':
+                continue
+            system = reported.get(entry.get('zone_equipment_name','').upper())
+            if system is None:
+                continue
+            require(zone and system not in mapped, f'系统 {system} 的房间连接缺失或不唯一。')
+            mapped[system] = zone
+    missing = sorted(set(systems)-mapped.keys())
+    require(not missing, '运行模型中找不到以下系统的房间连接：'+'、'.join(missing[:5]))
+    return mapped
+
+
+def daily_rooms(root,batch,index,start,end,known=None):
+    registered = registered_source(root,batch,index,time.monotonic()+30)
+    job,raw,_,_,_,_,_,sql_token = registered
+    paths = [p for p in raw['artifacts'] if Path(p).name.lower()=='model.epjson']
+    require(len(paths)==1, '结果未登记唯一的运行模型，无法确认房间与系统的对应关系。')
+    model_path = path_checked(root,paths[0])
+    require(model_path.is_file(), '登记的运行模型缺失，无法读取房间连接。')
+    model_stamp = stamp(model_path)
+    token = digest([sql_token,str(model_path),model_stamp,start,end])
+    if known==token and registration_unchanged(root,batch,index,registered) and model_stamp==stamp(model_path):
+        return dict(view_token=token,unchanged=True)
+    with source(root,batch,index,registered=registered) as (db,raw,env,out):
+        require(job['status'] in ('passed','reused'), '算例的接受状态已改变，请重新读取对比结果。')
+        first,last = day_number(start,raw['period']),day_number(end,raw['period'])
+        require(1<=last-first+1<=MAX_DAYS, '请选择连续 1—31 天的房间明细。')
+        rows = dictionary(db)
+        items = systems(rows)
+        issue = building_daily_issue(rows,raw,items)
+        require(not issue,issue)
+        content = model_path.read_bytes()
+        require(hashlib.sha256(content).hexdigest()==raw['artifacts'][paths[0]], '运行模型与结果登记不一致，无法确认房间连接。')
+        mapped = system_rooms(json.loads(content),items)
+        points = daily_points(db,env,raw,items,first,last,room_by_system=mapped)
+        check_daily_months(raw,points)
+        require(stamp(model_path)==model_stamp, '读取期间运行模型发生变化，请重新读取。')
+        out.update(view_token=token,start=start,end=end,rows=points)
+    return out
 
 
 def daily(root,batch,index,system,start,end,scope='system'):

@@ -18,7 +18,7 @@ class WorkbenchHTTPServer(ThreadingHTTPServer):
     request_queue_size = 64
 
 from urllib.parse import urlparse, unquote, parse_qs
-from foundation import ROOT, config, read_json, loads, write_json, now, owned
+from foundation import ROOT, config, read_json, loads, write_json, now, owned, sha
 from manage import current, persist_building_source
 from record_store import Store, Conflict
 import planner
@@ -92,7 +92,7 @@ from research_execution import Runs as SetRuns
 def summary(record):
     f=record['factors']
     return dict(id=record['id'],revision=record['revision'],name=record['name'],status=record['status'],archived=record['archived'],
-        building=f['building']['name'],site_count=len(f['scope']['site_ids']),step_minutes=record['numerics']['step_minutes'],
+        building=f['building']['name'],building_id=f['building']['id'],site_count=len(f['scope']['site_ids']),step_minutes=record['numerics']['step_minutes'],
         mode=f['condition']['operation']['mode'],adapter=record['provenance']['adapter'])
 
 def make_server(root=ROOT,port=None,start_workers=False):
@@ -127,8 +127,12 @@ def make_server(root=ROOT,port=None,start_workers=False):
     def cleanup_active():
         return bool(bulk_reviews.active) or bool(result_reviews.active) or any(j['state'] in ('queued','running') for j in list(input_jobs.jobs.values())) or any(not f.done() for f in list(set_runs.futures.values()))
     storage_requests=result_storage.Requests()
+    from daily_inspection import DailyInspections
+    daily_inspections=DailyInspections(root,storage_requests)
     recent_batches=RecentBatches(root)
+    candidate_receipts=group_candidates.CandidateReceipts(root)
     recent_comparisons=RecentComparisons(root)
+    recent_availability=result_availability.RecentAvailability(root,limit=24)
     from regional_previews import RegionalPreviews
     regional_previews=RegionalPreviews(root)
     class Handler(BaseHTTPRequestHandler):
@@ -174,7 +178,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/api/result-timeline/series':
                     return self.send(200,result_timeline.series(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0]),int(query.get('variable',['0'])[0]),query.get('start',[''])[0],query.get('end',[''])[0]))
                 if route=='/summary-retention.js':return self.send(200,(root/'static/summary-retention.js').read_bytes(),'text/javascript; charset=utf-8')
-                if route in ('/result-timeline.js','/result-timeline.css'):
+                if route in ('/result-timeline.js','/result-timeline.css','/stack-response.js','/stack-response.css','/spectral-response.js','/spectral-response.css','/response-tools.js','/wall-observations.js','/wall-switches.js','/probe-transfer.js'):
                     return self.send(200,(root/'static'/route[1:]).read_bytes(),'text/javascript; charset=utf-8' if route.endswith('.js') else 'text/css; charset=utf-8')
                 if route in ('/api/failed-result','/api/failed-result/download'):
                     from failed_result_diagnostics import collect
@@ -187,9 +191,14 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     return self.send(200,result_timeline.inventory(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0]),query.get('known',[None])[0]))
                 if route=='/api/result-timeline/daily':
                     return self.send(200,result_timeline.daily(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0]),query.get('system',[''])[0],query.get('start',[''])[0],query.get('end',[''])[0],query.get('scope',['system'])[0]))
+                if route=='/api/result-timeline/daily-rooms':
+                    return self.send(200,result_timeline.daily_rooms(root,query.get('batch',[''])[0],int(query.get('index',['-1'])[0]),query.get('start',[''])[0],query.get('end',[''])[0],query.get('known',[None])[0]))
                 if route=='/result-availability.js':return self.send(200,(root/'static/result-availability.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/api/result-availability':
-                    return self.send(200,result_availability.inspect(root,query.get('batch',[''])[0],int(query['index'][0])) if 'index' in query else result_availability.listing(root,query.get('batch',[''])[0]))
+                    batch=query.get('batch',[''])[0];index=int(query['index'][0]) if 'index' in query else None
+                    if query.get('view') in (['recent'],['refresh']):
+                        return self.send(200,recent_availability.get((batch,index),None,force=query['view']==['refresh'],known=query.get('known',[None])[0]))
+                    return self.send(200,result_availability.inspect(root,batch,index) if index is not None else result_availability.listing(root,batch))
                 if route=='/storage-management.js':return self.send(200,(root/'static/storage-management.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/api/storage-management':return self.send(200,storage_management.inventory(root))
                 if route=='/study-relations.js':return self.send(200,(root/'static/study-relations.js').read_bytes(),'text/javascript; charset=utf-8')
@@ -198,7 +207,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/api/plan-deletion/history':return self.send(200,plan_deletion.history(root))
                 if route=='/api/storage-management/history':return self.send(200,storage_management.history(root))
                 if route=='/api/storage-management/result-impact':return self.send(200,result_storage.inspect(root,parse_qs(urlparse(self.path).query).get('attempt',[''])[0]))
-                if route=='/api/input-preparations/latest':return self.send(200,input_jobs.latest(query.get('id',[''])[0],int(query.get('revision',['0'])[0]),query.get('kind',[None])[0]))
+                if route=='/api/input-preparations/latest':return self.send(200,input_jobs.latest(query.get('id',[''])[0],int(query.get('revision',['0'])[0]),query.get('kind',[None])[0],query.get('prefer_active',['0'])[0]=='1'))
                 match=re.fullmatch(r'/api/input-preparations/(job_[a-f0-9]{32})',route)
                 if match:return self.send(200,input_jobs.get(match[1]))
                 match=re.fullmatch(r'/api/input-inspection/(inputs_[a-f0-9]{32})/cases/(\d+)',route)
@@ -215,6 +224,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/controlled-experiment.js':return self.send(200,(root/'static/controlled-experiment.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/optical-terminology.js':return self.send(200,(root/'static/optical-terminology.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/research-set-changes.js':return self.send(200,(root/'static/research-set-changes.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route=='/design-regions.js':return self.send(200,(root/'static/design-regions.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/comparison-designs.js':return self.send(200,(root/'static/comparison-designs.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/theme-groups.js':return self.send(200,(root/'static/theme-groups.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/group-candidates.js':return self.send(200,(root/'static/group-candidates.js').read_bytes(),'text/javascript; charset=utf-8')
@@ -223,11 +233,15 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     from comparison_designs import drafts
                     return self.send(200,dict(designs=drafts(store)))
                 if route=='/api/reading-collections':
+                    if 'candidate-receipt' in query:
+                        return self.send(200,dict(current=candidate_receipts.valid(query['candidate-receipt'][0])))
                     readings=reading_collections.Readings(catalog,root)
                     if 'version-picker' in query:return self.send(200,theme_groups.options(readings))
                     if 'candidates' in query:
                         revision=int(query['revision'][0]) if query.get('revision') else None
-                        return self.send(200,group_candidates.report(readings,query['candidates'][0],revision,context=query.get('context',[None])[0]))
+                        def read_candidates():
+                            return group_candidates.report(readings,query['candidates'][0],revision,context=query.get('context',[None])[0])
+                        return self.send(200,candidate_receipts.read(read_candidates) if 'receipt' in query else read_candidates())
                     if 'options' in query:return self.send(200,readings.options(query['options'][0]))
                     if 'group' in query:return self.send(200,readings.detail(query['group'][0]))
                     return self.send(200,readings.groups(query.get('comparison',[None])[0]))
@@ -260,6 +274,8 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     return self.send(200,sets.describe(match[1],revision))
                 if route.startswith('/api/calendar-inspections/'):
                     return self.send(200,inspections.get(route.rsplit('/',1)[-1]))
+                if route.startswith('/api/daily-inspections/'):
+                    return self.send(200,daily_inspections.get(route.rsplit('/',1)[-1]))
                 if route=='/result-review.js':return self.send(200,(root/'static/result-review.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/api/result-review':
                     return self.send(200,result_reviews.latest(query['batch'][0],int(query['index'][0])))
@@ -283,6 +299,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 match=re.fullmatch(r'/api/building-imports/(import_(?:[a-f0-9]{12}|[a-f0-9]{32}))',route)
                 if match:return self.send(200,accdb_import.status(root,match[1]))
                 if route=='/comparison-library.js':return self.send(200,(root/'static/comparison-library.js').read_bytes(),'text/javascript; charset=utf-8')
+                if route=='/comparison-months.js':return self.send(200,(root/'static/comparison-months.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/version-history.js':return self.send(200,(root/'static/version-history.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/input-review.js':return self.send(200,(root/'static/input-review.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/export-history.js':return self.send(200,(root/'static/export-history.js').read_bytes(),'text/javascript; charset=utf-8')
@@ -308,7 +325,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/material-catalog.js':return self.send(200,(root/'static/material-catalog.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/scope-results-viewer.js':return self.send(200,(root/'static/scope-results-viewer.js').read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/input-workflow.js':return self.send(200,(root/'static/input-workflow.js').read_bytes(),'text/javascript; charset=utf-8')
-                if route in ('/material-types.js','/material-inputs.js','/material-registration.js','/material-transfer.js','/research-materials.js','/reference-library.js','/weather-downloads.js','/weather-folder.js','/construction-library.js'):
+                if route in ('/material-types.js','/material-inputs.js','/material-registration.js','/material-transfer.js','/research-materials.js','/composite-materials.js','/reference-library.js','/weather-downloads.js','/weather-folder.js','/construction-library.js'):
                     return self.send(200,(root/'static'/route[1:]).read_bytes(),'text/javascript; charset=utf-8')
                 if route=='/api/reference-library':
                     import reference_library
@@ -389,6 +406,11 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     return self.send(200,(root/name).read_bytes(),'text/plain; charset=utf-8')
                 if route=='/api/health':return self.send(200,dict(version=version,root=str(root),phase='unified_execution',execution_enabled=start_workers,pid=os.getpid()))
                 if route=='/api/comparison-map':return self.send(200,result_exports.map_assets(root))
+                if route=='/api/origin-environment':
+                    from runtime_settings import origin_environment
+                    try:status=dict(available=True,**origin_environment(root))
+                    except (ValueError,OSError) as error:status=dict(available=False,detail=str(error))
+                    return self.send(200,status)
                 match=re.fullmatch(r'/api/execution/(batch_[a-f0-9]{32})/summary',route)
                 if match and query.get('view') in (['recent'],['refresh']):
                     return self.send(200,recent_batches.get(match[1],catalog,force=query['view']==['refresh'],
@@ -405,10 +427,18 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     return
                 match=re.fullmatch(r'/api/comparisons/(comparison_[a-f0-9]{32})/sources',route)
                 if match:return self.send(200,presentation.describe_sources(comparison_results.available(match[1],catalog,root),store,catalog,presentation.batch_index(root)))
-                match=re.fullmatch(r'/api/origin-exports/(origin_[a-f0-9]{32})/RegionalPair\.opju',route)
+                match=re.fullmatch(r'/api/origin-exports/(origin_[a-f0-9]{32})/(Regional(?:Pair|Standard)\.opju|OriginMap\.zip)',route)
                 if match:
                     from origin_exports import project_file
-                    project,_=project_file(root,match[1])
+                    project,receipt=project_file(root,match[1])
+                    if match[2]=='OriginMap.zip' and receipt.get('package_sha256'):
+                        archive=project.with_name(match[2])
+                        if sha(archive)!=receipt['package_sha256']:return self.error(409,'工程包校验未通过。')
+                        with archive.open('rb') as stream:
+                            self.send_headers(200,'application/zip',os.fstat(stream.fileno()).st_size)
+                            shutil.copyfileobj(stream,self.wfile,1024*1024)
+                        return
+                    if project.name!=match[2]:return self.error(404,'工程样式不匹配。')
                     return self.send(200,project.read_bytes(),'application/octet-stream')
                 match=re.fullmatch(r'/api/comparison-exports/(comparison_export_[a-f0-9]{32})/([^/]+)',route)
                 if match:
@@ -445,6 +475,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     if revision.isdigit():revision=int(revision)
                     return self.send(200,get_note(store,route.removeprefix('/api/version-notes/'),revision))
                 if route=='/api/bootstrap':
+                    from region_plan_derivation import daily_navigation,plan_origins
                     from material_types import support_paths
                     from workspace_setup import status as setup_status
                     from version_notes import listing as note_listing
@@ -453,7 +484,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     proof_path=root/'verification/acceptance.json'
                     observed=coverage_registry(root)
                     return self.send(200,dict(version=version,token=token,material_support=support_paths(),version_notes=note_listing(store),workspace=setup_status(root,catalog),records=[dict(summary(r),**metadata[r['id']],research_set=owners.get(r['id'])) for r in records],
-                        capability_guide=capability_summary.factors(catalog),sites=catalog['sites'],ordinary_weather_sites={k:v['site']['id'] for k,v in catalog.get('ordinary_buildings',{}).items()},climate_classes=catalog['global_bundle']['classes'],imported_at=catalog['created'],source_summary=catalog['global_bundle']['summary'],
+                        regional_plan_origins=plan_origins(store),regional_daily_plans=daily_navigation(store,records),capability_guide=capability_summary.factors(catalog),sites=catalog['sites'],ordinary_weather_sites={k:v['site']['id'] for k,v in catalog.get('ordinary_buildings',{}).items()},climate_classes=catalog['global_bundle']['classes'],imported_at=catalog['created'],source_summary=catalog['global_bundle']['summary'],
                         comparisons=comparison_library.describe(store,index),coverage_comparisons=observed['comparisons'],adjacent_comparisons=observed.get('adjacent_comparisons',[]),verification=read_json(proof_path) if proof_path.exists() else None,
                         model_verification=read_json(root/'verification/model-input-parity.json') if (root/'verification/model-input-parity.json').exists() else None,
                         control_policy={k:catalog.get('dynamic_registry',{}).get('policy',{})[k] for k in ('cold_C','hot_C','flux_deadband_W_m2','minimum_hold_minutes') if k in catalog.get('dynamic_registry',{}).get('policy',{})},
@@ -632,7 +663,28 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/api/comparison-site-step':
                     from comparison_steps import choose
                     return self.send(200,choose(root,catalog,body))
+                if route=='/api/material-response/floor-plan':
+                    from spectral_response import response_floor_plan
+                    return self.send(200,response_floor_plan(root,body))
+                if route=='/api/material-response/switches':
+                    from wall_switches import read
+                    return self.send(200,read(root,body))
+                if route=='/api/probe-transfer':
+                    from probe_transfer import handle
+                    return self.send(200,handle(root,catalog,store,body))
+                if route=='/api/material-response/supplement':
+                    from observation_followup import resolve
+                    return self.send(200,resolve(root,body))
+                if route=='/api/material-response/workbook':
+                    from response_workbook import workbook
+                    return self.send(200,workbook(body),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                if route=='/api/material-response/spectral':
+                    from spectral_response import response
+                    return self.send(200,response(root,body))
                 if route=='/api/material-response':
+                    if 'batch' in body:
+                        from stack_response import read
+                        return self.send(200,read(root,body['batch'],body['index'],body['wall'],body['layer'],body['date']))
                     from material_response import comparison_response
                     return self.send(200,comparison_response(catalog,root,body))
                 if route=='/api/comparison-results':
@@ -721,6 +773,11 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     from material_catalog import legacy_feedback_options
                     record=store.draft_payload(store.get(body['id'],body['revision']),body.get('changes',{}))
                     return self.send(200,legacy_feedback_options(record,catalog))
+                if route=='/api/material-library/stack-feedback':
+                    from composite_materials import configure_feedback
+                    record=store.update_payload(store.get(body['id'],body['revision']),body.get('changes',{}))
+                    result=configure_feedback(record,body.get('layer_number'),body['targets'])
+                    return self.send(200,dict(controls=result['factors']['condition']['controls'],numerics=result['numerics']))
                 if route in ('/api/material-library/wall-inventory','/api/material-library/wall-scope'):
                     import drawing_wall_scope as ws
                     record=store.update_payload(store.get(body['id'],body['revision']),body.get('changes',{}))
@@ -766,6 +823,9 @@ def make_server(root=ROOT,port=None,start_workers=False):
                         base,_,_=building_configuration.baseline(catalog,building_id=content.get('building_id'));building_configuration.validate_content(content,base)
                     elif kind=='material':
                         from material_catalog import normalize_library_material
+                        if content.get('model')=='layer_stack_v1' and body.get('assemble') is True:
+                            from composite_materials import resolve
+                            content=resolve(content,Library(root))
                         content=normalize_library_material(content)
                     else:raise ValueError('组件类型不受支持。')
                     return self.send(201,Library(root).save(kind,body['name'],content,body.get('parent'),example_origin=body.get('example_origin')))
@@ -787,6 +847,9 @@ def make_server(root=ROOT,port=None,start_workers=False):
                 if route=='/api/reference-readiness/daily-preparation':
                     record=store.update_payload(store.get(body['id'],body['revision']),body.get('changes',{}))
                     return self.send(200,daily_workflow.enrich(daily_reference.build(record,catalog,root),record,catalog,root))
+                if route=='/api/daily-inspections':
+                    record=store.update_payload(store.get(body['id'],body['revision']),body.get('changes',{}))
+                    return self.send(200,daily_inspections.start(record,current(root)))
                 if route=='/api/reference-readiness/daily-restore':
                     return self.send(200,daily_workflow.restore(root,store.get(body['id'],body['revision']),body['review_id'],body['plan_sha256'],body['record_sha256']))
                 if route=='/api/reference-readiness/daily-freeze':
@@ -818,9 +881,30 @@ def make_server(root=ROOT,port=None,start_workers=False):
                     if action in ('preview-design-cell','confirm-design-cell'):
                         from design_derivation import resolve_cell
                         return self.send(200,resolve_cell(store,body,confirm=action=='confirm-design-cell'))
+                    if action=='collect-answer':return self.send(200,group_candidates.collect_answer(readings,body))
+                    if action=='question-designs':
+                        from comparison_designs import question_designs
+                        return self.send(200,candidate_receipts.read(lambda:question_designs(readings,body)) if body.get('receipt') else question_designs(readings,body))
+                    if action=='preview-design-regions':
+                        from design_regions import preview as region_preview
+                        return self.send(200,candidate_receipts.read(lambda:region_preview(readings,body)))
+                    if action=='list-design-region-groups':
+                        from design_regions import saved_groups
+                        return self.send(200,dict(groups=saved_groups(store,body.get('id'))))
+                    if action=='derive-design-region-group':
+                        from design_regions import derive
+                        return self.send(200,derive(readings,body))
+                    if action=='inspect-design-region-member':
+                        from design_regions import local_member
+                        return self.send(200,candidate_receipts.read(lambda:local_member(readings,body)))
+                    if action in ('preview-region-plans','derive-region-plans'):
+                        from region_plan_derivation import derive_plans
+                        if action=='preview-region-plans':
+                            return self.send(200,candidate_receipts.read(lambda:derive_plans(readings,body)))
+                        return self.send(200,derive_plans(readings,body,confirm=True))
                     if action=='inspect-design':
                         from comparison_designs import coverage
-                        return self.send(200,coverage(readings,body))
+                        return self.send(200,candidate_receipts.read(lambda:coverage(readings,body)) if body.get('receipt') else coverage(readings,body))
                     if action=='save-design':
                         from comparison_designs import save
                         return self.send(200,save(store,body))
@@ -923,7 +1007,7 @@ def make_server(root=ROOT,port=None,start_workers=False):
     server.disk_observer=observer
     close_server=server.server_close
     def close_with_inspections():
-        inspections.close();input_jobs.close();bulk_reviews.close();result_reviews.close();set_runs.close();close_server()
+        inspections.close();daily_inspections.close();input_jobs.close();bulk_reviews.close();result_reviews.close();set_runs.close();close_server()
     server.server_close=close_with_inspections
     return server
 

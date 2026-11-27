@@ -18,8 +18,15 @@ from review_evidence import reviewed
 
 def baseline(record):
     r = copy.deepcopy(record)
+    r.get('execution',{}).pop('stack_response',None)
+    r.get('execution',{}).pop('wall_observations',None)
     from surface_materials import restore_reference_step
     restore_reference_step(r)
+    if any(d.get('model')=='layer_stack_v1' for d in r['factors']['materials'].get('definitions',[])):
+        optical=next((c for c in r['factors']['condition']['controls'] if c['channel']=='orientation'),{})
+        if 'calendar_step_minutes' in optical:
+            from composite_materials import calendar_step
+            r['numerics']['step_minutes']=calendar_step(optical)
     if r['provenance']['adapter'] not in ('global_frozen_v011', 'ordinary_building_v1'):
         raise ValueError('该旧动态来源尚未接通独立原构造参考转换；保留原绑定，不能直接移植到新地点。')
     m = r['factors']['materials']

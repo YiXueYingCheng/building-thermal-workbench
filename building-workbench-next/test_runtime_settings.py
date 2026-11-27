@@ -91,6 +91,22 @@ class RuntimeSettingsTests(unittest.TestCase):
         self.assertEqual(selected, self.root / 'plot environment/python.exe')
         probe.assert_called_once_with(str(selected), ('numpy', 'matplotlib'))
 
+    def test_origin_probes_the_workspace_module_dir_and_reports_dll_errors(self):
+        self.value['plot_python']=sys.executable
+        self.save()
+        modules=self.root/'data/origin-python'
+        modules.mkdir(parents=True)
+        (modules/'originpro.py').write_text("import OriginExt",encoding='utf8')
+        (modules/'OriginExt.py').write_text("raise ImportError('incompatible test DLL')",encoding='utf8')
+        with self.assertRaisesRegex(ValueError,'incompatible test DLL') as error:
+            settings.origin_environment(self.root)
+        self.assertIn(str(Path(sys.executable).resolve()),str(error.exception))
+        self.assertIn('plot_python',str(error.exception))
+        (modules/'OriginExt.py').write_text("__version__='test'",encoding='utf8')
+        result=settings.origin_environment(self.root)
+        self.assertEqual(Path(result['executable']),Path(sys.executable))
+        self.assertEqual(set(result['modules']),{'numpy','OriginExt','originpro'})
+
     def test_import_converter_uses_explicit_bundled_path(self):
         from accdb_import import backend
         self.assertEqual(backend(self.root), self.root.parent / 'dependencies/dest_compatibility')

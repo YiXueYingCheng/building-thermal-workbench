@@ -1,16 +1,62 @@
 """Questions and the next missing comparison for one selected set or reading collection."""
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
+from threading import Lock
+from pathlib import Path
+from uuid import uuid4
+import sqlite3
 from copy import deepcopy
 
 import pair_archives
 from comparison_reading import verified_export
 from comparison_results import choice_index, compatible, finite, pair_reason
-from foundation import digest, owned, read_json
+from foundation import canonical, digest, loads, now, owned, read_json
 from pair_evidence import archive_alternative, building_key, fixed_optics_candidate, needs_pair_archive, pin, read
 from research_sets import require
 
 STEPS = [('baseline','fixed'), ('fixed','flip'), ('flip','feedback')]
 SINGLE = {'application','orientation','feedback','calendar_feedback','fixed_thermal_state','room_usage'}
+
+
+class CandidateReceipts:
+    """Bounded metadata receipts for reading. Submission and collection always verify afresh."""
+    def __init__(self,root):
+        self.root=Path(root)
+        self.entries=OrderedDict()
+        self.lock=Lock()
+
+    def sources(self):
+        from navigation_lists import database_files
+        paths=database_files(self.root,'drafts.sqlite','components.sqlite','execution/preparations.sqlite','execution/queue.sqlite')
+        data=self.root/'data'
+        return paths+[data/n for n in ('current.json','coverage-results','coverage-results/index.json',
+                                       'research-set-exports','execution/reviews','model-inputs','history-locations/index.json','output-storage.json')]
+
+    def read(self,loader):
+        from inspection_io import reading
+        from recent_batch_views import file_marks
+        before=file_marks(self.sources())
+        with reading() as reads:
+            result=loader()
+            files=file_marks(set(reads.hashes)|set(reads.paths))
+            bindings=tuple(reads.values.values())
+        if before is None or files is None or before!=file_marks(before) or files!=file_marks(files):
+            return dict(result,read_receipt=None)
+        token=uuid4().hex
+        with self.lock:
+            self.entries[token]=(before|files,bindings)
+            if len(self.entries)>64:self.entries.popitem(last=False)
+        return dict(result,read_receipt=token)
+
+    def valid(self,token):
+        from recent_batch_views import file_marks
+        with self.lock:entry=self.entries.get(token)
+        if not entry:return False
+        marks,bindings=entry
+        try:
+            return marks==file_marks(marks) and all(get()==expected for get,expected,_ in bindings)
+        except (OSError,sqlite3.Error,ValueError):
+            return False
+
 
 
 def key(ref):
@@ -74,13 +120,14 @@ def scoped_gap(data, scope):
         sites = [s for s in data['excluded'] if s['site'] in scope and s['site'] in target_sites and s['site'] in ready['accepted']
                  and s['reason']=='缺少一侧结果或未在该侧范围内']
         if sites:
-            return dict(side='研究侧' if i==0 else '参考侧',places=[r['city'] for r in sites],count=len(sites))
+            return dict(side='研究侧' if i==0 else '参考侧',sites=[r['site'] for r in sites],places=[r['city'] for r in sites],count=len(sites))
     return None
 
 
 def proposal(data, relation, gap, gain, basis, title=None):
     return dict(question=title or data['question']['text'],metric=data['metric'],period=data['periods'][0],
-                sides=data['sides'],relation=relation,gap=gap,gain=gain,basis=basis)
+                sides=data['sides'],relation=relation,gap=gap,gain=gain,basis=basis,
+                scope=sorted({r['site'] for r in data['sites']+data['excluded']}),mode=data['mode'],steps=data['steps'])
 
 
 def member_answers(reader, group, relations, index, notices):
@@ -291,14 +338,17 @@ def feedback_followup(reader, group, answers, pending, index, notices):
             if len(compatible_groups)!=1:
                 continue
             match=next(iter(compatible_groups.values()))
+        if 'feedback' not in match['members'] or {key(a),key(b)}!={
+                key(match['members'][role]['record']) for role in ('flip','feedback')}:
+            continue
         special=fixed_optics_candidate(a,b,catalog,root,group=match,index=index)
         if not special:
             continue
         scope={r['site'] for r in data['sites']}
         comp=special.get('evidence')
         title='固定 A 组光学参数时，按反馈调节热阻会怎样改变显热需求？'
-        basis='同一光学切换日历下，已有结果能单独比较启用热阻调节的影响。'
-        gain='可以比较固定 A 和季节光学切换两种条件下，热阻调节分别改变了多少供暖与制冷需求。'
+        basis='已有对照测出了季节光学切换时的反馈效果。固定 A 的对照可检验这个结论是否也适用于全年固定表面参数。'
+        gain='先量出固定 A 时，启用反馈使供暖、制冷和合计各改变多少。再与同地点的季节光学切换结果对照，就能判断哪种光学策略下反馈的作用更大，以及差多少。'
         if comp:
             if comp['condition']!=data['condition']:
                 notices.append('固定光学参数与日历工况的结果条件存在差异，请单独核对。')
@@ -308,19 +358,23 @@ def feedback_followup(reader, group, answers, pending, index, notices):
                       excluded=[s for s in comp['excluded'] if s['site'] in scope])
             if relation:
                 pending[:]=[e for e in pending if e['relation']!=relation]
-            sig={(key(s['ref']),s['source']) for s in comp['sides']}
-            if comp['sites'] and not any({(key(s['ref']),s['source']) for s in e['data']['sides']}==sig and
+            sig=[(key(s['ref']),s['source']) for s in comp['sides']]
+            if comp['sites'] and not any([(key(s['ref']),s['source']) for s in e['data']['sides']]==sig and
                                          e['data']['metric']==comp['metric'] for e in answers):
                 answers.append(dict(data=comp,relation=relation,origin='匹配到已有方案'))
             gap=scoped_gap(comp,scope)
             if gap:
-                return proposal(comp,relation,gap,gain,basis,title)
+                return dict(proposal(comp,relation,gap,gain,basis,title),basis_entry=entry)
+            if comp['sites']:
+                return dict(proposal(comp,relation,None,gain,basis,title),basis_entry=entry,answer=comp)
             if comp['excluded']:
                 if not any(e['relation']==relation and relation for e in pending):
                     pending.append(dict(data=comp,relation=relation,origin='匹配到已有方案'))
+                return dict(proposal(comp,relation,None,gain,basis,title),basis_entry=entry,waiting=comp['excluded'][0]['reason'])
         else:
             return dict(question=title,gain=gain,basis=basis,gap=None,relation=None,metric='total',period=data['periods'][0],
-                          sides=[],draft=True)
+                          sides=[],draft=True,basis_entry=entry,design_target=dict(left=special['left'],recipe=special['target_recipe'],rules=special['target_rules']),
+                          scope=sorted(scope),mode=data['mode'],steps=data['steps'])
 
     return None
 
@@ -335,18 +389,83 @@ def saved_followup(pending):
         gap=scoped_gap(data,{r['site'] for r in data['excluded']})
         if gap:
             possibilities.append((gap['count'],proposal(data,entry['relation'],gap,
+                '可以逐间比较所选时段内两种设置的室温差异。' if data['metric']=='temperature' else
                 {'application':'可以量化这一铺设方案对供暖和制冷需求的整体影响。',
                  'orientation':'可以量化热阻设置相同时，改变表面光学策略带来的需求变化。',
                  'feedback':'可以量化表面光学参数固定时，调节热阻带来的需求变化。',
                  'calendar_feedback':'可以量化共用光学切换日历时，调节热阻带来的需求变化。',
                  'fixed_thermal_state':'可以量化在同一表面光学策略下，采用两种固定材料状态的需求差异。',
                  'room_usage':'可以比较这两套房间使用配置对选定指标的整体影响。'}[data['question']['kind']],
-                '已有一侧通过核验，取得另一侧同条件结果后即可比较。')))
+                '这组只改变一项研究设置，一侧已有核验结果。在满足这两个条件的候选里，这组所缺的地点算例最少。')))
     if possibilities:
         priority=min(possibilities,key=lambda item:item[0])[1]
         pending[:]=[e for e in pending if e['data']['sides']!=priority['sides'] or e['data']['metric']!=priority['metric']]
         return priority
     return None
+
+
+def thermal_strategy_tables(store, answers):
+    """Join three verified pairs only when each shared observation is identical."""
+    from comparison_reading import installation
+    by_scope = defaultdict(dict)
+    for i, entry in enumerate(answers):
+        data = entry['data']
+        kind = data['question']['kind']
+        if (kind not in ('fixed_thermal_state', 'calendar_feedback', 'feedback')
+                or data['mode'] != 'controlled' or data['metric'] != 'total'
+                or len(set(data['steps'])) != 1 or data['periods'][0] != data['periods'][1]
+                or any(side['ambiguous'] for side in data['sides'])):
+            continue
+        for row in data['sites']:
+            # Include version and source explicitly for older export evidence keys.
+            nodes = tuple((key(side['ref']), side['source'], fingerprint, tuple(values))
+                          for side, fingerprint, values in zip(data['sides'], row['keys'], row['values']))
+            scope = row['site'], data['condition'], tuple(data['periods'][0]), data['steps'][0]
+            edges = by_scope[scope]
+            pair = frozenset(nodes)
+            if len(pair) == 2 and (pair not in edges or (entry['relation'] and row.get('monthly_sources'))):
+                edges[pair] = (kind, nodes, i, row['city'])
+
+    labels = {}
+    tables = []
+    for (site, condition, period, step), edges in by_scope.items():
+        neighbours = defaultdict(set)
+        for kind, (left, right), _, _ in edges.values():
+            if kind != 'fixed_thermal_state':
+                neighbours[left].add(right)
+                neighbours[right].add(left)
+        for kind, (left, right), _, city in edges.values():
+            if kind != 'fixed_thermal_state':
+                continue
+            for feedback in sorted(neighbours[left] & neighbours[right]):
+                nodes = [left, right, feedback]
+                members = []
+                for node in nodes:
+                    ref = dict(id=node[0][0], revision=node[0][1])
+                    if node[0] not in labels:
+                        try:
+                            record = store.study_record(ref)
+                        except KeyError:
+                            labels[node[0]] = (None, '')
+                        else:
+                            labels[node[0]] = (installation(record), record['name'])
+                    app, name = labels[node[0]]
+                    if not app or app['thermal']['mode'] != ('feedback' if node == feedback else 'fixed'):
+                        break
+                    label = '按反馈调节热阻' if node == feedback else '固定'+app['state']
+                    members.append(dict(ref=ref, name=name, label=label, values=node[3]))
+                if len(members) != 3:
+                    continue
+                pairs = []
+                for first, second in ((left,right),(left,feedback),(right,feedback)):
+                    _, (a,b), index, _ = edges[frozenset((first,second))]
+                    pairs.append(dict(left=nodes.index(a), right=nodes.index(b), answer=index))
+                optical = app['optical']
+                optics = '同一光学切换日历' if optical['mode']=='calendar' else '固定 '+optical['face_id']+' 面'
+                tables.append(dict(id=digest([site,condition,sorted((n[:3] for n in nodes),key=canonical)]), site=site, city=city,
+                                   period=period, step=step, optics=optics, material=app['material'],
+                                   members=members, pairs=pairs))
+    return tables
 
 
 def report(reader, ident, revision=None, *, context=None):
@@ -398,5 +517,61 @@ def report(reader, ident, revision=None, *, context=None):
         else:
             add_neighbours(reader,info,relations,index,answers,pending)
             priority=feedback_followup(reader,group,answers,pending,index,notices) or saved_followup(pending)
-    return dict(name=group['name'] if group else info['name'],revision=group['revision'] if group else None,
-                answers=answers,priority=priority,pending=pending,member_review=member_review,notices=list(dict.fromkeys(notices)))
+    # Bind the confirmation to the exact direction, coverage and evidence the user read.
+    for item in answers:
+        evidence=item['data']
+        if evidence['sites'] and not evidence.get('export') and not any(s['ambiguous'] for s in evidence['sides']):
+            item['collection_token']=digest([ident,revision,context,(info.get('membership') or {}).get('revision'),item['relation'],evidence])
+    answered=None
+    if priority and priority.get('answer'):
+        entry=next((x for x in answers if x.get('collection_token') and
+                    [s['ref'] for s in x['data']['sides']]==[s['ref'] for s in priority['sides']] and
+                    x['data']['sites']==priority['answer']['sites']),None)
+        if entry:
+            priority['collection_token']=entry['collection_token']
+            priority['collected']=entry['origin']=='已收录'
+        answered=priority
+        priority=saved_followup(potential if member_review else pending)
+    # Point to the exact verified comparison used in this report, including its saved direction.
+    for item in (priority,answered):
+        if item and 'basis_entry' in item:
+            evidence=item.pop('basis_entry')
+            item['basis_answer']=next(i for i,row in enumerate(answers) if row is evidence)
+    return dict(answered_followup=answered,name=group['name'] if group else info['name'],revision=group['revision'] if group else None,
+                answers=answers,thermal_tables=thermal_strategy_tables(store,answers),
+                priority=priority,pending=pending,member_review=member_review,notices=list(dict.fromkeys(notices)))
+
+
+def collect_answer(reader,body):
+    """Explicit confirmation of one already-read candidate, including a version outside the set."""
+    ident=body['group']
+    token=body.get('token')
+    require(isinstance(token,str) and len(token)==64,'请重新打开追问并核对结果。')
+    revision=body.get('revision')
+    result=report(reader,ident,revision,context=body.get('context'))
+    entry=next((x for x in result['answers'] if x.get('collection_token')==token),None)
+    require(entry is not None,'对照的版本、来源或结果已变化，请重新核对后收录。')
+    data=dict(entry['data'])
+    left,right=[s['ref'] for s in data['sides']]
+    metric=data['metric']
+    relation=entry['relation'] or 'comparison_'+digest(['topic-pair',left,right,metric])[:32]
+    a,b=[reader.store.study_record(ref) for ref in (left,right)]
+    name=data.get('name') or (a['name']+' → '+b['name'])[:100]
+    data.update(comparison=relation,name=name,building=a['factors']['building']['name'],building_key=building_key(a))
+    sig=digest([left,right,metric,data['mode'],[s['source'] for s in data['sides']]])
+    rel=dict(id=relation,name=name,left=left,right=right,metric=metric)
+    with reader.store.connect() as db:
+        db.execute('BEGIN IMMEDIATE')
+        if result['member_review']:
+            from theme_groups import latest
+            require(latest(db,ident)['revision']==result['member_review']['revision'],'集内成员已变化，请重新核对。')
+        row=db.execute('SELECT payload FROM comparisons WHERE id=?',(relation,)).fetchone()
+        if row:
+            current=loads(row[0])
+            require(all(current[k]==rel[k] for k in ('left','right','metric')),'原对照已经变化，请重新核对。')
+        else:
+            require(not entry['relation'],'原对照已移除，请重新核对。')
+            db.execute('INSERT INTO comparisons VALUES(?,?,?)',(relation,canonical(dict(rel,created=now())),now()))
+        reader.store._pin_members(db,rel)
+        added=reader.save_link(db,ident,sig,data)
+    return dict(group=ident,entry=sig,added=added)

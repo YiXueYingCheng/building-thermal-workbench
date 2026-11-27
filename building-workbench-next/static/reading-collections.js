@@ -451,7 +451,7 @@ async function showReadingGroup(origin,id,message='',focusEntry=null,revision=nu
   });
   body.querySelectorAll('[data-read-config]').forEach(btn=>btn.onclick=async e=>{
    e.stopPropagation();const row=rows.find(r=>'link-'+r.id===btn.closest('.reading-entry').id);
-   try{await openReadingComparison(btn,row);}catch(error){notice(error.message);}
+   try{await openReadingComparison(btn,row);}catch(error){notice(error.message,'error');}
   });
  }catch(e){body.textContent=e.message;}
 }
@@ -463,7 +463,7 @@ async function listReadingGroups(origin) {
   if(!page.isConnected)return;
   body.innerHTML=rows.length?'<div class="collection-library">'+rows.map(row=>'<button class="collection-library-row" data-group="'+esc(row.id)+'"><strong>'+esc(row.name)+'</strong><small>'+esc([row.kind==='calculation'?row.member_count+' 个成员 · 组版本 '+row.revision:'',row.count?row.count+' 条已收录对照':''].filter(Boolean).join(' · '))+'</small><span aria-hidden="true">→</span></button>').join('')+'</div>':'<p>可从「建立对比集」选择方案版本或已有对照。</p>';
   body.querySelectorAll('[data-group]').forEach((btn,i)=>btn.onclick=()=>{
-   if(rows[i].kind==='calculation'){RS.manage=false;rsOpen(rows[i].id).catch(e=>notice(e.message));}
+   if(rows[i].kind==='calculation'){RS.manage=false;rsOpen(rows[i].id).catch(e=>notice(e.message,'error'));}
    else showReadingGroup(page,rows[i].id);
   });
  }catch(e){body.textContent=e.message;}
@@ -476,8 +476,8 @@ document.addEventListener('click',event=>{
  if(button.dataset.setPane){
   if(button.getAttribute('aria-pressed')==='true')return;
   const {setPane:pane,setId:id,setRevision}=button.dataset,revision=Number(setRevision);
-  if(pane==='saved'){void showReadingGroup(button,id,'',null,revision).catch(e=>notice(e.message));return;}
-  rsShowSetPane(id,revision,pane).catch(e=>notice(e.message));return;
+  if(pane==='saved'){void showReadingGroup(button,id,'',null,revision).catch(e=>notice(e.message,'error'));return;}
+  rsShowSetPane(id,revision,pane).catch(e=>notice(e.message,'error'));return;
  }
  if(button.hasAttribute('data-return-collection')){returnToReadingGroup();return;}
  if(button.hasAttribute('data-collect-pair')){collectPair(button,button.dataset.collectPair);return;}
@@ -485,9 +485,9 @@ document.addEventListener('click',event=>{
   const [left,right]=JSON.parse(button.dataset.planCandidate);
   S.left=left.id;S.right=right.id;S.compareVersions={left_revision:left.revision,right_revision:right.revision};
   S.resultComparison=null;S.comparisonData=null;S.planComparisonDraft=null;
-  loadComparison().then(()=>{S.view='compare';S.comparePage='config';render();}).catch(e=>notice(e.message));return;
+  loadComparison().then(()=>{S.view='compare';S.comparePage='config';render();}).catch(e=>notice(e.message,'error'));return;
  }
  const origin=button.closest('dialog');
  const opening=button.dataset.readingLibrary?showReadingGroup(origin,button.dataset.readingLibrary):listReadingGroups(origin);
- opening.catch(e=>notice(e.message));
+ opening.catch(e=>notice(e.message,'error'));
 },true);

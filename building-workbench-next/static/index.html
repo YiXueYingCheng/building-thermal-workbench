@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>建筑热环境工作台 · v0.73.15 公开预览版</title>
+  <title>建筑热环境工作台 · v0.73.16 公开预览版</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/workbench-theme.css">
   <script src="/optical-terminology.js" defer></script>
@@ -21,6 +21,7 @@
   <script src="/execution.js" defer></script>
   <script src="/recent-views.js" defer></script>
   <script src="/comparison-results.js" defer></script>
+  <script src="/comparison-months.js" defer></script>
   <script src="/comparison-details.js" defer></script>
   <script src="/batch-results.js" defer></script>
   <script src="/schedules-ui.js" defer></script>
@@ -77,12 +78,14 @@
   <script defer src="/reading-collections.js"></script>
   <script defer src="/group-candidates.js"></script>
   <script defer src="/theme-groups.js"></script>
+  <script defer src="/design-regions.js"></script>
   <script defer src="/comparison-designs.js"></script>
   <script defer src="/material-types.js"></script>
   <script defer src="/material-inputs.js"></script>
   <script defer src="/material-registration.js"></script>
   <script defer src="/material-transfer.js"></script>
   <script defer src="/research-materials.js"></script>
+  <script defer src="/composite-materials.js"></script>
   <script defer src="/reference-library.js"></script>
   <script defer src="/weather-downloads.js"></script>
   <script defer src="/construction-library.js"></script>
@@ -93,18 +96,28 @@
   <script defer src="/plan-deletion.js"></script>
   <script defer src="/study-relations.js"></script>
   <link rel="stylesheet" href="/result-timeline.css">
+  <link rel="stylesheet" href="/stack-response.css">
+  <link rel="stylesheet" href="/spectral-response.css">
   <script defer src="/result-timeline.js"></script>
+  <script defer src="/response-tools.js"></script>
+  <script defer src="/wall-switches.js"></script>
+  <script defer src="/stack-response.js"></script>
+  <script defer src="/spectral-response.js"></script>
+  <script defer src="/wall-observations.js"></script>
+  <script defer src="/probe-transfer.js"></script>
   <script defer src="/result-series.js"></script>
   <script defer src="/drawing-wall-scope.js"></script>
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 26V9l11-4v21M16 12l10-4v18M3 26h25M9 12v2m0 4v2m4-10v2m0 4v2m8-4v2m0 4v2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div class="brand-copy"><strong>建筑热环境工作台</strong><span>建筑 · 材料 · 工况 · 范围</span></div><span class="tag">v0.73.15 · 公开预览版</span></div>
-    <a class="legacy-link" href="http://127.0.0.1:8765" target="_blank" rel="noopener noreferrer">打开原平台 ↗</a>
+    <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 26V9l11-4v21M16 12l10-4v18M3 26h25M9 12v2m0 4v2m4-10v2m0 4v2m8-4v2m0 4v2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div class="brand-copy"><strong>建筑热环境工作台</strong><span>建筑 · 材料 · 工况 · 范围</span></div><span class="tag">v0.73.16 · 公开预览版</span></div>
   </header>
   <div class="phase-line">研究工作区 · 按四因素编辑方案，核对计算安排，比较结果与导出论文数据。</div>
   <nav id="navigation" aria-label="工作区视图"></nav>
-  <div id="message" role="status" aria-live="polite"></div>
+  <div id="operation-feedback" popover="manual" hidden>
+    <div id="message" role="status" aria-atomic="true"></div>
+    <button type="button" aria-label="关闭操作提示" title="关闭提示">×</button>
+  </div>
   <div id="workspace-layout"><aside id="section-navigation" aria-label="本页区块导航" hidden></aside><main id="app"><p>正在读取研究方案…</p></main></div>
 </body>
 </html>

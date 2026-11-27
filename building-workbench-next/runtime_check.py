@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 from foundation import ROOT, config, digest, owned, read_json
-from runtime_settings import figure_font, python_environment, powershell_environment
+from runtime_settings import figure_font, origin_environment, python_environment, powershell_environment
 
 
 def check(root=ROOT):
@@ -73,6 +73,7 @@ def check(root=ROOT):
     record('Python 与 NumPy', 'startup', lambda: python_environment(cfg['python'], ('numpy',)))
     record('建筑与材料来源目录', 'startup', catalog)
     record('绘图 Python', 'plots', lambda: python_environment(cfg['plot_python'], ('numpy', 'matplotlib')))
+    record('Origin 工程接口（可选）', 'origin_export', lambda: origin_environment(root)['detail'])
     record('中文绘图字体', 'plots', lambda: str(figure_font(root)))
     record('文件选择窗口', 'file_picker', lambda: python_environment(cfg['python'], ('tkinter',)))
     record('DeST 转换程序', 'database_import', converter)

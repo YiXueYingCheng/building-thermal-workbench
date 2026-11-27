@@ -19,25 +19,49 @@ function pdCleanupDetails(plan){
 function pdEvidence(r){
  return `<details><summary>${esc(r.relations.join('、'))} · 查看文件</summary><p class="output-path">${esc(r.source)}</p></details>`;
 }
-function pdTree(i){
+function pdGroups(rows,keyFor){
  const groups=new Map();
- for(const r of i.references){
-  const key=JSON.stringify([r.kind,r.owner_key||r.owner||r.source]);
+ for(const row of rows){
+  const key=keyFor(row);
   if(!groups.has(key))groups.set(key,[]);
-  groups.get(key).push(r);
+  groups.get(key).push(row);
  }
- const branches=Array.from(groups.values(),rows=>{
+ return Array.from(groups.values());
+}
+function pdReferenceBranches(groups){
+ return groups.map(rows=>{
   const r=rows[0],versions=[...new Set(rows.flatMap(row=>row.relations))].join('、');
   return `<li><strong>${esc(r.kind)}</strong> · ${esc(r.label)} · ${esc(versions)}
   ${r.label===r.owner?'':`<div class="output-path">${esc(r.owner)}</div>`}
   ${r.action?relationButton(r.action):''}
   ${rows.map(pdEvidence).join('')}</li>`;
  }).join('');
+}
+function pdObjectBranch(rows){
+ const latest=rows.reduce((a,b)=>a.source_object.revision>b.source_object.revision?a:b);
+ const links=pdGroups(rows,r=>JSON.stringify(r.relations.filter(s=>!s.startsWith('关联计算资料 '))));
+ const versions=links.map(link=>{
+  const sourceRevisions=[...new Set(link.map(r=>r.source_object.revision))].sort((a,b)=>a-b);
+  const relations=link[0].relations.filter(s=>!s.startsWith('关联计算资料 '));
+  const target=relations.map(s=>s.replace(/^方案引用 · (v\d+)$/,'引用本方案 $1')
+   .replace(/^另存／来源追溯 · (v\d+)$/,'来源为本方案 $1')).join('、')||'引用本次计算资料';
+  return '<li>'+sourceRevisions.map(v=>'v'+esc(v)).join('、')+' '+esc(target)+'</li>';
+ }).join('');
+ return `<li><strong>${esc(latest.source_object.kind)} · ${esc(latest.label)}</strong><ul>${versions}</ul>
+ <details><summary>查看引用依据</summary>${rows.map(pdEvidence).join('')}</details></li>`;
+}
+function pdTree(i){
+ const objects=pdGroups(i.references.filter(r=>r.source_object),r=>r.source_object.id);
+ const archives=pdGroups(i.references.filter(r=>r.history_file),r=>r.history_file);
+ const others=pdGroups(i.references.filter(r=>!r.history_file&&!r.source_object),r=>JSON.stringify([r.kind,r.owner_key||r.owner||r.source,r.owner]));
  const outgoing=i.target.versions.map(v=>`<details open><summary>v${esc(v.revision)} · ${esc(v.name)}</summary>
  <ul>${(v.outgoing||[]).map(r=>`<li>${esc(r.kind)} · ${esc(r.name)}${r.version!=null?' · '+esc(typeof r.version==='number'?'v'+r.version:r.version):''}
  ${r.name!==r.id?`<small>${esc(r.id)}</small>`:''}</li>`).join('')||'<li>无已登记来源</li>'}</ul></details>`).join('');
- return `<section><h3>方案关系树</h3><details open><summary>${i.cleanup?'阻止清理的关联对象':'引用本方案的对象'}（${groups.size}）</summary>
- ${branches?`<ul>${branches}</ul>`:'<p>已核对资料中未发现引用。</p>'}</details>
+ return `<section><h3>方案关系树</h3>
+ ${objects.length?`<h4>引用本方案的方案与日历</h4><ul>${objects.map(pdObjectBranch).join('')}</ul>`:''}
+ ${others.length?`<details open><summary>其他关联对象（${others.length}）</summary><ul>${pdReferenceBranches(others)}</ul></details>`:''}
+ ${archives.length?`<details><summary>历史文件引用（${archives.length}）· 阻止${i.cleanup?'清理':'删除'}</summary><ul>${pdReferenceBranches(archives)}</ul></details>`:''}
+ ${i.references.length?'':'<p>已核对资料中未发现引用。</p>'}
  <details><summary>本方案使用的来源、配置和地点</summary>${outgoing}</details>
  ${i.historical_mentions?.length?`<details><summary>迁入时的历史清单（${i.historical_mentions.length}）</summary><p>记录交接时存在的版本，单独列出供追溯。</p>${i.historical_mentions.map(pdEvidence).join('')}</details>`:''}
  ${i.issues.length?`<details open><summary>尚未核对的资料（${i.issues.length}）</summary><ul>${i.issues.map(x=>`<li class="output-path">${esc(x)}</li>`).join('')}</ul></details>`:''}</section>`;
@@ -57,11 +81,11 @@ function pdBusyMessage(){
  const text=PD.executing?(PD.receipt?'清理已完成，正在刷新方案列表…':'正在重新核对引用，并处理已确认的版本和资料…'):'正在读取版本及关联资料…';
  return `<div class="well" role="status"><strong>${text}</strong> <span data-pd-elapsed role="timer" aria-live="off"></span><div><progress aria-label="操作进行中"></progress></div></div>`;
 }
-function pdDraw(){const d=pdDialog(),i=PD.preview?.inspection,t=i?.target;let body=PD.receipt?pdReceipt(PD.receipt):PD.history?PD.history.length?PD.history.map(r=>`<details><summary>${esc(r.name)} · ${r.removed_versions} 个版本 · ${esc(readableTime(r.completed))}</summary>${pdReceipt(r)}</details>`).join(''):'<p>还没有方案或版本删除记录。</p>':t?`<h3>${esc(t.name)} · ${t.scope==='record'?'整个方案':'版本 '+esc(t.revision)}</h3><p>${esc(i.impact)}</p><p class="muted">核对时间 ${esc(readableTime(PD.preview.created))} · 执行清理前会再次检查引用。 <button data-pd="refresh"${PD.pending?' disabled':''}>重新核对</button></p>${t.versions.length?`<div class="actions"><button data-pd="mode"${PD.pending?' disabled':''}>${i.cleanup?'改为仅删除方案版本':'同时清理专属计算资料'}</button></div>`:''}${i.cleanup?pdCleanupDetails(i.cleanup):''}${i.blocked.length?'<p class="warning" role="alert">'+i.blocked.map(esc).join('；')+'</p>':'<p>本次未发现阻止删除的受管引用。确认前请核对下面范围。</p>'}<h3>本次删除范围</h3>${t.versions.map(v=>`<p>v${esc(v.revision)} · ${esc(v.name)}${t.notes.some(n=>String(n.revision)===String(v.revision))?' · 含当前版本备注':''}</p>`).join('')||'<p>只读来源，无可删除版本。</p>'}<p>${t.latest_after==null?'执行后该方案将不再显示。':t.latest_after!==t.latest_before?'执行后回到 v'+esc(t.latest_after)+'，不改写其内容。':'最新保存版仍为 '+esc(t.latest_after)+'。'} ${t.versions.length?'剩余版本号保持，后续新版本不复用已删除编号。':''}</p>${pdTree(i)}<details><summary>继续保留的资料与检查范围</summary><ul>${i.kept.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul><p>${esc(i.scope_note)}</p></details><label class="check"><input id="pd-confirm" type="checkbox"${PD.pending||i.blocked.length||!t.versions.length?' disabled':''}>${i.cleanup?'我确认清理以上版本、批次和文件，了解恢复需使用已有备份':'我确认仅删除列出的版本及当前备注'}</label>`:'<p role="status">正在核对版本、备注和关联，不删除资料；可以关闭窗口继续查看。</p>';
+function pdDraw(){const d=pdDialog(),i=PD.preview?.inspection,t=i?.target;let body=PD.receipt?pdReceipt(PD.receipt):PD.history?PD.history.length?PD.history.map(r=>`<details><summary>${esc(r.name)} · ${r.removed_versions} 个版本 · ${esc(readableTime(r.completed))}</summary>${pdReceipt(r)}</details>`).join(''):'<p>还没有方案或版本删除记录。</p>':t?`<h3>${esc(t.name)} · ${t.scope==='record'?'整个方案':'版本 '+esc(t.revision)}</h3><p>${esc(i.impact)}</p><p class="muted">核对时间 ${esc(readableTime(PD.preview.created))} · 执行清理前会再次检查引用。 <button data-pd="refresh"${PD.pending?' disabled':''}>重新核对</button></p>${t.versions.length?`<div class="actions"><button data-pd="mode"${PD.pending?' disabled':''}>${i.cleanup?'改为仅删除方案版本':'同时清理专属计算资料'}</button></div>`:''}${i.blocked.length?'<p class="warning" role="alert">'+i.blocked.map(esc).join('；')+'</p>':'<p>本次未发现阻止删除的受管引用。确认前请核对下面范围。</p>'}${pdTree(i)}${i.cleanup?pdCleanupDetails(i.cleanup):''}<h3>本次删除范围</h3>${t.versions.map(v=>`<p>v${esc(v.revision)} · ${esc(v.name)}${t.notes.some(n=>String(n.revision)===String(v.revision))?' · 含当前版本备注':''}</p>`).join('')||'<p>只读来源，无可删除版本。</p>'}<p>${t.latest_after==null?'执行后该方案将不再显示。':t.latest_after!==t.latest_before?'执行后回到 v'+esc(t.latest_after)+'，不改写其内容。':'最新保存版仍为 '+esc(t.latest_after)+'。'} ${t.versions.length?'剩余版本号保持，后续新版本不复用已删除编号。':''}</p><details><summary>继续保留的资料与检查范围</summary><ul>${i.kept.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul><p>${esc(i.scope_note)}</p></details><label class="check"><input id="pd-confirm" type="checkbox"${PD.pending||i.blocked.length||!t.versions.length?' disabled':''}>${i.cleanup?'我确认清理以上版本、批次和文件，了解恢复需使用已有备份':'我确认仅删除列出的版本及当前备注'}</label>`:'<p role="status">正在核对版本、备注和关联，不删除资料；可以关闭窗口继续查看。</p>';
  d.innerHTML=`<header class="viewer-head"><h2 id="pd-title">方案与版本 · ${PD.history?'清理与删除记录':'方案清理预览'}</h2><button data-pd="close"${PD.executing?' disabled':''}>关闭</button></header><div class="mc-preview-body">${PD.error?'<p class="warning" role="alert">'+esc(PD.error)+'</p>':''}${body}</div><footer class="actions">${PD.pending?pdBusyMessage():''}<button data-pd="close"${PD.executing?' disabled':''}>${PD.receipt||PD.history?'完成':'取消，保留全部版本'}</button>${!PD.receipt&&!PD.history?'<button class="primary" data-pd="execute" disabled>'+ (i?.cleanup?'确认清理列出的资料':'确认删除列出的版本')+'</button>':''}</footer>`;if(PD.executing)d.querySelectorAll('button,input,select').forEach(el=>el.disabled=true);if(!d.open)d.showModal();pdClockStart();}
 async function pdPreview(id,revision,cleanup,force=false){
  if(PD.executing)return;
- if(S.dirty||S.usageDirty){notice('当前有未保存编辑，请先保存或撤销，再核对删除。');return;}
+ if(S.dirty||S.usageDirty){notice('当前有未保存编辑，请先保存或撤销，再核对删除。','warning');return;}
  const record=S.boot.records.find(r=>r.id===id);
  const target=JSON.stringify([id,revision??null,record?.revision]);
  if(cleanup===undefined)cleanup=PD.target===target?PD.cleanup:true;

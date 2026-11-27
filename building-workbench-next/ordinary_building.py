@@ -64,7 +64,8 @@ def capability(record,catalog):
    if any(c.get('channel')=='orientation' and c.get('mode')=='calendar' for c in f['condition']['controls']) and not f['condition']['reference_runs']:raise ValueError('等待新版 1 min W00 逐日参考与日历；尚未生成或提交翻面输入。')
   elif {**r['numerics'],'step_minutes':s['numerics']['step_minutes']}!=s['numerics']:raise ValueError('普通建筑需要沿用已登记的引擎及数值设置。')
   if set(f['scope'])-{'site_ids','period','aggregation'}:raise ValueError('范围包含未支持字段。')
-  if any(i!=s['site']['id'] and (catalog['sites'][i].get('source_kind') not in ('reviewed_global','imported_epw_v1') or not catalog['sites'][i].get('eligible')) for i in f['scope']['site_ids']):raise ValueError('所选地点没有可用的登记气象。')
+  from scope_management import scope_value
+  scope_value(f['scope'],catalog)
   resolve(r,catalog,s['usage'])
   if f['building'].get('envelope_overrides'):
    from ordinary_envelope import validate_overrides

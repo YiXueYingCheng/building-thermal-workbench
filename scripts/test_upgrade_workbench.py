@@ -1,5 +1,5 @@
 import copy, importlib.util, json, shutil, sqlite3, tempfile, unittest
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest.mock import patch
 import upgrade_workbench as u
 
@@ -44,6 +44,42 @@ class UpgradeTests(unittest.TestCase):
         (self.old/'building-workbench-next/server.py').write_text('user changes');before=u.scan(self.old)
         with self.assertRaisesRegex(u.UpgradeError,'自行修改'):u.apply(self.new,self.old,self.saved)
         self.assertEqual(u.scan(self.old),before);self.assertFalse(self.saved.exists())
+
+    def test_classic_path_boundary_counts_utf16_and_directory_limit(self):
+        folder=PureWindowsPath('C:/b')
+        prefix=u.path_units(folder)+1
+        name='房'*(259-prefix-2)+'😀'
+        u.check_backup_length(folder,[(name,259,'文件')])
+        with self.assertRaisesRegex(u.UpgradeError,'260 .*259') as caught:
+            u.check_backup_length(folder,[(name+'x',259,'文件')])
+        self.assertIn(str(folder/(name+'x')),str(caught.exception))
+        with self.assertRaisesRegex(u.UpgradeError,'249 .*248'):
+            u.check_backup_length(folder,[('d'*(249-prefix),248,'目录')])
+
+    def test_backup_length_includes_external_files_and_checks_before_copy(self):
+        rel='wx-'+'r'*75+'.bin'
+        (self.out/rel).write_bytes(b'preserve')
+        too_long=self.saved/('b'*max(1,261-u.path_units(self.saved/'external-1'/rel)-1))
+        with patch.object(u,'legacy_windows_paths',return_value=True):
+            with self.assertRaisesRegex(u.UpgradeError,'备份文件路径过长') as caught:
+                u.backup(self.old,too_long)
+        self.assertIn(str(too_long.resolve()/'external-1'/rel),str(caught.exception))
+        self.assertFalse(too_long.exists())
+
+    def test_wizard_offers_short_persistent_location_and_reprompts(self):
+        default=self.old.with_name(self.old.name+'-upgrade-backups')/'fixed'
+        # Independent of the machine running the test, straddle the same file boundary.
+        allowed=u.path_units(default)
+        def check(path,limits):
+            if u.path_units(path)>=allowed:
+                raise u.UpgradeError('备份文件路径过长')
+        with patch.object(u,'legacy_windows_paths',return_value=True),patch.object(u,'stamp',return_value='fixed'),patch.object(Path,'home',return_value=self.root),patch.object(u,'check_backup_length',side_effect=check):
+            with patch('builtins.input',return_value=''):
+                chosen=u.choose_backup(self.old,[self.out],self.new)
+                self.assertEqual(chosen.parent,self.root/'wbup')
+                self.assertFalse(chosen.exists())
+            with patch('builtins.input',side_effect=[str(default),str(self.root/'short')]):
+                self.assertEqual(u.choose_backup(self.old,[self.out],self.new),self.root/'short')
     def test_tampered_source_and_protected_paths_refused(self):
         (self.new/'building-workbench-next/server.py').write_text('tampered')
         with self.assertRaisesRegex(u.UpgradeError,'新包校验'):u.plan(self.new,self.old)

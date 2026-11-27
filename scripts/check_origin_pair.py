@@ -20,24 +20,27 @@ def run(project, output, division, source):
     fingerprint = digest(project)
     output.mkdir(parents=True,exist_ok=True)
     assert op.open(str(project.resolve()),readonly=True)
+    view=json.loads((source/'origin-map.json').read_text(encoding='utf8')) if (source/'origin-map.json').exists() else {'style':'pair'}
+    pair=view['style']=='pair'
     edit = op.find_sheet('w','RegionValues')
     ids = op.find_sheet('m','RegionIDs').to_np2d().astype(int)
-    matrices = [op.find_sheet('m',name) for name in ('RateMap','AreaMap')]
+    matrices = [op.find_sheet('m',name) for name in (('RateMap','AreaMap') if pair else ('DemandMap',))]
     original = [m.to_np2d().copy() for m in matrices]
-    keys = edit.to_list(0)
+    keys = [str(int(k)) if isinstance(k,(int,float)) else str(k) for k in edit.to_list(0)]
     with (source/'map-groups.csv').open(encoding='utf-8-sig',newline='') as stream:
         groups = list(csv.DictReader(stream))
     for group in groups:
         ix=keys.index(group['group'])
-        for c,field in enumerate(['percent','kWh_m2']):
+        for c,field in enumerate(['percent','kWh_m2'] if pair else ['MJ_m2']):
             expected=float(group[field]) if group[field] else np.nan
             assert np.isclose(edit.to_list(c+1)[ix],expected,equal_nan=True)
-    which,region = (0,'Af') if division=='climate' else (1,'BRA')
+    which=1 if pair and division=='country' else 0
+    region={'climate':'Af','country':'BRA','china':'650000'}[division]
     index = keys.index(region)
     target = ids==index+1
     assert target.sum()>0
-    right = op.find_graph('RegionalPair')
-    assert len(right)==2
+    right = op.find_graph('RegionalPair' if pair else 'RegionalStd')
+    assert len(right)==len(matrices)
     right.activate()
     def pixels(suffix):
         path=output/(division+'-'+suffix+'.png')
@@ -52,11 +55,11 @@ def run(project, output, division, source):
     revised = matrices[which].to_np2d()
     assert np.all(revised[target]==new)
     assert np.array_equal(revised[~target],original[which][~target],equal_nan=True)
-    assert np.array_equal(matrices[1-which].to_np2d(),original[1-which],equal_nan=True)
+    if pair:assert np.array_equal(matrices[1-which].to_np2d(),original[1-which],equal_nan=True)
     after = pixels('after')
     delta = np.any(before!=after,axis=2)
     halves = [int(half.sum()) for half in np.array_split(delta,2,axis=1)]
-    assert halves[which]>50 and halves[1-which]==0, halves
+    assert (halves[which]>50 and halves[1-which]==0 if pair else sum(halves)>50), halves
     assert digest(project)==fingerprint
     report=dict(division=division, paired_sites=sum(int(r['sites']) for r in groups),groups=len(groups),
         verified_input_rows=len(groups),region=region,column=('B','C')[which],old=old,new=new,

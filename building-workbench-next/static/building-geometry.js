@@ -11,17 +11,19 @@ function geometryControl(w){
   return (d?.name||a.material_id)+' · '+({exterior:'外侧附加',interior:'内侧',between:'层间'}[a.position]||a.position)+'；'+controls.map(c=>c.channel==='thermal'?(c.mode==='fixed'?'固定 '+(d?.states.find(x=>x.id===c.state_id)?.name||c.state_id):'传热反馈'):(c.mode==='fixed'?'固定 '+c.face_id:'按日历切换表面光学参数')).join('；');
  }).join(' / ');
 }
-function geometrySVG(m){
- const d=m.data,f=d.floors[m.floor],rooms=d.rooms.filter(r=>r.floor===m.floor),walls=d.walls.filter(w=>w.floor===m.floor),targets=geometryTargets();
+function geometrySVG(m,pickable=null){
+ const d=m.data,f=d.floors[m.floor],rooms=d.rooms.filter(r=>r.floor===m.floor),walls=d.walls.filter(w=>w.floor===m.floor),targets=pickable??geometryTargets();
  const [x0,y0,x1,y1]=f.bounds,scale=Math.min(672/Math.max(x1-x0,.01),440/Math.max(y1-y0,.01));
  const px=p=>[54+(672-(x1-x0)*scale)/2+(p[0]-x0)*scale,64+(440-(y1-y0)*scale)/2+(y1-p[1])*scale];
  const points=poly=>poly.map(p=>px(p).map(v=>v.toFixed(3)).join(',')).join(' ');
  const line=(l,cls,extra='')=>`<line class="${cls}" x1="${px(l[0])[0]}" y1="${px(l[0])[1]}" x2="${px(l[1])[0]}" y2="${px(l[1])[1]}" ${extra}/>`;
  const scaleM=[.5,1,2,5,10,20,50].filter(x=>x*scale<=125).at(-1)||.5;
- return `<svg class="geometry-plan" viewBox="0 0 780 570" aria-label="建筑平面，北向朝上。可选择房间与外墙。"><text x="26" y="28" class="geometry-caption">标高 ${format(f.elevation,2)} m · ${rooms.length} 间</text><path d="M742 76V32m-8 14 8-14 8 14" class="geometry-north"/><text x="742" y="22" text-anchor="middle" class="geometry-caption">N 北</text>
- ${rooms.map(r=>`<g role="button" tabindex="0" data-geometry-node="room" data-geometry-id="${esc(r.id)}" aria-label="选择房间 ${esc(geometryRoomName(r))}" aria-pressed="${m.room===r.id}" class="geometry-room ${r.conditioned?'conditioned':'unconditioned'} ${m.room===r.id?'selected':''}">${r.polygons.map(p=>`<polygon points="${points(p)}"/>`).join('')}<title>${esc(geometryRoomName(r))} · ${format(r.area_m2,2)} m² · ${r.conditioned?'空调房':'非空调房'}</title></g>`).join('')}
- ${walls.filter(w=>!w.exterior).map(w=>line(w.line,'geometry-inner')).join('')}
- ${walls.filter(w=>w.exterior).map(w=>`<g role="button" tabindex="0" data-geometry-node="wall" data-geometry-id="${esc(w.id)}" aria-label="选择外墙 ${esc(w.id)}" aria-pressed="${m.wall===w.id}" class="geometry-wall ${targets.has(w.id)?'targeted':''} ${m.wall===w.id?'selected':''}">${line(w.line,'geometry-wall-hit')}${line(w.line,'geometry-wall-visible')}<title>${esc(w.id)} · ${esc(w.direction)} · ${esc(geometryControl(w))}</title></g>`).join('')}
+ const activeWall=w=>pickable?pickable.has(w.id):w.exterior;
+ const roomAttributes=r=>pickable?'':`role="button" tabindex="0" data-geometry-node="room" data-geometry-id="${esc(r.id)}" aria-label="选择房间 ${esc(geometryRoomName(r))}" aria-pressed="${m.room===r.id}"`;
+ return `<svg class="geometry-plan" viewBox="0 0 780 570" aria-label="${pickable?'结果平面，选择标出的墙面':'建筑平面，北向朝上。可选择房间与外墙。'}"><text x="26" y="28" class="geometry-caption">标高 ${format(f.elevation,2)} m · ${rooms.length} 间</text><path d="M742 76V32m-8 14 8-14 8 14" class="geometry-north"/><text x="742" y="22" text-anchor="middle" class="geometry-caption">N 北</text>
+ ${rooms.map(r=>`<g ${roomAttributes(r)} class="geometry-room ${r.conditioned?'conditioned':'unconditioned'} ${m.room===r.id?'selected':''}">${r.polygons.map(p=>`<polygon points="${points(p)}"/>`).join('')}<title>${pickable?esc(r.zone):esc(geometryRoomName(r))+' · '+format(r.area_m2,2)+' m² · '+(r.conditioned?'空调房':'非空调房')}</title></g>`).join('')}
+ ${walls.filter(w=>!activeWall(w)).map(w=>line(w.line,'geometry-inner')).join('')}
+ ${walls.filter(activeWall).map(w=>`<g role="button" tabindex="0" ${pickable?'data-response-wall':'data-geometry-node="wall" data-geometry-id'}="${esc(w.id)}" aria-label="选择外墙 ${esc(w.id)}" aria-pressed="${m.wall===w.id}" class="geometry-wall ${targets.has(w.id)?'targeted':''} ${m.wall===w.id?'selected':''}">${line(w.line,'geometry-wall-hit')}${line(w.line,'geometry-wall-visible')}<title>${esc(w.id)} · ${esc(w.direction)} · ${esc(pickable?w.zone:geometryControl(w))}</title></g>`).join('')}
  ${d.openings.filter(o=>o.floor===m.floor).map(o=>line(o.line,'geometry-opening '+(o.kind==='Window'?'window':'door'))).join('')}
  ${rooms.map(r=>`<text x="${px(r.label)[0]}" y="${px(r.label)[1]}" class="geometry-room-label" text-anchor="middle">${esc(r.zone)}</text>`).join('')}
  <path d="M54 534v8h${scaleM*scale}v-8" class="geometry-scale"/><text x="${54+scaleM*scale/2}" y="560" text-anchor="middle" class="geometry-caption">${scaleM} m</text></svg>`;

@@ -3,6 +3,7 @@
 This module never dispatches, resumes, or changes the acceptance of a simulation.
 """
 from __future__ import annotations
+import calendar
 import math
 from pathlib import Path
 import statistics
@@ -14,6 +15,7 @@ from execution_queue import Queue
 from review_evidence import reviewed
 
 NOTE = '逐地点配对后，按气候类型对有效代表点等权平均；范围为地点最小/最大值，非置信区间。地图将类型均值映射到同类气候区域，不表示逐像元模拟，也不代表全球建筑总量。'
+PERIOD_MISMATCH = '计算时段不同'
 
 
 def comparison(store, ident):
@@ -64,7 +66,7 @@ def available(ident, catalog, root=ROOT):
     return data
 
 
-def historical(record, catalog, root=ROOT):
+def historical(record, catalog, root=ROOT, *, weather_paths=None):
     reader = VerifiedReader(catalog,history_root=root); source = catalog['global_bundle']['historical']['source']
     reader.check(source)
     values = {}; case = record['provenance']['case']
@@ -72,7 +74,9 @@ def historical(record, catalog, root=ROOT):
         if job['case'] != case:
             continue
         for ref in [job['model'], job['weather'], job['result'], *job['dependencies']]:
-            reader.check(ref)
+            path=reader.check(ref)
+            if weather_paths is not None and ref is job['weather']:
+                weather_paths[ref['sha256']]=path
         accepted = job['review_status'].startswith('accepted') and catalog['sites'][job['site_id']]['eligible']
         values[job['site_id']] = dict(status='passed' if accepted else 'review', mode='controlled',
             period=[1,1,12,31], step_minutes=15, days=365, loads=job['annual'], monthly=job['monthly'],
@@ -83,7 +87,14 @@ def historical(record, catalog, root=ROOT):
     return dict(id='historical', kind='reviewed_historical', record_sha256=digest(record), source=source, cases=values)
 
 
-def execution(record, ident, mode, root):
+def spectral_variant(record):
+    materials=record['factors']['materials']['definitions']
+    if len(materials)==1 and materials[0].get('model')=='spectral_exterior_v1':
+        return materials[0]['spectral']['variant']
+    return None
+
+
+def execution(record, ident, mode, root, *, weather_paths=None):
     matches = batch_rows(root,ident)
     if len(matches) != 1:
         raise ValueError('未找到选定批次。')
@@ -116,7 +127,9 @@ def execution(record, ident, mode, root):
             raise ValueError('算例时段或步长与方案版本不一致。')
         reader.check(dict(path=str(owned(folder/c['model_file'],folder)),sha256=c['model_sha256']))
         for path, checksum in c['dependencies'].items():
-            reader.check(dict(path=path,sha256=checksum))
+            actual=reader.check(dict(path=path,sha256=checksum))
+            if weather_paths is not None and path==c['weather']:
+                weather_paths[checksum]=actual
     q = Queue(root)
     with q.db() as db:
         from site_recalculation import links
@@ -125,6 +138,7 @@ def execution(record, ident, mode, root):
     from result_reading import results as readable_results
     results = {r['index']:r for r in readable_results(root,ident)['results']}
     values = {}
+    spectral=spectral_variant(record)
     for c in p['cases']:
         if c['mode'] != mode:
             continue
@@ -145,6 +159,8 @@ def execution(record, ident, mode, root):
             weather_sha256=c['dependencies'][c['weather']],
             evidence=dict(kind='execution',batch_id=ident,index=c['index'],attempt=j['attempt'],identity=c['identity'],
                 result_path=j['result'],result_sha256=j['result_sha256'],model_sha256=c['model_sha256'],scientific_review=review,**({'data_retention':r['data_retention']} if r and r.get('data_retention') else {})))
+        if spectral and r and r.get('output_contract')=='timeseries_timestep_v1':
+            values[sid]['spectral_variant']=spectral
         pinned = input_cases.get((sid, mode))
         if pinned and r:
             scope = read_audit(bundle_dir,pinned).get('drawing_wall_scope')
@@ -189,7 +205,7 @@ def compatible(a, b, mode, metric):
     bo = dict(b['factors']['condition']['operation'],mode=mode)
     if ao != bo: issues.append('建筑运行设置不同')
     if {k:v for k,v in a['numerics'].items() if k!='step_minutes'} != {k:v for k,v in b['numerics'].items() if k!='step_minutes'}: issues.append('引擎或其他数值设置不同')
-    if a['factors']['scope']['period'] != b['factors']['scope']['period']: issues.append('计算时段不同')
+    if a['factors']['scope']['period'] != b['factors']['scope']['period']: issues.append(PERIOD_MISMATCH)
     if metric != 'temperature' and mode != 'controlled': issues.append('负荷比较需要双方温控结果')
     for r in (a,b):
         ag = r['factors']['scope']['aggregation']
@@ -201,7 +217,7 @@ def compatible(a, b, mode, metric):
     return list(dict.fromkeys(issues))
 
 
-def pair_reason(left, right, *, ignore_step=False):
+def pair_reason(left, right, *, ignore_step=False, common_month=False):
     for r in (left,right):
         if r and r.get('choice_error'):return r['choice_error']
     if left is None or right is None: return '缺少一侧结果或未在该侧范围内'
@@ -209,6 +225,7 @@ def pair_reason(left, right, *, ignore_step=False):
         if row['status'] not in ('passed','reused'):
             return label+'侧'+{'review':'待复核','pending':'待计算','running':'计算中','failed':'失败','interrupted':'中断','cancelled':'已取消'}.get(row['status'],'无有效结果')
     for key,label in [('weather_sha256','气象'),('period','时段'),('step_minutes','求解步长'),('mode','运行模式'),('days','覆盖天数')]:
+        if common_month and key in ('period','days'):continue  # Each original period is checked independently.
         if key=='step_minutes' and ignore_step:continue
         if left.get(key) != right.get(key):
             if key=='step_minutes':return f"求解步长不一致（参考 {left.get(key)} min，研究 {right.get(key)} min）"
@@ -220,6 +237,59 @@ def finite(value):
     if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value):
         raise ValueError('结果含缺失或非有限数值。')
     return value
+
+
+def load_changes(left, right, area):
+    values = {}
+    for key in ('heating', 'cooling', 'total'):
+        lv, rv = (finite(side[key+'_kWh']) for side in (left, right))
+        delta = lv - rv
+        values.update({f'left_{key}_kWh':lv, f'right_{key}_kWh':rv, f'{key}_saved_kWh':delta,
+                       f'{key}_saved_MJ_m2':delta*3.6/area if area else None,
+                       f'{key}_saved_percent':delta/lv*100 if lv else None})
+    return values
+
+
+def common_month_results(periods, sources, sites, area):
+    from output_resolution import days
+    months = []
+    for month in range(1, 13):
+        last = calendar.monthrange(2025, month)[1]
+        if not all(p[:2] <= [month, 1] and [month, last] <= p[2:] for p in periods):
+            continue
+        site_results = []
+        for site in sites:
+            rows = [s['cases'].get(site['id']) for s in sources]
+            reason = pair_reason(*rows, common_month=True)
+            if not site.get('eligible', True):
+                reason = '来源地点暂缓接受'
+            selected = []
+            for label, row, period in zip(('参考', '研究'), rows, periods):
+                if reason:
+                    break
+                if row.get('period') != period or row.get('days') != days(period):
+                    reason = label+'侧原始时段或覆盖天数未核实'
+                elif (not row.get('weather_sha256') or row.get('mode') != 'controlled'
+                      or type(row.get('step_minutes')) is not int or row['step_minutes'] <= 0):
+                    reason = label+'侧缺少已核实的气象、温控模式或步长'
+                else:
+                    matches = [m for m in (row.get('monthly') or []) if m.get('month') == month]
+                    if len(matches) != 1:
+                        reason = f'{label}侧缺少唯一的 {month} 月负荷记录'
+                    else:
+                        selected.append(matches[0])
+            values = {}
+            if not reason:
+                try:
+                    values = load_changes(*selected, area)
+                except (KeyError, ValueError):
+                    reason = '所选月供暖、制冷或合计值缺失或无效'
+            site_results.append(dict(site_id=site['id'], city=site['name'], reason=reason,
+                                     left_step_minutes=(rows[0] or {}).get('step_minutes'),
+                                     right_step_minutes=(rows[1] or {}).get('step_minutes'), **values))
+        months.append(dict(month=month, days=last, sites=site_results,
+                           paired_sites=sum(not r['reason'] for r in site_results)))
+    return dict(left_period=periods[0], right_period=periods[1], months=months)
 
 
 def aggregate(sites, metadata):
@@ -257,7 +327,38 @@ def pairing_summary(label,sites,metric):
     return row
 
 
-def assemble(rel, a, b, left, right, catalog, mode, *, waivers=None):
+def paired_station_geography(meta, left, right, catalog, weather_paths):
+    """Fill an unmapped site's location only from the weather shared by this pair."""
+    expected = left.get('weather_sha256')
+    if not expected or expected != right.get('weather_sha256'):
+        return {}
+    path = weather_paths.get(expected)
+    if not path:
+        # Observed snapshots may retain only the EPW digest.
+        ref = meta.get('weather') or {}
+        if not ref.get('path') or ref.get('sha256') != expected:
+            return {}
+        from source_locations import resolve
+        try:
+            actual, _ = resolve(ref,catalog)
+        except (OSError, ValueError):
+            return {}
+        path = actual['path']
+        from inspection_io import current
+        reads = current()
+        if reads is not None:
+            from navigation_cache import stamps
+            def weather_stamp():
+                try:
+                    return stamps([path])
+                except OSError:
+                    return None
+            reads.watch_value(('map_weather',str(path)),weather_stamp,weather_stamp())
+    from weather_quality import station_geography
+    return station_geography(path,expected)
+
+
+def assemble(rel, a, b, left, right, catalog, mode, *, waivers=None, weather_paths=None):
     waivers=waivers or {}
     metric = rel['metric']; issues = compatible(a,b,mode,metric)
     area = a['factors']['building'].get('conditioned_area_m2')
@@ -278,7 +379,16 @@ def assemble(rel, a, b, left, right, catalog, mode, *, waivers=None):
             left_status=l['status'] if l else 'missing',right_status=r['status'] if r else 'missing',
             left_evidence=l.get('evidence') if l else None,right_evidence=r.get('evidence') if r else None,
             left_pending_warnings=l.get('pending_warnings',[]) if l else [],right_pending_warnings=r.get('pending_warnings',[]) if r else [])
+        if not reason and metric != 'temperature' and (row['latitude'] is None or row['longitude'] is None):
+            station = paired_station_geography(meta,l,r,catalog,weather_paths or {})
+            if station:
+                row.update(latitude=station['latitude'],longitude=station['longitude'],
+                           country=row['country'] or station['country'])
         for side,item in (('left',l),('right',r)):
+            if (item or {}).get('spectral_variant'):
+                row[side+'_spectral_variant']=item['spectral_variant']
+            if (item or {}).get('stack_response',{}).get('selections'):
+                row[side+'_stack_response']=True
             scope = (item or {}).get('wall_scope')
             if scope:
                 wall_scopes.setdefault(sid,{})[side] = scope
@@ -289,10 +399,7 @@ def assemble(rel, a, b, left, right, catalog, mode, *, waivers=None):
             for prefix,suffix in [('left','kWh'),('right','kWh'),('','saved_kWh'),('','saved_MJ_m2'),('','saved_percent')]:
                 row[(prefix+'_' if prefix else '')+key+'_'+suffix] = None
         if not reason and metric != 'temperature':
-            for key in ('heating','cooling','total'):
-                lv = finite(l['loads'][key+'_kWh']); rv = finite(r['loads'][key+'_kWh']); delta = lv-rv
-                row.update({f'left_{key}_kWh':lv,f'right_{key}_kWh':rv,f'{key}_saved_kWh':delta,
-                    f'{key}_saved_MJ_m2':delta*3.6/area if area else None,f'{key}_saved_percent':delta/lv*100 if lv else None})
+            row.update(load_changes(l['loads'],r['loads'],area))
             lm={x['month']:x for x in l['monthly']}; rm={x['month']:x for x in r['monthly']}
             if set(lm)!=set(rm): raise ValueError('双方月度覆盖不一致。')
             for month in sorted(lm):
@@ -339,12 +446,16 @@ def assemble(rel, a, b, left, right, catalog, mode, *, waivers=None):
     steps={s[key] for s in sites for key in ('left_step_minutes','right_step_minutes') if s[key] is not None}
     result['step_minutes']=next(iter(steps)) if len(steps)==1 else None
     result['step_label']=' / '.join(f'{s} min' for s in sorted(steps)) or '—'
+    if issues == [PERIOD_MISMATCH] and mode == 'controlled' and metric != 'temperature':
+        result['common_months'] = common_month_results(
+            [period, b['factors']['scope']['period']], (left, right),
+            [catalog['sites'][s['site_id']] for s in sites], area)
     coverage_results.annotate(result,(a,b),(left,right),catalog)
     result['dataset_sha256']=digest({k:v for k,v in result.items() if k!='created'})
     return result
 
 
-def read_sources(ident, left_source, right_source, mode, catalog, root):
+def read_sources(ident, left_source, right_source, mode, catalog, root, *, weather_paths=None):
     if mode not in ('controlled','natural'): raise ValueError('请选择温控或自然室温模式。')
     store=Store(catalog,root);rel=comparison(store,ident);records=[];sources=[]
     for side,selected in [('left',left_source),('right',right_source)]:
@@ -355,14 +466,15 @@ def read_sources(ident, left_source, right_source, mode, catalog, root):
         if selected.startswith('observed_'):
             sources.append(coverage_results.observed(record,selected,root))
         else:
-            sources.append(historical(record,catalog,root) if selected=='historical' else execution(record,selected,mode,root))
+            sources.append(historical(record,catalog,root,weather_paths=weather_paths) if selected=='historical' else execution(record,selected,mode,root,weather_paths=weather_paths))
     return rel,records,sources
 
 
 def build(ident,left_source,right_source,mode,catalog,root=ROOT,*,with_controls=False):
     from comparison_steps import apply
-    rel,records,sources=read_sources(ident,left_source,right_source,mode,catalog,root)
+    weather_paths={}
+    rel,records,sources=read_sources(ident,left_source,right_source,mode,catalog,root,weather_paths=weather_paths)
     controls,waivers=apply(rel,records,sources,mode,catalog,root,with_controls)
-    result=assemble(rel,*records,*sources,catalog,mode,waivers=waivers)
+    result=assemble(rel,*records,*sources,catalog,mode,waivers=waivers,weather_paths=weather_paths)
     if with_controls:result['step_controls']=controls
     return result

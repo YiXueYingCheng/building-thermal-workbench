@@ -28,6 +28,21 @@ def table_exists(db,name):return db.execute('SELECT 1 FROM sqlite_master WHERE t
 def connect_read(path):
  db=sqlite3.connect(Path(path).as_uri()+'?mode=ro',uri=True,timeout=2);db.row_factory=sqlite3.Row;db.execute('BEGIN');return db
 
+def reference_display(root,source,value):
+ """Describe the owner for display, independently of the decision to block."""
+ data=root/'data'
+ if source==str(data/'drafts.sqlite')+'#versions':
+  kind='方案'
+ elif source==str(data/'components.sqlite')+'#components' and value.get('kind')=='calendar':
+  kind='日历'
+ else:
+  path=Path(source)
+  if path.is_relative_to(data/'history-locations'/'files') or path.is_relative_to(data/'integration-sources'):
+   table=value.get('_storage_table') if isinstance(value,dict) else None
+   return {'history_file':source.removesuffix('#'+table) if table else source}
+  return {}
+ return {'source_object':dict(kind=kind,id=value['id'],revision=value['revision'])}
+
 def match_reference(value,ident,revisions):
  """Match a version where specified; an unversioned/unknown reference protects all.
 
@@ -170,7 +185,8 @@ def references(root,ident,scope,revision,fresh=False):
   elif len(relative)==3 and relative[:2]==('data','input-preparations'):
    owner=path.stem;kind='输入准备任务'
   action=action_for(table,value) if source in (own+"#"+table,str(root/"data/execution/queue.sqlite")+"#"+table) else None
-  refs.append(dict(action=action,kind=kind,label=str(name or owner),owner=owner,owner_key=owner_key,source=source,relations=hits,historical=historical))
+  refs.append(dict(action=action,kind=kind,label=str(name or owner),owner=owner,owner_key=owner_key,source=source,relations=hits,historical=historical,
+                   **reference_display(root,source,value)))
  for source,value in documents(root,issues,include_all_databases=True,plan_files=PlanFiles(ident,fresh)):consider(source,value)
  name_relations(root,refs)
  return sorted({digest(r):r for r in refs}.values(),key=lambda r:(r['kind'],r['source'],r['label'])),sorted(set(issues))

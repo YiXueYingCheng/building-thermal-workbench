@@ -1,7 +1,9 @@
 'use strict';
 const rtControlLabels={
+ 'NX_SC_StackStateOutput':'受控层 · C 态时间占比',
+ 'NX_SC_StackChangedOutput':'受控层 · 热阻切换次数',
  'NX_SC_StateOutput':'热阻状态 · 压缩 C 时间占比',
- 'NX_SC_FaceOutput':'表面光学状态 · A 面朝外时间占比',
+ 'NX_SC_FaceOutput':'表面光学状态 · 采用 A 组的时间占比',
  'NX_FiveStorey_Flip_FaceOutput':'采用 A 的时间占比',
  'NX_Fb_StateOutput':'压缩时间占比',
  'NX_Fb_ChangedOutput':'热阻切换次数'

@@ -105,6 +105,12 @@ def plot(folder,metric=None):
 if __name__=='__main__':
     if len(sys.argv)==6:
         from plot_regional import plot as regional_plot
+        folder,division,style,metric,_=sys.argv[1:]
+        if division=='climate' and style=='standard' and figure_kind(json.loads((Path(folder)/'dataset.json').read_text(encoding='utf8')))=='climate':
+            plot(folder,metric)
+            for ext in ('svg','pdf','png'):
+                (Path(folder)/('figure.'+ext)).rename(Path(folder)/('climate-overview.'+ext))
+            (Path(folder)/'figure_caption.txt').rename(Path(folder)/'climate-overview-caption.txt')
         regional_plot(*sys.argv[1:])
     else:
         plot(*sys.argv[1:])

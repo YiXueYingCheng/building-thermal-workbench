@@ -2,8 +2,9 @@
 from contextlib import closing
 from pathlib import Path
 import sqlite3
+import time
 import numpy as np
-from foundation import read_json,sha
+from foundation import digest,read_json,sha
 from input_pipeline import read_audit
 from research_materials import PCM,SPECTRAL,latent
 from output_storage import checked_path
@@ -119,23 +120,42 @@ def summarize(case,app,d,root,with_series=False,aperture_signatures=None):
 
 def comparison_response(catalog,root,body):
     from comparison_results import read_sources,compatible,pair_reason
+    from comparison_steps import apply
     rel,recs,sources=read_sources(body['id'],body['left_source'],body['right_source'],body['mode'],catalog,root)
     sid=body['site_id']
     issues=compatible(*recs,body['mode'],rel['metric'])
     if issues:raise ValueError('；'.join(issues))
+    _,waivers=apply(rel,recs,sources,body['mode'],catalog,root,False)
     cases=[s['cases'].get(sid) for s in sources]
-    if not all(cases) or pair_reason(*cases):raise ValueError('材料响应需要两侧通过核对的同地点配对结果。')
-    out={}
-    for label,record,case,source in zip(('left','right'),recs,cases,sources):
+    if not all(cases) or pair_reason(*cases,ignore_step=sid in waivers):raise ValueError('材料响应需要两侧通过核对的同地点配对结果。')
+    pins=[{k:c['evidence'].get(k) for k in ('batch_id','index','result_sha256')} for c in cases]
+    if 'pins' in body and body['pins']!=pins:raise ValueError('配对结果的选用记录已变化，请重新读取配对结果。')
+    from result_timeline import registered_source
+    from comparison_results import batch_rows
+    import json
+    inputs=[]
+    signatures=[]
+    for record,case in zip(recs,cases):
         defs=record['factors']['materials']['definitions']
         if len(defs)!=1 or defs[0]['model'] not in (PCM,SPECTRAL):raise ValueError('所选方案缺少材料响应输出。')
-        from comparison_results import batch_rows
-        import json
-        plan=json.loads(batch_rows(root,source['id'])[0]['plan'])
+        evidence=case.get('evidence',{})
+        if evidence.get('kind')!='execution':raise ValueError('材料响应需要登记的逐步计算结果。')
+        batch,index=evidence['batch_id'],evidence['index']
+        job,*_,token=registered_source(root,batch,index,time.monotonic()+30)
+        if job['result_sha256']!=evidence['result_sha256']:raise ValueError('结果来源已更新，请重新读取配对结果。')
+        plan=json.loads(batch_rows(root,batch)[0]['plan'])
         folder=Path(root)/'data/model-inputs'/plan['bundle_id']
         manifest=read_json(folder/'manifest.json')
         entry=next(r for r in manifest['cases'] if r['site_id']==sid and r['mode']==body['mode'])
         audit=read_audit(folder,entry)
-        out[label]=summarize(case,audit['material_application'],defs[0],root,
+        signatures.append([token,digest(record),digest(audit)])
+        inputs.append((case,audit,defs[0]))
+    view_token=digest(signatures)
+    if body.get('known')==view_token:return dict(unchanged=True,view_token=view_token)
+    out=dict(view_token=view_token)
+    for label,(case,audit,definition) in zip(('left','right'),inputs):
+        out[label]=summarize(case,audit['material_application'],definition,root,
             aperture_signatures=audit.get('spectral_solar',{}).get('aperture_signatures'))
+        ev=case['evidence']
+        out[label].update(batch=ev['batch_id'],index=ev['index'],sha256=ev['result_sha256'])
     return out

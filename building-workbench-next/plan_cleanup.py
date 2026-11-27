@@ -199,7 +199,8 @@ def inspect(root,catalog,ident,scope,revision,active,fresh=False):
             payload=value.get('payload') if isinstance(value,dict) else None
             label=payload.get('name') if isinstance(payload,dict) else None
             refs.append(dict(action=action,kind=action['label'] if action else '外部引用',label=str(label or name or path.name),
-                             owner_key=(action['kind']+'/'+action['id']) if action else source,owner=action['id'] if action else str(name or path.name),source=source,relations=hits))
+                             owner_key=(action['kind']+'/'+action['id']) if action else source,owner=action['id'] if action else str(name or path.name),source=source,relations=hits,
+                             **pd.reference_display(root,source,value)))
     pd.name_relations(root,refs)
     if refs:reasons.append('其他资料仍引用所选版本或计算记录，详见关系树。')
     if issues:reasons.append('仍有资料未完成核对。')

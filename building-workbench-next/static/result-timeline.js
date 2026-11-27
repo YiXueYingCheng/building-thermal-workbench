@@ -3,7 +3,10 @@ let rtSequence=0,rtState=null;
 const rtInventories=new RecentViewReader();
 const rtDetails=new DialogReads(8);
 function rtDetail(kind,params){
- const url=rtUrl(kind,params),token=rtState.inventory.view_token;
+ return rtReadDetail(rtState.batch,rtState.index,rtState.inventory.view_token,kind,params);
+}
+function rtReadDetail(batch,index,token,kind,params){
+ const url=rtCaseUrl(kind,batch,index,params);
  return rtDetails.read(JSON.stringify([url,token]),async()=>{
   const result=await api(url);
   if(result.view_token!==token)throw Error('结果资料已更新，请重新打开。');
@@ -27,7 +30,14 @@ function rtShell(body){
  d.innerHTML=`<header class="viewer-head"><div><h2 id="rt-title">输出频率与时序明细</h2>${sub?`<p class="muted">${esc(sub)} · 算例 ${rtState.index+1}</p>`:''}</div><button data-rt-close autofocus>${back}</button></header>${rtState.inventory?rtFrequencyBanner(rtState.inventory):''}<div class="focused-body">${body}</div>`;
  if(d.open)d.querySelector('[data-rt-close]').focus({preventScroll:true});
 }
-function rtUrl(kind,extra={}){return '/api/result-timeline/'+kind+'?'+new URLSearchParams({batch:rtState.batch,index:rtState.index,...extra});}
+function rtCaseUrl(kind,batch,index,extra={}){return '/api/result-timeline/'+kind+'?'+new URLSearchParams({batch,index,...extra});}
+function rtReadInventory(batch,index){
+ const url=rtCaseUrl('inventory',batch,index);
+ return rtInventories.read(url,false,async known=>{
+  const result=await api(url+(known?'&known='+encodeURIComponent(known):''));
+  return {view_token:result.view_token,summary:result.unchanged?undefined:result};
+ });
+}
 function rtOptions(a){return a.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');}
 function rtMD(m,d){return [m,d].map(x=>String(x).padStart(2,'0')).join('-');}
 function rtMonthRange(){
@@ -54,7 +64,7 @@ function rtInventory(d){
  const sides=rtState.context?.sides;
  const context=sides?`<label>对照工况<select id="rt-side">${options(sides.map((s,i)=>[i,s.name]),rtState.context.side)}</select></label>`:'';
  return `${d.registered_status==='review'?'<p class="warning" role="status">此结果仍待复核。可在「输出清单与来源」查看接受说明。</p>':''}<div class="rt-toolbar">${context}<label>查看月份<select id="rt-month">${options(monthChoices,rtState.month)}</select></label></div>
- <div class="rt-tabs" role="group" aria-label="查看内容">${tabs.map(([k,v])=>`<button data-rt-tab="${k}" aria-pressed="false">${v}</button>`).join('')}</div>
+ <div class="rt-tabs" role="group" aria-label="查看内容">${tabs.map(([k,v])=>`<button data-rt-tab="${k}" aria-pressed="false">${v}</button>`).join('')}${d.stack_selections?.length?'<button data-stack-open data-batch="'+esc(d.batch)+'" data-index="'+d.index+'">材料响应</button>':''}</div>
  <section data-rt-panel="month"></section>
  ${d.systems.length?`<section data-rt-panel="daily" hidden><h3>逐日显热需求</h3><div class="rt-fields"><label>查看范围<select id="rt-system">${d.building_daily_issue?'':'<option value="">整栋建筑（全部系统）</option>'}${rtOptions(d.systems)}</select></label>${rtDateFields('rt')}</div>${d.building_daily_issue?`<p class="muted">${esc(d.building_daily_issue)}</p>`:'<button data-rt-period>选择整个计算时段</button>'}<button class="primary" data-rt-load>读取逐日冷热需求</button><div id="rt-daily" aria-live="polite"></div></section>`:''}
  <section data-rt-panel="series" hidden></section>
@@ -70,7 +80,7 @@ function rtMonthView(){
  function card(label,value){return `<div><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;}
  if(row)for(const [key,label] of [['heating_kWh','供暖'],['cooling_kWh','制冷'],['total_kWh','合计']])
     cards.push(card(label,Number.isFinite(row[key])?format(row[key])+' kWh':'无数据'));
- for(const [key,label] of [['face_a','采用 A 的时间占比'],['compressed','压缩时间占比'],['switches','热阻切换次数']]){
+ for(const [key,label] of [['face_a','采用 A 的时间占比'],['compressed','压缩时间占比'],['layer_state_c','受控层处于 C 态的时间占比'],['switches','热阻切换次数']]){
    if(!ctl[key])continue;
    const value=ctl[key].months?.[m];
    if(!Number.isFinite(value)){controls.push(card(label,ctl[key].error||'缺少本月读数'));continue;}
@@ -128,13 +138,10 @@ async function rtOpen(batch,index,context=null,trigger=document.activeElement){
  if(!dialog.open)dialog.showModal();
  // Keep the current controls, scroll position and pending detail read while the receipt is checked.
  const body=dialog.querySelector('.focused-body');body.inert=true;
- const url=rtUrl('inventory'),request=(state.openRequest||0)+1;
+ const request=(state.openRequest||0)+1;
  state.openRequest=request;
  try{
-   const receipt=await rtInventories.read(url,false,async known=>{
-    const result=await api(url+(known?'&known='+encodeURIComponent(known):''));
-    return {view_token:result.view_token,summary:result.unchanged?undefined:result};
-   });
+   const receipt=await rtReadInventory(batch,index);
    if(rtState!==state||request!==state.openRequest)return;
    const d=receipt.summary,expected=context?.sides[context.side];
    if(expected && (expected.sha!==d.summary_sha256 || !['passed','reused'].includes(d.registered_status)))throw Error('已有结果登记发生变化，请返回对比集重新读取。');
@@ -215,7 +222,17 @@ async function rtLoad(){const seq=++rtSequence,target=rtDialog().querySelector('
 function rtExport(){const d=rtState?.daily;if(!d)return;const cell=v=>'"'+String(typeof v==='string'&&/^[=+@-]/.test(v)?"'"+v:v??'').replaceAll('"','""')+'"';const lines=[['batch','case_index','identity','summary_sha256','sql_sha256','registered_status','acceptance_note','system','frequency','aggregation','source_units','display_units','month_day','sql_year','time_index','interval_minutes','heating_kWh','cooling_kWh','total_kWh'],...d.rows.map(r=>[d.batch,d.index,d.identity,d.summary_sha256,d.sql_sha256,d.registered_status,d.acceptance_note,/^[=+@-]/.test(d.system)?"'"+d.system:d.system,d.frequency,d.aggregation,d.source_units,d.units,r.date,r.time.Year,r.time.TimeIndex,r.time.Interval,r.heating_kWh,r.cooling_kWh,r.total_kWh])];const url=URL.createObjectURL(new Blob(['\uFEFF'+lines.map(r=>r.map(cell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`daily-loads-${d.index+1}-${d.start}-${d.end}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 
 const rtPriorView=resultViewContent;
-resultViewContent=function(v){const d=rtPriorView(v);if(d&&v.kind==='batch'){const row=S.executionResults.results.find(r=>r.index===S.batchSelected);d.groups.summary+=`<p><button data-rt-batch="${esc(row.evidence.batch_id)}" data-rt-index="${row.evidence.index}">查看输出频率与时序明细 ↗</button></p>`;}return d;};
+resultViewContent=function(v){
+ const d=rtPriorView(v);
+ if(d&&v.kind==='batch'){
+   const row=S.executionResults.results.find(r=>r.index===S.batchSelected);
+   const batch=esc(row.evidence.batch_id),idx=row.evidence.index;
+   d.groups.summary+=`<p><button data-rt-batch="${batch}" data-rt-index="${idx}">查看输出频率与时序明细 ↗</button>
+     ${row.stack_response?.selections?.length?`<button data-stack-open data-batch="${batch}" data-index="${idx}">材料响应</button>`:''}
+     ${spectralOpenButton([row.evidence],true)} ${row.spectral_variant?spectralOpenButton([row.evidence]):''}</p>`;
+ }
+ return d;
+};
 const rtPriorReport=raReport;
 raReport=function(r){return rtPriorReport(r)+`<p><button data-rt-batch="${esc(r.batch)}" data-rt-index="${r.index}">查看输出频率与时序明细 ↗</button></p>`;};
 

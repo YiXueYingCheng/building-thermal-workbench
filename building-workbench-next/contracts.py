@@ -36,7 +36,7 @@ def normalize(record):
                 item['solar_absorptance']=1-rho if finite_number(rho) else None
         if definition.get('optics_depend_on_state') is False:
             for face in ('A','B'):
-                if face+'_R' in optics and (definition.get('model') not in ('optical_surface_v1','solid_layer_v1','solid_variable_v1','phase_change_layer_v1','spectral_exterior_v1') or any(s.get('id')=='C' for s in definition.get('states',[]))):optics[face+'_C']=copy.deepcopy(optics[face+'_R'])
+                if face+'_R' in optics and (definition.get('model') not in ('optical_surface_v1','solid_layer_v1','solid_variable_v1','phase_change_layer_v1','spectral_exterior_v1','layer_stack_v1') or any(s.get('id')=='C' for s in definition.get('states',[]))):optics[face+'_C']=copy.deepcopy(optics[face+'_R'])
     return record
 
 def validate(record, sites=None):
@@ -106,7 +106,10 @@ def validate(record, sites=None):
         targets=app.get('target_ids')
         if not isinstance(targets,list) or any(not isinstance(x,str) for x in targets) or len(targets)!=len(set(targets)):
             errors.append('材料应用对象应为不重复的构件列表。')
-        if app.get('position')=='between':
+        if app.get('position')=='between' and app.get('placement_basis')=='layer_stack_v1':
+            if type(app.get('after_layer')) is not int or app['after_layer'] < 1:
+                errors.append('请指定从室外起算的原构造层号。')
+        elif app.get('position')=='between':
             layers=app.get('between_layers')
             if not isinstance(layers,list) or len(layers)!=2 or any(not isinstance(v,str) or not v.strip() for v in layers):
                 errors.append('中间层应用需要明确前后两个层名。')

@@ -54,6 +54,24 @@ def read_snapshot(path, expected_sha256):
         return dict(status='unreadable', actual_sha256=None), None
 
 
+def station_geography(path, expected_sha256):
+    """Read map coordinates from the exact EPW bound to this calculation."""
+    _, raw = read_snapshot(path, expected_sha256)
+    if not raw:
+        return {}
+    try:
+        line = io.BytesIO(raw).readline().decode('utf-8-sig')
+        header = next(csv.reader([line], strict=True))
+        if len(header) != 10 or header[0].strip().upper() != 'LOCATION':
+            return {}
+        lat, lon = map(float, header[6:8])
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return {}
+    except (UnicodeError, csv.Error, ValueError):
+        return {}
+    return dict(latitude=lat, longitude=lon, country=header[3].strip() or None)
+
+
 def inspect(raw):
     """Screen one non-leap hourly year. Mixed TMY source years are metadata, not a gap."""
     if len(raw) > MAX_BYTES:

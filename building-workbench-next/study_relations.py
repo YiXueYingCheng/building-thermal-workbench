@@ -13,7 +13,7 @@ KINDS = {
     'design': ('comparison_designs', '对照设计', '删除设计'),
 }
 LABELS = {'comparisons':'已保存比较', 'comparison_inputs':'比较双方保存的输入快照', 'reading_groups':'阅读对比集', 'research_sets':'计算型对比集版本',
-          'comparison_designs':'设计版本', 'reading_links':'收录的比较', 'reading_hidden':'收录隐藏记录',
+          'comparison_designs':'设计版本', 'design_region_groups':'设计下的地区研究组', 'design_region_plans':'地区组的方案关联', 'reading_links':'收录的比较', 'reading_hidden':'收录隐藏记录',
           'theme_versions':'成员清单版本', 'research_set_members':'成员归属', 'queue.comparison_step_choices':'地点步长选择'}
 
 
@@ -23,6 +23,8 @@ def action_for(table, row):
             return action(kind, row['id'])
     if table == 'comparison_inputs':
         return action('comparison', row['comparison_id'])
+    if table in ('design_region_groups','design_region_plans'):
+        return action('design', row['design_id'])
     if table == 'research_set_members':
         return action('set', row['set_id'])
     if table in ('theme_versions', 'reading_links'):
@@ -81,6 +83,9 @@ def inspect(db, root, kind, ident):
         for link in links:
             collect('reading_hidden', 'group_id=? AND signature=?', (link['group_id'], link['signature']))
         collect('queue.comparison_step_choices', 'comparison=?', (ident,))
+    elif kind == 'design':
+        collect('design_region_groups', 'design_id=?', (ident,))
+        collect('design_region_plans', 'design_id=?', (ident,))
     elif kind in ('reading', 'set'):
         for table in ('reading_links', 'reading_hidden', 'theme_versions'):
             collect(table, 'group_id=?', (ident,))
